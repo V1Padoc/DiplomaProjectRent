@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom'; // Hook to get URL parameters
 import axios from 'axios'; // For fetching data
 import Slider from 'react-slick'; 
-
+import { useAuth } from '../context/AuthContext';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
 // Fix for default marker icon issue with Webpack/Create-React-App
@@ -16,6 +16,7 @@ L.Icon.Default.mergeOptions({
     shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
 
+
 function ListingDetail() {
   // Get the 'id' parameter from the URL
   const { id } = useParams();
@@ -26,6 +27,18 @@ function ListingDetail() {
   const [loading, setLoading] = useState(true);
   // State to manage potential errors
   const [error, setError] = useState(null);
+
+  const [reviews, setReviews] = useState([]);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState(null);
+  const [newReviewRating, setNewReviewRating] = useState(5); // State for new review rating input
+  const [newReviewComment, setNewReviewComment] = useState(''); // State for new review comment input
+  const [reviewSubmitting, setReviewSubmitting] = useState(false); // State for review submission loading
+  const [reviewSubmitError, setReviewSubmitError] = useState(null); // State for review submission error
+  const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState(null); // State for review submission success
+  // --- End of State for Reviews ---
+
+    const { isAuthenticated, user, token } = useAuth();
 
   // useEffect hook to fetch data when the component mounts or the ID changes
   useEffect(() => {
@@ -59,6 +72,79 @@ function ListingDetail() {
        fetchListing();
     }
   }, [id]); // Dependency array: re-run effect if 'id' changes
+// --- useEffect to fetch Reviews ---
+  useEffect(() => {
+      const fetchReviews = async () => {
+          try {
+              setReviewLoading(true);
+              setReviewError(null);
+               // Use the listing ID from useParams to fetch reviews
+              const response = await axios.get(`http://localhost:5000/api/listings/${id}/reviews`);
+              setReviews(response.data);
+               console.log('Reviews fetched:', response.data); // Log fetched reviews
+          } catch (err) {
+              console.error('Error fetching reviews:', err);
+              setReviewError('Failed to load reviews.');
+          } finally {
+              setReviewLoading(false);
+          }
+      };
+
+      if (id) { // Fetch reviews only if listing ID is available
+          fetchReviews();
+      }
+  }, [id]); // Re-fetch reviews if the listing ID changes
+  // --- End of useEffect to fetch Reviews ---
+
+   // --- Function to handle new review submission ---
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+
+    setReviewSubmitError(null);
+    setReviewSubmitSuccess(null);
+    setReviewSubmitting(true);
+
+    // Basic frontend validation (can add more)
+    if (newReviewRating === null || newReviewRating < 1 || newReviewRating > 5) {
+        setReviewSubmitError('Please select a rating between 1 and 5.');
+        setReviewSubmitting(false);
+        return;
+    }
+
+    try {
+        // Send the POST request to the backend review endpoint
+        const response = await axios.post(`http://localhost:5000/api/listings/${id}/reviews`,
+            { // Request body
+                rating: newReviewRating,
+                comment: newReviewComment
+            },
+            { // Configuration object for headers
+                headers: {
+                    'Authorization': `Bearer ${token}` // Include the JWT from AuthContext
+                }
+            }
+        );
+
+        // If review is created successfully
+        setReviewSubmitSuccess(response.data.message);
+        console.log('Review submitted:', response.data.review);
+
+        // Add the newly created review to the existing reviews state so it appears immediately
+        // response.data.review contains the review with user details included by backend
+        setReviews([response.data.review, ...reviews]); // Add new review to the top of the list
+
+        // Clear the review form fields
+        setNewReviewRating(5); // Reset rating to default
+        setNewReviewComment(''); // Clear comment
+
+    } catch (err) {
+        console.error('Error submitting review:', err);
+        setReviewSubmitError(err.response?.data?.message || 'Failed to submit review. Please try again.');
+    } finally {
+        setReviewSubmitting(false); // Always set submitting to false
+    }
+  };
+  // --- End of Function to handle new review submission ---
 
   // Render loading state
   if (loading) {
@@ -216,12 +302,95 @@ const sliderSettings = {
         </div>
         {/* --- End of Map Section --- */}
 
-        {/* Reviews Section (Placeholder) */}
+       {/* --- Reviews Section (Integrate Reviews Display and Form) --- */}
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">Reviews</h2>
-          {/* Implement reviews display and form here later */}
-          <div className="text-gray-700">Reviews section coming soon.</div>
+
+          {/* Review Submission Form (Visible only if authenticated) */}
+          {isAuthenticated ? (
+            <div className="bg-gray-50 p-4 rounded-sm mb-6"> {/* Form container styling */}
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Leave a Review</h3>
+
+                {/* Display submission messages */}
+                 {reviewSubmitting && <div className="text-center text-blue-600 mb-2">Submitting review...</div>}
+                {reviewSubmitSuccess && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded relative mb-2 text-sm">{reviewSubmitSuccess}</div>}
+                {reviewSubmitError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded relative mb-2 text-sm">{reviewSubmitError}</div>}
+
+
+                <form onSubmit={handleReviewSubmit}>
+                    {/* Rating Input */}
+                    <div className="mb-3">
+                         <label className="block text-gray-700 text-sm font-bold mb-1" htmlFor="rating">Rating (1-5)</label>
+                         <input
+                             className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                             id="rating"
+                             type="number"
+                             min="1"
+                             max="5"
+                             value={newReviewRating}
+                             onChange={(e) => setNewReviewRating(parseInt(e.target.value, 10))} // Parse to integer
+                             required
+                         />
+                    </div>
+
+                    {/* Comment Input */}
+                    <div className="mb-4">
+                        <label className="block text-gray-700 text-sm font-bold mb-1" htmlFor="comment">Comment (Optional)</label>
+                        <textarea
+                            className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                            id="comment"
+                            placeholder="Share your experience..."
+                            value={newReviewComment}
+                            onChange={(e) => setNewReviewComment(e.target.value)}
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="flex justify-end">
+                         <button
+                             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out text-sm"
+                             type="submit"
+                             disabled={reviewSubmitting} // Disable button while submitting
+                         >
+                             {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                         </button>
+                    </div>
+                </form>
+            </div>
+          ) : (
+            // Message for unauthenticated users
+            <div className="bg-gray-100 p-4 rounded-sm text-center text-gray-700 mb-6">
+                Please log in to leave a review.
+            </div>
+          )}
+
+
+          {/* Display Existing Reviews */}
+           {reviewLoading && <div className="text-center text-gray-700">Loading reviews...</div>}
+           {reviewError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 text-center">{reviewError}</div>}
+           {!reviewLoading && !reviewError && reviews.length === 0 && (
+               <div className="text-gray-700">No reviews yet. Be the first to leave one!</div>
+           )}
+           {!reviewLoading && !reviewError && reviews.length > 0 && (
+               <div className="space-y-4"> {/* Add vertical space between reviews */}
+                   {reviews.map(review => (
+                       <div key={review.id} className="bg-gray-50 p-4 rounded-sm shadow-sm border border-gray-200"> {/* Individual review card styling */}
+                           <div className="flex justify-between items-center mb-2">
+                                <span className="font-semibold text-gray-800">{review.User?.name || review.User?.email || 'Anonymous'}</span> {/* Display reviewer name or email */}
+                                <span className="text-sm text-gray-600">Rating: {review.rating}/5</span> {/* Display rating */}
+                           </div>
+                           <p className="text-gray-700 leading-snug">{review.comment || 'No comment provided.'}</p>
+                           {/* Optional: Display review creation date */}
+                           <div className="text-xs text-gray-500 mt-2">
+                                Reviewed on: {new Date(review.createdAt).toLocaleDateString()}
+                           </div>
+                       </div>
+                   ))}
+               </div>
+           )}
         </div>
+        {/* --- End of Reviews Section --- */}
 
         {/* Contact Button (Placeholder) */}
          <div className="text-center">
