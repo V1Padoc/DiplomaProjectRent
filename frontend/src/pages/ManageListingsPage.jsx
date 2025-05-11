@@ -171,11 +171,12 @@ function ManageListingsPage() {
                     )}
                 </div>
 
-                {/* Actions: Edit and Delete Buttons (Placeholders) */}
+               {/* Actions: Edit and Delete Buttons */}
                 <div className="flex space-x-4">
-                   {/* Link to Edit Listing Page (Will implement later) */}
+                   {/* --- Link to Edit Listing Page (Corrected) --- */}
                    <Link
-                       to={`/manage-listings/edit/${listing.id}`} // Example edit route
+                       // Change the 'to' prop to the new edit route format
+                       to={`/manage-listings/edit/${listing.id}`} // Corrected URL
                        className="flex-1 text-center bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-sm transition duration-150 ease-in-out text-sm"
                    >
                        Edit

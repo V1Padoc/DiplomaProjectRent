@@ -17,6 +17,12 @@ router.get(
   listingController.getOwnerListings // The controller function
 ); 
 
+router.get(
+  '/:id/edit', // The path for this route
+  authMiddleware, // Requires authentication
+  listingController.getListingForEdit // The controller function
+);
+
 router.get('/:id', listingController.getListingById);
 
 router.get('/:listingId/reviews', listingController.getReviewsByListingId);
@@ -47,5 +53,11 @@ router.delete(
 // router.put('/:id', authMiddleware, listingController.updateListing);
 // router.delete('/:id', authMiddleware, listingController.deleteListing);
 
+router.put(
+  '/:id', // The path for this route with the listing ID parameter
+  authMiddleware, // Requires authentication
+  upload.array('photos', 10), // Apply multer middleware (expecting *new* files named 'photos')
+  listingController.updateListing // The controller function
+);
 
 module.exports = router;

@@ -304,6 +304,154 @@ exports.deleteListing = async (req, res) => {
     res.status(500).json({ message: 'Server error during listing deletion.' });
   }
 };
-// Keep other listing controller functions below this
-// exports.updateListing = async (req, res) => { ... };
-// exports.deleteListing = async (req, res) => { ... };
+
+exports.getListingForEdit = async (req, res) => {
+  // Get the listing ID from the request parameters
+  const listingId = req.params.id;
+  // Get the authenticated user's ID and role from req.user
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  try {
+    // Find the listing by its ID
+    const listing = await Listing.findByPk(listingId, {
+      // You might still want to include the owner's basic info
+      include: [{
+        model: User,
+        as: 'Owner',
+        attributes: ['id', 'name', 'email']
+      }]
+       // We do NOT filter by status here, as owner needs to edit pending/rejected listings
+    });
+
+    // If listing not found
+    if (!listing) {
+      return res.status(404).json({ message: 'Listing not found.' });
+    }
+
+    // --- Authorization Check: Verify if the authenticated user is the owner or an admin ---
+    if (listing.owner_id !== userId && userRole !== 'admin') {
+      // 403 Forbidden: The user is authenticated but does not own this listing and is not an admin
+      return res.status(403).json({ message: 'You do not have permission to edit this listing.' });
+    }
+    // --- End of Authorization Check ---
+
+
+    // If listing found and user is authorized, send the listing data back
+    res.status(200).json(listing);
+
+  } catch (error) {
+    console.error('Error fetching listing for edit:', error);
+    res.status(500).json({ message: 'Server error while fetching listing for edit.' });
+  }
+};
+
+exports.updateListing = async (req, res) => {
+  // Get the listing ID from the request parameters
+  const listingId = req.params.id;
+  // Get the authenticated user's ID and role from req.user
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  // req.body contains the text/number fields from the form
+  // Make sure to parse numerical values
+  const { title, description, price, rooms, area, location, amenities, type }
+      = req.body; // Note: latitude and longitude also come from req.body
+
+  // req.files contains an array of file objects provided by multer for *new* uploads
+  const newPhotoFilenames = req.files ? req.files.map(file => file.filename) : [];
+
+  // --- Handling existing photos ---
+  // The frontend needs to tell the backend which existing photos to keep.
+  // A common way is to send an array of filenames to keep in the request body.
+  // We'll assume the frontend sends a 'existingPhotos' array in req.body.
+  // If 'existingPhotos' is not provided, we assume all old photos should be removed except new ones.
+  const existingPhotosToKeep = Array.isArray(req.body.existingPhotos) ? req.body.existingPhotos : [];
+  // Note: req.body might parse 'existingPhotos' as a single string if only one is sent without array notation,
+  // or as an array if multiple are sent. Array.isArray() handles this.
+
+  // --- End of Handling existing photos ---
+
+
+  try {
+    // Find the listing by its ID
+    const listing = await Listing.findByPk(listingId);
+
+    // If listing not found
+    if (!listing) {
+      return res.status(404).json({ message: 'Listing not found.' });
+    }
+
+    // --- Authorization Check: Verify if the authenticated user is the owner or an admin ---
+    if (listing.owner_id !== userId && userRole !== 'admin') {
+      return res.status(403).json({ message: 'You do not have permission to update this listing.' });
+    }
+    // --- End of Authorization Check ---
+
+
+    // --- Optional: Delete old photos that are NOT in the 'existingPhotosToKeep' list ---
+     const oldPhotosToDelete = listing.photos
+         ? listing.photos.filter(photo => !existingPhotosToKeep.includes(photo))
+         : []; // Find photos currently in DB but not in the 'keep' list
+
+     if (oldPhotosToDelete.length > 0) {
+         const uploadDir = path.join(__dirname, '../uploads'); // Path to your uploads folder
+         for (const filename of oldPhotosToDelete) {
+             const filePath = path.join(uploadDir, filename);
+             try {
+                 // Use fs.access to check if the file exists before trying to delete
+                 await fs.access(filePath); // Check if file is accessible (exists)
+                 await fs.unlink(filePath); // Delete the file asynchronously
+                 console.log(`Deleted old file: ${filePath}`);
+             } catch (fileError) {
+                 // If access or unlink fails (e.g., file didn't exist or permission issue)
+                 console.warn(`Could not delete old file ${filePath}:`, fileError.message);
+                 // Continue with the process even if a file couldn't be deleted
+             }
+         }
+     }
+    // --- End of Optional Old File Deletion ---
+
+
+    // Combine photos to keep with newly uploaded photo filenames
+    const updatedPhotos = [...existingPhotosToKeep, ...newPhotoFilenames];
+
+    // Update the listing attributes
+    const updatedListing = await listing.update({
+      title: title || listing.title, // Use new value or keep old if not provided
+      description: description || listing.description,
+      price: price ? parseFloat(price) : listing.price,
+      rooms: rooms !== undefined ? parseInt(rooms, 10) : listing.rooms, // Handle 0 rooms correctly
+      area: area !== undefined ? parseFloat(area) : listing.area, // Handle 0 area correctly
+      location: location || listing.location,
+      amenities: amenities || listing.amenities,
+      type: type || listing.type,
+      // Note: Status is typically updated by admin, not the owner directly via this form
+      // status: 'pending', // You might set status back to pending if significant changes require re-approval
+      photos: updatedPhotos.length > 0 ? updatedPhotos : null, // Save the updated array of filenames (or null)
+      // --- Update latitude and longitude ---
+      latitude: req.body.latitude !== undefined ? parseFloat(req.body.latitude) : listing.latitude,
+      longitude: req.body.longitude !== undefined ? parseFloat(req.body.longitude) : listing.longitude,
+      // --- End of latitude and longitude update ---
+      // Sequelize automatically updates 'updated_at' when using .update()
+    });
+
+    // If update is successful, send a success response
+    res.status(200).json({
+      message: 'Listing updated successfully!',
+      listing: { // Send back some details of the updated listing
+        id: updatedListing.id,
+        title: updatedListing.title,
+        owner_id: updatedListing.owner_id,
+        status: updatedListing.status,
+        photos: updatedListing.photos,
+        latitude: updatedListing.latitude,
+        longitude: updatedListing.longitude
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating listing:', error);
+    res.status(500).json({ message: 'Server error during listing update.' });
+  }
+};
