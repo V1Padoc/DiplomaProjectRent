@@ -1,41 +1,88 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom'; // Import Routes and Route
+// frontend/src/App.js
 
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import HomePage from './pages/HomePage';
+import ListingsPage from './pages/ListingsPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
+import ManageListingsPage from './pages/ManageListingsPage';
+import AdminPage from './pages/AdminPage';
+import CreateListingPage from './pages/CreateListingPage';
+// Import the new ListingDetailPage
+import ListingDetailPage from './pages/ListingDetail'; // <-- Import the new page
 
-// Import or create placeholder components for your pages
-// We'll create these shortly if you don't have them
-import HomePage from './pages/HomePage'; // Placeholder - create this
-import ListingsPage from './pages/ListingsPage'; // Placeholder - create this
-import LoginPage from './pages/LoginPage'; // Placeholder - create this
-import RegisterPage from './pages/RegisterPage'; // Placeholder - create this
-// Add imports for other pages as you create them (ListingDetail, Profile, etc.)
+import ProtectedRoute from './components/ProtectedRoute';
 
 
 function App() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
-
-      {/* Main content area */}
-      <main className="flex-grow pt-16">
-        {/* Use Routes to define the different paths */}
+      <main className="flex-grow">
         <Routes>
-          {/* Define a Route for each page */}
+          {/* Public Routes */}
           <Route path="/" element={<HomePage />} />
+
+          {/* --- Add the route for the Listing Detail Page --- */}
+          {/* This route includes a parameter ':id' */}
+          <Route path="/listings/:id" element={<ListingDetailPage />} /> {/* <-- Add this line */}
+          {/* --- End of Listing Detail Route --- */}
+
+          {/* The general listings page route remains */}
           <Route path="/listings" element={<ListingsPage />} />
+
+
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {/* Add other public routes here */}
 
-          {/* Example of a dynamic route for listing details (will need more later) */}
-          {/* <Route path="/listings/:id" element={<ListingDetail />} /> */}
+          {/* Protected Routes */}
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Optional: A catch-all route for 404 pages */}
+           <Route
+             path="/manage-listings"
+             element={
+               <ProtectedRoute allowedRoles={['owner']}>
+                 <ManageListingsPage />
+               </ProtectedRoute>
+             }
+           />
+
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminPage />
+                </ProtectedRoute>
+              }
+            />
+
+           <Route
+             path="/create-listing"
+             element={
+               <ProtectedRoute allowedRoles={['owner']}>
+                 <CreateListingPage />
+               </ProtectedRoute>
+             }
+           />
+           {/* Add other protected routes here */}
+
+          {/* Optional: Catch-all route for 404 Not Found */}
           {/* <Route path="*" element={<NotFoundPage />} /> */}
+
         </Routes>
       </main>
-
       <Footer />
     </div>
   );

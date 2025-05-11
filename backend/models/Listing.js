@@ -72,6 +72,18 @@ const Listing = sequelize.define('Listing', {
     allowNull: false,
     defaultValue: 'pending' // Listings start as pending until admin approves
   },
+  photos: {
+    type: DataTypes.JSON, // Use JSON type for an array of photo paths/filenames
+    allowNull: true       // Matches the database column allowing NULL
+  },
+   latitude: {
+    type: DataTypes.DECIMAL(10, 8),
+    allowNull: true // Matches the database column
+  },
+  longitude: {
+    type: DataTypes.DECIMAL(11, 8),
+    allowNull: true // Matches the database column
+  },
   // Sequelize will add createdAt and updatedAt automatically because timestamps: true
   // If you want to store photo file paths, you might add:
   // photos: {
@@ -89,9 +101,8 @@ const Listing = sequelize.define('Listing', {
 });
 
 // Define the association: A Listing belongs to a User (the owner)
-Listing.belongsTo(User, { foreignKey: 'owner_id' });
+Listing.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
 // Conversely, a User can have many Listings
-User.hasMany(Listing, { foreignKey: 'owner_id' });
-
+User.hasMany(Listing, { foreignKey: 'owner_id', as: 'Listings' });
 
 module.exports = Listing;

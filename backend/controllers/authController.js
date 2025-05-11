@@ -8,10 +8,15 @@ const User = require('../models/User');
 exports.register = async (req, res) => {
   // ... (keep your existing register function here)
   const { email, password, name, role } = req.body;
-
+  const allowedSelfRegisterRoles = ['tenant', 'owner']; // Define roles allowed for self-registration
+  if (!allowedSelfRegisterRoles.includes(role)) {
+    // If the provided role is NOT in the allowed list
+    console.warn(`Attempted registration with invalid role: ${role}`);
+    return res.status(400).json({ message: 'Invalid role specified during registration.' });
+  }
   try {
-    if (!email || !password || !name || !role) {
-      return res.status(400).json({ message: 'Please provide all required fields: email, password, name, role' });
+    if (!email || !password || !name) { // 'role' is now validated against allowed roles
+      return res.status(400).json({ message: 'Please provide all required fields: email, password, name, and a valid role.' });
     }
 
     const existingUser = await User.findOne({ where: { email: email } });
