@@ -13,8 +13,9 @@ import ManageListingsPage from './pages/ManageListingsPage';
 import AdminPage from './pages/AdminPage';
 import CreateListingPage from './pages/CreateListingPage';
 import ListingDetailPage from './pages/ListingDetail';
-// Import the new EditListingPage
-import EditListingPage from './pages/EditListingPage'; // <-- Import the new page
+import EditListingPage from './pages/EditListingPage';
+// Import the new ChatPage
+import ChatPage from './pages/ChatPage'; // <-- Import the new page
 
 
 import ProtectedRoute from './components/ProtectedRoute';
@@ -38,7 +39,7 @@ function App() {
           <Route
             path="/profile"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute> {/* Requires authentication */}
                 <ProfilePage />
               </ProtectedRoute>
             }
@@ -47,7 +48,7 @@ function App() {
            <Route
              path="/manage-listings"
              element={
-               <ProtectedRoute allowedRoles={['owner']}>
+               <ProtectedRoute allowedRoles={['owner']}> {/* Protected for owners */}
                  <ManageListingsPage />
                </ProtectedRoute>
              }
@@ -56,7 +57,7 @@ function App() {
             <Route
               path="/admin"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin']}> {/* Protected for admins */}
                   <AdminPage />
                 </ProtectedRoute>
               }
@@ -65,23 +66,32 @@ function App() {
            <Route
              path="/create-listing"
              element={
-               <ProtectedRoute allowedRoles={['owner']}>
+               <ProtectedRoute allowedRoles={['owner']}> {/* Protected for owners */}
                  <CreateListingPage />
                </ProtectedRoute>
              }
            />
 
-           {/* --- Add the route for editing a listing, protected for owners/admins --- */}
-           {/* This route includes a parameter ':id' */}
            <Route
-             path="/manage-listings/edit/:id" // Path matching the link from ManageListingsPage
+             path="/manage-listings/edit/:id"
              element={
-               <ProtectedRoute allowedRoles={['owner', 'admin']}> {/* Protected: requires owner or admin */}
+               <ProtectedRoute allowedRoles={['owner', 'admin']}> {/* Protected for owners/admins */}
                  <EditListingPage />
                </ProtectedRoute>
              }
            />
-           {/* --- End of Edit Listing Route --- */}
+
+           {/* --- Add the route for the Chat Page, protected for authenticated users --- */}
+           {/* The route path includes the listingId parameter */}
+           <Route
+             path="/listings/:listingId/chat" // Path matching the backend endpoint structure
+             element={
+               <ProtectedRoute> {/* Requires ANY authenticated user */}
+                 <ChatPage />
+               </ProtectedRoute>
+             }
+           />
+           {/* --- End of Chat Page Route --- */}
 
 
           {/* Add other protected routes here */}

@@ -5,7 +5,7 @@ const router = express.Router();
 const listingController = require('../controllers/listingController');
 const authMiddleware = require('../middleware/authMiddleware'); // Import the auth middleware
 const upload = require('../config/multerConfig'); // Import the configured multer instance
-
+const messageController = require('../controllers/messageController');
 
 // Keep your existing GET / route above this
 router.get('/', listingController.getListings); // <-- This should be there
@@ -59,5 +59,26 @@ router.put(
   upload.array('photos', 10), // Apply multer middleware (expecting *new* files named 'photos')
   listingController.updateListing // The controller function
 );
+
+router.get('/:listingId/reviews', listingController.getReviewsByListingId);
+router.post(
+  '/:listingId/reviews',
+  authMiddleware,
+  listingController.createReview
+);
+
+router.get(
+  '/:listingId/messages', // URL path
+  authMiddleware,        // Requires authentication
+  messageController.getMessagesByListingId // The controller function
+); // <-- Add this line
+
+// --- Define the POST route for creating a message for a specific listing ---
+// This route is protected.
+router.post(
+  '/:listingId/messages', // URL path (Note: listing_id also expected in body in controller)
+  authMiddleware,      // Requires authentication
+  messageController.createMessage // The controller function
+); // <-- Add this line
 
 module.exports = router;

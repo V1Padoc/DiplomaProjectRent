@@ -1,7 +1,7 @@
 // frontend/src/pages/ListingDetail.jsx
 
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom'; // Hook to get URL parameters
+import React, { useState, useEffect, useRef } from 'react'; 
+import { useParams, Link } from 'react-router-dom'; // Import Link Hook to get URL parameters
 import axios from 'axios'; // For fetching data
 import Slider from 'react-slick'; 
 import { useAuth } from '../context/AuthContext';
@@ -193,6 +193,7 @@ const sliderSettings = {
     ? [parseFloat(listing.latitude), parseFloat(listing.longitude)] // Use listing coords
     : [51.505, -0.09]; // Default fallback position (e.g., London coordinates)
 
+  const isOwner = user && listing && user.id === listing.owner_id;
 
   // Render the listing details once data is loaded
   return (
@@ -391,14 +392,32 @@ const sliderSettings = {
            )}
         </div>
         {/* --- End of Reviews Section --- */}
-
-        {/* Contact Button (Placeholder) */}
+ {/* --- Contact Button (Make Functional) --- */}
          <div className="text-center">
-             {/* You will add a button/link to the chat feature here */}
-             <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out">
-                 Contact Owner (Coming Soon)
-             </button>
+             {/* Only show the button if the user is authenticated AND is NOT the owner */}
+             {isAuthenticated && !isOwner && (
+                 <Link
+                     to={`/listings/${id}/chat`} // Link to the chat page for this listing
+                     className="inline-block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out"
+                 >
+                     Contact Owner
+                 </Link>
+             )}
+             {/* Optional: Message if owner is viewing */}
+             {isOwner && (
+                  <div className="text-gray-600 text-sm">
+                     You are the owner of this listing.
+                  </div>
+             )}
+             {/* Optional: Message if not authenticated */}
+              {!isAuthenticated && (
+                  <div className="text-gray-600 text-sm">
+                     Log in to contact the owner.
+                  </div>
+              )}
          </div>
+         {/* --- End of Contact Button --- */}
+
 
 
       </div>
