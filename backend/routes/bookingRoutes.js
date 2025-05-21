@@ -28,7 +28,12 @@ router.put(
     isOwner,    // Only owners can access this (further checks in controller ensure they own the listing)
     bookingController.updateBookingStatus
 );
-
+router.get(
+    '/my-bookings',
+    authMiddleware,
+    isTenant,       // Only tenants can access this
+    bookingController.getMyBookings // We'll create this controller function
+);
 // We will add GET /api/bookings/my-bookings (for tenants) later
 
 module.exports = router;

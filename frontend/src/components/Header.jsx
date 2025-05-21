@@ -29,6 +29,11 @@ function Header() {
                 <li>
                     <Link to="/my-chats" className="text-gray-700 hover:text-gray-900">My Chats</Link>
                 </li>
+                   {(user?.role === 'tenant' || user?.role === 'owner') && ( // Show if tenant or if owner (owners might book too)
+                   <li>
+                       <Link to="/my-bookings" className="text-gray-700 hover:text-gray-900">My Bookings</Link>
+                   </li>
+                )}
                 {/* Link for creating a listing - visible only to owners */}
                  {user && user.role === 'owner' && (
                    <li>

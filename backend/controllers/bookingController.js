@@ -179,3 +179,32 @@ exports.updateBookingStatus = async (req, res) => {
         res.status(500).json({ message: "Server error while updating booking status." });
     }
 };
+
+exports.getMyBookings = async (req, res) => {
+    const tenantId = req.user.id; // Authenticated tenant's ID
+
+    try {
+        const bookings = await Booking.findAll({
+            where: { tenant_id: tenantId },
+            include: [
+                {
+                    model: Listing,
+                    attributes: ['id', 'title', 'location'], // Include some listing details
+                    include: [{ // Include the owner of the listing
+                        model: User,
+                        as: 'Owner', // Make sure this alias matches your Listing model definition
+                        attributes: ['id', 'name', 'email']
+                    }]
+                }
+                // No need to include User (tenant) model again as it's the current user
+            ],
+            order: [['start_date', 'DESC']] // Show most recent start dates first
+        });
+
+        res.status(200).json(bookings);
+
+    } catch (error) {
+        console.error("Error fetching tenant bookings:", error);
+        res.status(500).json({ message: "Server error while fetching tenant bookings." });
+    }
+};

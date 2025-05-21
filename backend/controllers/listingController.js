@@ -7,6 +7,8 @@ const Review = require('../models/Review'); // Import the Review model// Import 
 const path = require('path');
 const fs = require('fs').promises; // Use promises version of fs for async operations
 // Controller function to get all listings
+const Booking = require('../models/Booking');
+
 
 exports.getListings = async (req, res) => {
   try {
@@ -463,4 +465,32 @@ exports.updateListing = async (req, res) => {
     console.error('Error updating listing:', error);
     res.status(500).json({ message: 'Server error during listing update.' });
   }
+};
+
+exports.getListingBookedDates = async (req, res) => {
+    const { listingId } = req.params;
+
+    try {
+        const confirmedBookings = await Booking.findAll({
+            where: {
+                listing_id: listingId,
+                status: 'confirmed' // Only fetch confirmed bookings
+            },
+            attributes: ['start_date', 'end_date'] // We only need these fields
+        });
+
+        // The frontend will expect an array of objects like [{start: Date, end: Date}, ...]
+        // Or just an array of individual dates to disable.
+        // Let's return ranges for now, frontend can process into individual dates.
+        const bookedDateRanges = confirmedBookings.map(b => ({
+            start: b.start_date,
+            end: b.end_date
+        }));
+
+        res.status(200).json(bookedDateRanges);
+
+    } catch (error) {
+        console.error("Error fetching booked dates:", error);
+        res.status(500).json({ message: "Server error while fetching booked dates." });
+    }
 };
