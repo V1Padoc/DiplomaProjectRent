@@ -24,7 +24,11 @@ function Header() {
             </li>
 
             {isAuthenticated ? (
-              <>
+              <> 
+                  {/* *** NEW: Link to My Chats *** */}
+                <li>
+                    <Link to="/my-chats" className="text-gray-700 hover:text-gray-900">My Chats</Link>
+                </li>
                 {/* Link for creating a listing - visible only to owners */}
                 {user && user.role === 'owner' && (
                    <li>

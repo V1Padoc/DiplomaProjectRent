@@ -10,7 +10,7 @@ const sequelize = require('./config/database');
 const generalRoutes = require('./routes/generalRoutes');
 const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
-
+const chatRoutes = require('./routes/chatRoutes');
 
 // --- IMPORTANT: Require all your model files here ---
 require('./models/User');
@@ -52,6 +52,7 @@ app.use('/api/auth', authRoutes);
 // Use the listing routes
 app.use('/api/listings', listingRoutes);
 
+app.use('/api/chats', chatRoutes);
 
 // Function to connect to the database and start the server
 async function startServer() {

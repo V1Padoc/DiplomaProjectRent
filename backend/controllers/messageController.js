@@ -1,56 +1,65 @@
 // backend/controllers/messageController.js
 
-const { Op } = require('sequelize'); 
-const Message = require('../models/Message'); // Import the Message model
-const User = require('../models/User');     // Import the User model (for includes)
-const Listing = require('../models/Listing'); // Import the Listing model (to get owner_id for chat logic)
+const { Op } = require('sequelize');
+const Message = require('../models/Message');
+const User = require('../models/User');
+const Listing = require('../models/Listing');
 
-
-// Controller function to get messages for a specific listing for the authenticated user
-// This requires authentication. Users can only see messages they sent or received for that listing.
+// *** MODIFIED FUNCTION: getMessagesByListingId ***
 exports.getMessagesByListingId = async (req, res) => {
-  const listingId = req.params.listingId; // Get the listing ID from the route parameters
-  const userId = req.user.id;           // Get the authenticated user's ID from req.user
+  const listingId = req.params.listingId;    // From URL path
+  const currentUserId = req.user.id;         // Authenticated user
+  const { otherUserId } = req.query;       // Optional: From URL query (?otherUserId=...)
 
   try {
-    // Find the listing to get the owner's ID
     const listing = await Listing.findByPk(listingId, {
-        attributes: ['id', 'owner_id'] // Only need the owner_id
+        attributes: ['id', 'owner_id']
     });
 
     if (!listing) {
         return res.status(404).json({ message: 'Listing not found.' });
     }
 
-    // Determine the other participant in the chat.
-    // If the authenticated user is the owner, the other participant is the one they are chatting with
-    // about this listing. If the authenticated user is NOT the owner, the other participant is the owner.
-    // We need a way to identify the specific conversation thread.
-    // A simple approach for 1-on-1 chat per listing:
-    // A conversation is between the listing owner and one other user (tenant/buyer).
-    // The messages are either from owner to tenant/buyer or tenant/buyer to owner.
-    // To get messages FOR a user on a listing, we need messages where:
-    // (sender_id = userId AND receiver_id = listing.owner_id) OR (sender_id = listing.owner_id AND receiver_id = userId)
-
-    // Find all messages related to this listing where the authenticated user is either sender or receiver
-    const messages = await Message.findAll({
-      where: {
+    let queryConditions = {
         listing_id: listingId,
-        [Op.or]: [ // Use Sequelize's OR operator
-          { sender_id: userId, receiver_id: listing.owner_id },
-          { sender_id: listing.owner_id, receiver_id: userId }
-        ]
-      },
-      // Order messages by creation date (oldest first for chat flow)
+    };
+
+    if (currentUserId === listing.owner_id && otherUserId) {
+        // Case 1: Current user IS the owner AND a specific 'otherUserId' (tenant) is provided.
+        // Fetch messages between owner (currentUserId) and this specific tenant (otherUserId).
+        queryConditions[Op.or] = [
+            { sender_id: currentUserId, receiver_id: otherUserId },
+            { sender_id: otherUserId, receiver_id: currentUserId }
+        ];
+    } else if (currentUserId !== listing.owner_id) {
+        // Case 2: Current user is NOT the owner (i.e., a tenant/buyer).
+        // Fetch messages between this tenant (currentUserId) and the owner (listing.owner_id).
+        queryConditions[Op.or] = [
+            { sender_id: currentUserId, receiver_id: listing.owner_id },
+            { sender_id: listing.owner_id, receiver_id: currentUserId }
+        ];
+    } else {
+        // Case 3: Current user IS the owner, but NO specific 'otherUserId' is provided.
+        // This scenario is ambiguous for a direct chat page.
+        // "My Chats" list handles discovery. If owner lands here without 'otherUserId',
+        // it implies they aren't in a specific conversation context from "My Chats".
+        // Option 1: Return empty (as no specific conversation is targeted by owner).
+        // Option 2: Return all messages for this listing where owner is involved (could be many conversations). This is too broad for a single chat page.
+        // Let's go with Option 1 for clarity on a 1-on-1 chat page.
+        // MyChatsPage will pass otherUserId. ListingDetail page will implicitly mean chat with owner.
+        console.log(`Owner (ID: ${currentUserId}) accessing chat for listing ${listingId} without specifying other participant.`);
+        return res.status(200).json([]); // No specific chat thread targeted by owner
+    }
+
+
+    const messages = await Message.findAll({
+      where: queryConditions,
       order: [['created_at', 'ASC']],
-      // Include sender and receiver user details (optional but helpful)
-       include: [
+      include: [
          { model: User, as: 'Sender', attributes: ['id', 'name', 'email'] },
          { model: User, as: 'Receiver', attributes: ['id', 'name', 'email'] }
-       ]
+      ]
     });
-
-    // Send the fetched messages back as a JSON response
     res.status(200).json(messages);
 
   } catch (error) {
@@ -59,95 +68,130 @@ exports.getMessagesByListingId = async (req, res) => {
   }
 };
 
-
-// Controller function to create a new message
-// This requires authentication.
+// Keep createMessage as is. It already correctly uses receiver_id from the body if provided.
 exports.createMessage = async (req, res) => {
-  const senderId = req.user.id; // The authenticated user is the sender
-
-  // Get the listing ID and content from the request body
-  const { listing_id, content } = req.body;
+  const senderId = req.user.id;
+  const { listing_id, content, receiver_id: bodyReceiverId } = req.body; // Renamed to avoid conflict
 
   try {
-    // Basic validation
     if (!listing_id || !content) {
       return res.status(400).json({ message: 'Please provide listing ID and message content.' });
     }
 
-    // Find the listing to determine the receiver (the owner of the listing)
     const listing = await Listing.findByPk(listing_id, {
-        attributes: ['id', 'owner_id'] // Only need the owner_id
+        attributes: ['id', 'owner_id']
     });
 
     if (!listing) {
         return res.status(404).json({ message: 'Listing not found.' });
     }
 
-    // Determine the receiver ID.
-    // If the sender is the owner of the listing, the receiver must be the other user
-    // in the conversation about this listing. If the sender is NOT the owner, the receiver is the owner.
-    // This logic needs to be robust to handle replies.
-    // A simpler initial approach: assume the receiver is always the listing owner if the sender is not the owner.
-    // If the sender IS the owner, you'd need context about WHICH user the owner is messaging.
-    // For a simple 1-on-1 chat per listing between *an* interested user and the owner:
-    // When a user (tenant/buyer) initiates a chat via the 'Contact Owner' button:
-    // The FIRST message from the tenant/buyer to the owner defines the conversation.
-    // Subsequent messages from owner to THAT tenant/buyer, or tenant/buyer to owner, are part of this.
-    //
-    // Let's simplify the initial implementation:
-    // If the sender is the owner, they must specify the receiver_id in the request body.
-    // If the sender is NOT the owner, the receiver is automatically the owner of the listing.
+    let actualReceiverId;
 
-    let receiverId;
     if (senderId === listing.owner_id) {
-        // Owner is sending the message. The frontend MUST provide the specific receiver ID.
-        // This implies the owner is replying to a specific conversation thread with a tenant/buyer.
-        // For now, let's assume the frontend sends receiver_id in the body if the sender is the owner.
-         const { receiver_id } = req.body; // Expect receiver_id in body if sender is owner
-         if (!receiver_id) {
+         // Owner is sending. Frontend MUST provide the specific receiver_id (tenant ID).
+         if (!bodyReceiverId) {
              return res.status(400).json({ message: 'Receiver ID is required when the owner sends a message.' });
          }
-         receiverId = receiver_id;
-         // Optional: Add logic to ensure receiver_id is associated with this listing's chat historically
-         // or is the user who initiated contact. This makes the chat robust.
-         // For MVP, trust the frontend sends the correct receiver_id.
-
+         actualReceiverId = bodyReceiverId;
     } else {
-        // A non-owner is sending the message. The receiver is the listing owner.
-        receiverId = listing.owner_id;
+        // Non-owner (tenant) is sending. Receiver is always the listing owner.
+        actualReceiverId = listing.owner_id;
     }
 
-     // Prevent a user from messaging themselves on their own listing via this endpoint (optional)
-     if (senderId === receiverId) {
+     if (senderId === actualReceiverId) { // Ensure it's parsed as number if necessary
          return res.status(400).json({ message: 'Cannot send message to yourself.' });
      }
 
-
-    // Create the new message in the database
     const newMessage = await Message.create({
       listing_id: listing_id,
       sender_id: senderId,
-      receiver_id: receiverId,
+      receiver_id: actualReceiverId, // Use the determined receiver ID
       content: content
     });
 
-    // Fetch the created message with sender/receiver user details to send back
     const messageWithUsers = await Message.findByPk(newMessage.id, {
         include: [
             { model: User, as: 'Sender', attributes: ['id', 'name', 'email'] },
             { model: User, as: 'Receiver', attributes: ['id', 'name', 'email'] }
         ]
     });
-
-
-    // If message creation is successful, send a success response
     res.status(201).json({
       message: 'Message sent successfully!',
-      message: messageWithUsers // Send back the created message data with user info
+      message: messageWithUsers
     });
-
   } catch (error) {
     console.error('Error creating message:', error);
     res.status(500).json({ message: 'Server error during message creation.' });
   }
+};
+
+
+// Keep getMyChats as is.
+exports.getMyChats = async (req, res) => {
+    const userId = req.user.id; 
+
+    try {
+        const allUserMessages = await Message.findAll({
+            where: {
+                [Op.or]: [
+                    { sender_id: userId },
+                    { receiver_id: userId }
+                ]
+            },
+            include: [
+                { 
+                    model: Listing, 
+                    attributes: ['id', 'title', 'owner_id'],
+                },
+                { model: User, as: 'Sender', attributes: ['id', 'name', 'email'] },
+                { model: User, as: 'Receiver', attributes: ['id', 'name', 'email'] }
+            ],
+            order: [['listing_id', 'ASC'], ['createdAt', 'DESC']] 
+        });
+
+        if (!allUserMessages || allUserMessages.length === 0) {
+            return res.status(200).json([]); 
+        }
+
+        const conversationsMap = new Map();
+
+        allUserMessages.forEach(message => {
+            const otherUser = message.sender_id === userId ? message.Receiver : message.Sender;
+            const listing = message.Listing;
+
+            if (!otherUser || !listing) {
+                console.warn(`Message ID ${message.id} is missing related User or Listing data. Skipping.`);
+                return; 
+            }
+            const conversationKey = `${listing.id}-${otherUser.id}`;
+
+            if (!conversationsMap.has(conversationKey)) {
+                conversationsMap.set(conversationKey, {
+                    listingId: listing.id,
+                    listingTitle: listing.title,
+                    isCurrentUserListingOwner: listing.owner_id === userId, 
+                    otherParticipant: {
+                        id: otherUser.id,
+                        name: otherUser.name,
+                        email: otherUser.email 
+                    },
+                    lastMessage: {
+                        content: message.content,
+                        timestamp: message.createdAt,
+                        senderId: message.sender_id 
+                    },
+                });
+            }
+        });
+
+        const conversations = Array.from(conversationsMap.values());
+        conversations.sort((a, b) => new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp));
+
+        res.status(200).json(conversations);
+
+    } catch (error) {
+        console.error('Error fetching user chats:', error);
+        res.status(500).json({ message: 'Server error while fetching chats.' });
+    }
 };

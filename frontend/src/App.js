@@ -16,7 +16,7 @@ import ListingDetailPage from './pages/ListingDetail';
 import EditListingPage from './pages/EditListingPage';
 // Import the new ChatPage
 import ChatPage from './pages/ChatPage'; // <-- Import the new page
-
+import MyChatsPage from './pages/MyChatsPage'; 
 
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -93,7 +93,15 @@ function App() {
            />
            {/* --- End of Chat Page Route --- */}
 
-
+ {/* *** NEW: Route for MyChatsPage *** */}
+          <Route
+            path="/my-chats"
+            element={
+              <ProtectedRoute> {/* Requires ANY authenticated user */}
+                <MyChatsPage />
+              </ProtectedRoute>
+            }
+          />
           {/* Add other protected routes here */}
 
           {/* Optional: Catch-all route for 404 Not Found */}
