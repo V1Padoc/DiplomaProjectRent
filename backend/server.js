@@ -11,6 +11,7 @@ const generalRoutes = require('./routes/generalRoutes');
 const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 
 // --- IMPORTANT: Require all your model files here ---
 require('./models/User');
@@ -54,6 +55,7 @@ app.use('/api/listings', listingRoutes);
 
 app.use('/api/chats', chatRoutes);
 
+app.use('/api/bookings', bookingRoutes);
 // Function to connect to the database and start the server
 async function startServer() {
   try {

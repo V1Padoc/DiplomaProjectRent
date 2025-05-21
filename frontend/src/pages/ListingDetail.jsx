@@ -5,6 +5,8 @@ import { useParams, Link } from 'react-router-dom'; // Import Link Hook to get U
 import axios from 'axios'; // For fetching data
 import Slider from 'react-slick'; 
 import { useAuth } from '../context/AuthContext';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css'; // Default styling
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
 // Fix for default marker icon issue with Webpack/Create-React-App
@@ -19,7 +21,7 @@ L.Icon.Default.mergeOptions({
 
 function ListingDetail() {
   // Get the 'id' parameter from the URL
-  const { id } = useParams();
+const { id: listingId } = useParams();
 
   // State to store the listing details
   const [listing, setListing] = useState(null);
@@ -37,7 +39,10 @@ function ListingDetail() {
   const [reviewSubmitError, setReviewSubmitError] = useState(null); // State for review submission error
   const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState(null); // State for review submission success
   // --- End of State for Reviews ---
-
+ const [bookingDates, setBookingDates] = useState([null, null]); // [startDate, endDate]
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState(null);
+  const [bookingSuccess, setBookingSuccess] = useState(null);
     const { isAuthenticated, user, token } = useAuth();
 
   // useEffect hook to fetch data when the component mounts or the ID changes
@@ -48,8 +53,8 @@ function ListingDetail() {
         setError(null);
 
         // Make a GET request to your backend endpoint for a single listing
-        const response = await axios.get(`http://localhost:5000/api/listings/${id}`);
-
+        const response = await axios.get(`http://localhost:5000/api/listings/${listingId}`);
+ 
         // Set the listing state with the data from the response
         setListing(response.data);
         console.log('Listing details fetched:', response.data); // Log fetched data
@@ -68,10 +73,10 @@ function ListingDetail() {
     };
 
     // Call the fetchListing function
-    if (id) { // Only fetch if ID exists (should always exist for this route, but safe check)
+    if (listingId) { // Only fetch if ID exists (should always exist for this route, but safe check)
        fetchListing();
     }
-  }, [id]); // Dependency array: re-run effect if 'id' changes
+  }, [listingId]); // Dependency array: re-run effect if 'id' changes
 // --- useEffect to fetch Reviews ---
   useEffect(() => {
       const fetchReviews = async () => {
@@ -79,7 +84,7 @@ function ListingDetail() {
               setReviewLoading(true);
               setReviewError(null);
                // Use the listing ID from useParams to fetch reviews
-              const response = await axios.get(`http://localhost:5000/api/listings/${id}/reviews`);
+              const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/reviews`);
               setReviews(response.data);
                console.log('Reviews fetched:', response.data); // Log fetched reviews
           } catch (err) {
@@ -90,10 +95,10 @@ function ListingDetail() {
           }
       };
 
-      if (id) { // Fetch reviews only if listing ID is available
+      if (listingId) { // Fetch reviews only if listing ID is available
           fetchReviews();
       }
-  }, [id]); // Re-fetch reviews if the listing ID changes
+  }, [listingId]); // Re-fetch reviews if the listing ID changes
   // --- End of useEffect to fetch Reviews ---
 
    // --- Function to handle new review submission ---
@@ -113,7 +118,7 @@ function ListingDetail() {
 
     try {
         // Send the POST request to the backend review endpoint
-        const response = await axios.post(`http://localhost:5000/api/listings/${id}/reviews`,
+        const response = await axios.post(`http://localhost:5000/api/listings/${listingId}/reviews`,
             { // Request body
                 rating: newReviewRating,
                 comment: newReviewComment
@@ -145,7 +150,40 @@ function ListingDetail() {
     }
   };
   // --- End of Function to handle new review submission ---
+  const handleDateChange = (dates) => {
+    // react-calendar with selectRange returns an array [startDate, endDate]
+    setBookingDates(dates);
+    setBookingError(null); // Clear previous errors when dates change
+    setBookingSuccess(null);
+  };
 
+  // *** NEW: Handler for submitting booking request ***
+  const handleBookingRequest = async () => {
+    if (!bookingDates || !bookingDates[0] || !bookingDates[1]) {
+        setBookingError("Please select a start and end date.");
+        return;
+    }
+    setBookingSubmitting(true);
+    setBookingError(null);
+    setBookingSuccess(null);
+
+    try {
+        const response = await axios.post('http://localhost:5000/api/bookings', {
+            listing_id: listingId,
+            start_date: bookingDates[0].toISOString().split('T')[0], // Format as YYYY-MM-DD
+            end_date: bookingDates[1].toISOString().split('T')[0],   // Format as YYYY-MM-DD
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        setBookingSuccess(response.data.message);
+        setBookingDates([null, null]); // Reset calendar selection
+    } catch (err) {
+        console.error("Error requesting booking:", err);
+        setBookingError(err.response?.data?.message || "Failed to submit booking request.");
+    } finally {
+        setBookingSubmitting(false);
+    }
+  };
   // Render loading state
   if (loading) {
     return (
@@ -302,7 +340,55 @@ const sliderSettings = {
            )}
         </div>
         {/* --- End of Map Section --- */}
-
+ {/* --- BOOKING SECTION (NEW) --- */}
+        {listing.type === 'rent' && isAuthenticated && !isOwner && (
+            <div className="my-8 p-6 bg-gray-50 rounded-sm shadow">
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">Request to Book</h2>
+                <div className="flex flex-col md:flex-row md:space-x-6 items-start">
+                    <div className="mb-4 md:mb-0 md:flex-1">
+                        <Calendar
+                            onChange={handleDateChange}
+                            value={bookingDates}
+                            selectRange={true} // Allow selecting a date range
+                            minDate={new Date()} // Prevent selecting past dates
+                            className="border-gray-300 rounded-sm shadow-sm" // Minimalist calendar style
+                            tileClassName={({ date, view }) => { // Custom styling for tiles
+                                if (view === 'month') {
+                                    // Example: Highlight today (optional)
+                                    // if (date.toDateString() === new Date().toDateString()) {
+                                    //     return 'bg-blue-100';
+                                    // }
+                                }
+                                return null;
+                            }}
+                        />
+                    </div>
+                    <div className="md:flex-1">
+                        {bookingDates && bookingDates[0] && bookingDates[1] && (
+                            <div className="mb-4 p-3 bg-blue-50 rounded-sm text-blue-700">
+                                <p><strong>Selected Start:</strong> {bookingDates[0].toLocaleDateString()}</p>
+                                <p><strong>Selected End:</strong> {bookingDates[1].toLocaleDateString()}</p>
+                            </div>
+                        )}
+                        <button
+                            onClick={handleBookingRequest}
+                            disabled={bookingSubmitting || !bookingDates || !bookingDates[0] || !bookingDates[1]}
+                            className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out disabled:opacity-50"
+                        >
+                            {bookingSubmitting ? 'Submitting Request...' : 'Request to Book'}
+                        </button>
+                        {bookingError && <p className="mt-2 text-sm text-red-600">{bookingError}</p>}
+                        {bookingSuccess && <p className="mt-2 text-sm text-green-600">{bookingSuccess}</p>}
+                    </div>
+                </div>
+            </div>
+        )}
+        {!isAuthenticated && listing.type === 'rent' && (
+            <div className="my-8 p-4 bg-gray-100 rounded-sm text-center text-gray-700">
+                Please <Link to="/login" className="text-blue-600 hover:underline">log in</Link> or <Link to="/register" className="text-blue-600 hover:underline">register</Link> to book this rental.
+            </div>
+        )}
+        {/* --- END OF BOOKING SECTION --- */}
        {/* --- Reviews Section (Integrate Reviews Display and Form) --- */}
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">Reviews</h2>
@@ -397,7 +483,7 @@ const sliderSettings = {
              {/* Only show the button if the user is authenticated AND is NOT the owner */}
              {isAuthenticated && !isOwner && (
                  <Link
-                     to={`/listings/${id}/chat`} // Link to the chat page for this listing
+                     to={`/listings/${listingId}/chat`} // Link to the chat page for this listing
                      className="inline-block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out"
                  >
                      Contact Owner

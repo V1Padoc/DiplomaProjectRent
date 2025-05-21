@@ -17,7 +17,7 @@ import EditListingPage from './pages/EditListingPage';
 // Import the new ChatPage
 import ChatPage from './pages/ChatPage'; // <-- Import the new page
 import MyChatsPage from './pages/MyChatsPage'; 
-
+import BookingRequestsPage from './pages/BookingRequestsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 
@@ -92,7 +92,15 @@ function App() {
              }
            />
            {/* --- End of Chat Page Route --- */}
-
+ {/* *** NEW: Route for BookingRequestsPage for owners *** */}
+          <Route
+            path="/booking-requests"
+            element={
+              <ProtectedRoute allowedRoles={['owner']}>
+                <BookingRequestsPage />
+              </ProtectedRoute>
+            }
+          />
  {/* *** NEW: Route for MyChatsPage *** */}
           <Route
             path="/my-chats"
@@ -108,6 +116,7 @@ function App() {
           {/* <Route path="*" element={<NotFoundPage />} /> */}
 
         </Routes>
+        
       </main>
       <Footer />
     </div>

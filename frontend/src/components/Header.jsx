@@ -30,6 +30,11 @@ function Header() {
                     <Link to="/my-chats" className="text-gray-700 hover:text-gray-900">My Chats</Link>
                 </li>
                 {/* Link for creating a listing - visible only to owners */}
+                 {user && user.role === 'owner' && (
+                   <li>
+                       <Link to="/booking-requests" className="text-gray-700 hover:text-gray-900">Booking Requests</Link>
+                   </li>
+                )}
                 {user && user.role === 'owner' && (
                    <li>
                        <Link to="/create-listing" className="text-blue-600 hover:text-blue-800 font-semibold">Create Listing</Link> {/* Styled link */}
