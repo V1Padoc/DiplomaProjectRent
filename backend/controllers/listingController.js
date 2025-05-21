@@ -8,55 +8,101 @@ const path = require('path');
 const fs = require('fs').promises; // Use promises version of fs for async operations
 // Controller function to get all listings
 
-
 exports.getListings = async (req, res) => {
   try {
-    // Fetch all listings from the database where the status is 'active'
-    const listings = await Listing.findAll({
-      where: {
-        status: 'active' // Only retrieve listings that have been approved by admin
-      },
-      // You might want to order them, e.g., by creation date (newest first)
-      order: [['created_at', 'DESC']],
-      // Optional: Include the owner's name or email if needed
+    const {
+      page = 1, // Default to page 1
+      limit = 10, // Default to 10 listings per page
+      sortBy = 'created_at', // Default sort by creation date
+      sortOrder = 'DESC', // Default sort order (newest first)
+      type, // 'rent' or 'sale'
+      priceMin,
+      priceMax,
+      roomsMin, // Minimum number of rooms
+      location, // Search term for location
+      search, // General keyword search for title/description
+    } = req.query;
+
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const parsedLimit = parseInt(limit, 10);
+
+    let whereClause = {
+      status: 'active', // Always filter by active status for public listings
+    };
+
+    // --- Build dynamic where clause ---
+    if (type) {
+      whereClause.type = type;
+    }
+    if (priceMin && priceMax) {
+      whereClause.price = { [Op.between]: [parseFloat(priceMin), parseFloat(priceMax)] };
+    } else if (priceMin) {
+      whereClause.price = { [Op.gte]: parseFloat(priceMin) };
+    } else if (priceMax) {
+      whereClause.price = { [Op.lte]: parseFloat(priceMax) };
+    }
+
+    if (roomsMin) {
+      whereClause.rooms = { [Op.gte]: parseInt(roomsMin, 10) };
+    }
+
+    if (location) {
+      whereClause.location = { [Op.iLike]: `%${location}%` }; // Case-insensitive search for location
+    }
+
+    if (search) {
+      whereClause[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+        // You could extend search to other fields like amenities if needed
+      ];
+    }
+    // --- End of building where clause ---
+
+    // --- Build order clause ---
+    const validSortFields = ['created_at', 'price', 'rooms', 'area']; // Add other valid fields
+    const order = [];
+    if (validSortFields.includes(sortBy)) {
+      order.push([sortBy, sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC']);
+    } else {
+      order.push(['created_at', 'DESC']); // Default sort if sortBy is invalid
+    }
+    // --- End of building order clause ---
+
+    // Fetch listings with pagination, filtering, and sorting
+    const { count, rows: listings } = await Listing.findAndCountAll({
+      where: whereClause,
       include: [{
         model: User,
-        as: 'Owner', // Use the alias defined in the model association (if you added one, otherwise remove 'as')
-        attributes: ['name', 'email'] // Select only non-sensitive user attributes
-        // NOTE: Ensure you have defined the association Listing.belongsTo(User, { as: 'Owner', foreignKey: 'owner_id' });
-        // and User.hasMany(Listing, { as: 'Listings', foreignKey: 'owner_id' }); in your models
-      }]
+        as: 'Owner',
+        attributes: ['name', 'email'],
+      }],
+      order: order,
+      limit: parsedLimit,
+      offset: offset,
     });
 
-    // Send the fetched listings back as a JSON response
-    res.status(200).json(listings);
+    res.status(200).json({
+      totalItems: count,
+      totalPages: Math.ceil(count / parsedLimit),
+      currentPage: parseInt(page, 10),
+      listings, // The array of listings for the current page
+    });
 
   } catch (error) {
-    // If any error occurs during the database query
     console.error('Error fetching listings:', error);
-    // Send a 500 Internal Server Error response
     res.status(500).json({ message: 'Server error while fetching listings.' });
   }
 };
-
-
 exports.createListing = async (req, res) => {
   const owner_id = req.user.id;
-
-  // --- Include latitude and longitude in destructuring ---
   const { title, description, price, rooms, area, location, amenities, type, latitude, longitude } = req.body;
-  // --- End of destructuring update ---
-
   const photoFilenames = req.files ? req.files.map(file => file.filename) : [];
 
   try {
-    // Basic validation (add more)
-    // You might want to add validation that latitude/longitude are valid numbers if provided
     if (!title || !price || !location || !type) {
       return res.status(400).json({ message: 'Please provide title, price, location, and type.' });
     }
-
-    // Create the new listing
     const newListing = await Listing.create({
       owner_id: owner_id,
       title: title,
@@ -65,17 +111,13 @@ exports.createListing = async (req, res) => {
       rooms: rooms ? parseInt(rooms, 10) : null,
       area: area ? parseFloat(area) : null,
       location: location,
-      // --- Add latitude and longitude here ---
-      latitude: latitude ? parseFloat(latitude) : null, // Convert to number, handle optional
-      longitude: longitude ? parseFloat(longitude) : null, // Convert to number, handle optional
-      // --- End of adding coordinates ---
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
       amenities: amenities || null,
       type: type,
       status: 'pending',
       photos: photoFilenames.length > 0 ? photoFilenames : null
     });
-
-    // If listing creation is successful
     res.status(201).json({
       message: 'Listing created successfully! Awaiting admin approval.',
       listing: {
@@ -84,12 +126,10 @@ exports.createListing = async (req, res) => {
         owner_id: newListing.owner_id,
         status: newListing.status,
         photos: newListing.photos,
-        // Include coordinates in the response
         latitude: newListing.latitude,
         longitude: newListing.longitude
       }
     });
-
   } catch (error) {
     console.error('Error creating listing:', error);
     res.status(500).json({ message: 'Server error during listing creation.' });
@@ -97,72 +137,62 @@ exports.createListing = async (req, res) => {
 };
 
 exports.getListingById = async (req, res) => {
-  // Get the listing ID from the request parameters (e.g., from /api/listings/123, req.params.id will be '123')
   const listingId = req.params.id;
-
   try {
-    // Find the listing by its primary key (ID)
-    // We also include the owner details and potentially other associated data like reviews later
     const listing = await Listing.findByPk(listingId, {
-      // Only retrieve listings with status 'active' for public viewing
       where: {
          status: 'active'
-         // Note: If an owner needs to view their *pending* listing details,
-         // you'll need a separate endpoint or add auth check here
       },
       include: [
         {
           model: User,
-          as: 'Owner', // Use the alias defined in the model association
-          attributes: ['id', 'name', 'email'] // Select specific owner attributes
+          as: 'Owner',
+          attributes: ['id', 'name', 'email']
         }
-        // You will add includes for Reviews, Bookings (if applicable to view), etc. later
-        // , {
-        //   model: Review,
-        //   as: 'Reviews' // Assuming you defined Listing.hasMany(Review, { as: 'Reviews' })
-        // }
       ]
     });
-
-    // Check if the listing was found
     if (!listing) {
-      // If listing not found (or not active), send a 404 Not Found response
       return res.status(404).json({ message: 'Listing not found or is not active.' });
     }
-
-    // Send the fetched listing data back as a JSON response
+    // --- Increment views_count (Placeholder for Analytics) ---
+    // This is a simplified way. In a real app, you might want to avoid double counting
+    // for the same user session, or use a dedicated analytics service/table.
+    // For now, let's just increment if the Analytics model exists.
+    try {
+        const Analytics = require('../models/Analytics'); // Make sure Analytics model is imported or required here
+        const [analyticsEntry, created] = await Analytics.findOrCreate({
+            where: { listing_id: listingId },
+            defaults: { listing_id: listingId, views_count: 1 }
+        });
+        if (!created) {
+            await analyticsEntry.increment('views_count');
+        }
+        console.log(`Views for listing ${listingId} updated.`);
+    } catch (analyticsError) {
+        console.error('Error updating views count:', analyticsError);
+        // Don't let analytics error break the main listing fetch
+    }
+    // --- End of Increment views_count ---
     res.status(200).json(listing);
-
   } catch (error) {
-    // If any error occurs (e.g., invalid ID format, database error)
     console.error('Error fetching listing by ID:', error);
-    // Send a 500 Internal Server Error response
     res.status(500).json({ message: 'Server error while fetching listing.' });
   }
 };
 
 exports.getReviewsByListingId = async (req, res) => {
-  const listingId = req.params.listingId; // Get the listing ID from the route parameters
-
+  const listingId = req.params.listingId;
   try {
-    // Find all reviews associated with this listing ID
     const reviews = await Review.findAll({
       where: { listing_id: listingId },
-      // Order reviews, e.g., by creation date (newest first)
       order: [['created_at', 'DESC']],
-      // Include the user who wrote the review (optional but good for display)
       include: [{
         model: User,
-        as: 'User', // Assuming you defined Review.belongsTo(User, { as: 'User' })
-        attributes: ['id', 'name', 'email'] // Select non-sensitive user attributes
-        // NOTE: Ensure you have defined the association Review.belongsTo(User, { as: 'User', foreignKey: 'user_id' });
-        // and User.hasMany(Review, { as: 'Reviews', foreignKey: 'user_id' }); in your models
+        as: 'User',
+        attributes: ['id', 'name', 'email']
       }]
     });
-
-    // Send the fetched reviews back as a JSON response
     res.status(200).json(reviews);
-
   } catch (error) {
     console.error('Error fetching reviews:', error);
     res.status(500).json({ message: 'Server error while fetching reviews.' });
@@ -173,36 +203,19 @@ exports.getReviewsByListingId = async (req, res) => {
 // Controller function to create a new review for a listing
 // This requires authentication, so it will run after authMiddleware
 exports.createReview = async (req, res) => {
-  const listingId = req.params.listingId; // Get the listing ID from the route parameters
-  const userId = req.user.id;           // Get the user ID from the authenticated user (from authMiddleware)
-
-  // Get rating and comment from the request body
+  const listingId = req.params.listingId;
+  const userId = req.user.id;
   const { rating, comment } = req.body;
-
   try {
-    // Basic validation: Check if required fields are present and valid
     if (rating === undefined || rating === null || rating < 1 || rating > 5) {
       return res.status(400).json({ message: 'Please provide a valid rating between 1 and 5.' });
     }
-    // Comment is optional, but validate rating presence
-
-    // Optional: Check if the user has already reviewed this listing
-    // Depending on your rules, you might only allow one review per user per listing
-    // const existingReview = await Review.findOne({ where: { listing_id: listingId, user_id: userId } });
-    // if (existingReview) {
-    //     return res.status(409).json({ message: 'You have already reviewed this listing.' });
-    // }
-
-
-    // Create the new review in the database
     const newReview = await Review.create({
       listing_id: listingId,
       user_id: userId,
-      rating: parseInt(rating, 10), // Ensure rating is stored as an integer
-      comment: comment || null       // Handle optional comment
+      rating: parseInt(rating, 10),
+      comment: comment || null
     });
-
-    // Fetch the created review with user details to send back to frontend
     const reviewWithUser = await Review.findByPk(newReview.id, {
         include: [{
             model: User,
@@ -210,14 +223,10 @@ exports.createReview = async (req, res) => {
             attributes: ['id', 'name', 'email']
         }]
     });
-
-
-    // If review creation is successful, send a success response
     res.status(201).json({
       message: 'Review added successfully!',
-      review: reviewWithUser // Send back the created review data with user info
+      review: reviewWithUser
     });
-
   } catch (error) {
     console.error('Error creating review:', error);
     res.status(500).json({ message: 'Server error during review creation.' });
