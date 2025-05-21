@@ -31,6 +31,18 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING, // String type
     allowNull: true         // Can be empty initially, users can add later
   },
+   profile_photo_url: { // Store the path/filename of the profile photo
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  bio: { // User's description/bio
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  phone_number: {
+    type: DataTypes.STRING, // Store as string to accommodate various formats, country codes
+    allowNull: true,
+  }
   // Sequelize automatically adds `createdAt` and `updatedAt` timestamps by default.
   // We only need `created_at` according to the schema, but letting Sequelize manage both is common and often useful.
   // If you strictly only want `created_at`, you can disable default timestamps and add it manually:

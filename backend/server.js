@@ -12,6 +12,9 @@ const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const userRoutes = require('./routes/userRoutes');
+
 
 // --- IMPORTANT: Require all your model files here ---
 require('./models/User');
@@ -43,6 +46,7 @@ app.use(express.json());
 // The URL path will be /uploads, and it will map to the backend/uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // <-- Add this line
 
+app.use('/uploads/profiles', express.static(path.join(__dirname, 'uploads/profiles')));
 
 // Use the general routes
 app.use('/api', generalRoutes);
@@ -56,14 +60,17 @@ app.use('/api/listings', listingRoutes);
 app.use('/api/chats', chatRoutes);
 
 app.use('/api/bookings', bookingRoutes);
+
+app.use('/api/admin', adminRoutes);
+
+app.use('/api/users', userRoutes);
 // Function to connect to the database and start the server
 async function startServer() {
   try {
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
 
-    // sequelize.sync({ force: false }); // Adjust or remove based on your sync needs
-
+    // FIX: Corrected typo from process.envnpm.PORT to process.env.PORT
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

@@ -62,6 +62,18 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []); // The empty dependency array [] means this effect runs only once after the initial render
 
+  const refreshUser = async () => {
+    if (token) {
+      try {
+        const config = { headers: { 'Authorization': `Bearer ${token}` } };
+        const res = await axios.get('http://localhost:5000/api/auth/user', config);
+        setUser(res.data);
+      } catch (err) {
+        console.error('Error refreshing user data:', err);
+        // Optionally handle token invalidation if refresh fails
+      }
+    }
+  };
   // Function to handle user login (called from LoginPage)
   const login = async (newToken) => {
     setToken(newToken); // Set the token state
@@ -101,7 +113,8 @@ export const AuthProvider = ({ children }) => {
     token,       // The JWT token
     user,        // The authenticated user's data
     loading,     // True while checking for initial token
-    isAuthenticated: token !== null && user !== null, // Helper boolean for easy check
+    isAuthenticated: token !== null && user !== null,
+    refreshUser,
     login,       // Function to call upon successful login
     logout       // Function to call to log the user out
   };

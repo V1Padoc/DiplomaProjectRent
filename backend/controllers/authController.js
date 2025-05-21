@@ -115,7 +115,8 @@ exports.getUser = async (req, res) => {
     // req.user was set by the authMiddleware based on the token payload
     // We use req.user.id to find the user in the database
     const user = await User.findByPk(req.user.id, {
-        attributes: ['id', 'email', 'name', 'role', 'created_at'] // Select specific attributes to return (exclude password!)
+        attributes: ['id', 'email', 'name', 'role', 'created_at',
+            'profile_photo_url', 'bio', 'phone_number'] // Select specific attributes to return (exclude password!)
     });
 
     // If user is not found (shouldn't happen if token was valid and user exists)
