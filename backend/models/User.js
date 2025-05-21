@@ -40,8 +40,9 @@ const User = sequelize.define('User', {
     allowNull: true,
   },
   phone_number: {
-    type: DataTypes.STRING, // Store as string to accommodate various formats, country codes
-    allowNull: true,
+    type: DataTypes.STRING,
+    // *** MODIFIED: allowNull: false ***
+    allowNull: false,
   }
   // Sequelize automatically adds `createdAt` and `updatedAt` timestamps by default.
   // We only need `created_at` according to the schema, but letting Sequelize manage both is common and often useful.

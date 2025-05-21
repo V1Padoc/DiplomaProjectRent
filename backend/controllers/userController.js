@@ -19,7 +19,13 @@ exports.updateUserProfile = async (req, res) => {
         if (name !== undefined) fieldsToUpdate.name = name;
         if (bio !== undefined) fieldsToUpdate.bio = bio;
         if (phone_number !== undefined) fieldsToUpdate.phone_number = phone_number;
-
+        if (phone_number !== undefined) {
+        // *** ADDED: Validation if phone_number is being set/updated and is empty ***
+        if (phone_number === '') { // If they try to clear a mandatory field
+             return res.status(400).json({ message: "Phone number cannot be empty." });
+        }
+        fieldsToUpdate.phone_number = phone_number;
+        }
         // Handle profile photo upload
         if (req.file) { // 'profilePhoto' is the field name from multer
             // Delete old photo if it exists and is different

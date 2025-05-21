@@ -7,7 +7,7 @@ const User = require('../models/User');
 // Controller function for user registration
 exports.register = async (req, res) => {
   // ... (keep your existing register function here)
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role, phone_number } = req.body;
   const allowedSelfRegisterRoles = ['tenant', 'owner']; // Define roles allowed for self-registration
   if (!allowedSelfRegisterRoles.includes(role)) {
     // If the provided role is NOT in the allowed list
@@ -15,8 +15,8 @@ exports.register = async (req, res) => {
     return res.status(400).json({ message: 'Invalid role specified during registration.' });
   }
   try {
-    if (!email || !password || !name) { // 'role' is now validated against allowed roles
-      return res.status(400).json({ message: 'Please provide all required fields: email, password, name, and a valid role.' });
+    if (!email || !password || !name|| !phone_number) { // 'role' is now validated against allowed roles
+      return res.status(400).json({ message: 'Please provide all required fields: email, password, name, number, and a role.' });
     }
 
     const existingUser = await User.findOne({ where: { email: email } });
@@ -31,7 +31,8 @@ exports.register = async (req, res) => {
       email: email,
       password: hashedPassword,
       name: name,
-      role: role
+      role: role,
+      phone_number: phone_number
     });
 
     res.status(201).json({
@@ -40,7 +41,8 @@ exports.register = async (req, res) => {
         id: newUser.id,
         email: newUser.email,
         name: newUser.name,
-        role: newUser.role
+        role: newUser.role,
+        phone_number: newUser.phone_number
       }
     });
 

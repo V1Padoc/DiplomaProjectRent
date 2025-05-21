@@ -56,9 +56,9 @@ exports.getMessagesByListingId = async (req, res) => {
       where: queryConditions,
       order: [['created_at', 'ASC']],
       include: [
-         { model: User, as: 'Sender', attributes: ['id', 'name', 'email'] },
-         { model: User, as: 'Receiver', attributes: ['id', 'name', 'email'] }
-      ]
+         { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED profile_photo_url
+         { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED profile_photo_url
+       ]
     });
     res.status(200).json(messages);
 
@@ -112,8 +112,8 @@ exports.createMessage = async (req, res) => {
 
     const messageWithUsers = await Message.findByPk(newMessage.id, {
         include: [
-            { model: User, as: 'Sender', attributes: ['id', 'name', 'email'] },
-            { model: User, as: 'Receiver', attributes: ['id', 'name', 'email'] }
+            { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED
+            { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED
         ]
     });
     res.status(201).json({
@@ -144,8 +144,8 @@ exports.getMyChats = async (req, res) => {
                     model: Listing, 
                     attributes: ['id', 'title', 'owner_id'],
                 },
-                { model: User, as: 'Sender', attributes: ['id', 'name', 'email'] },
-                { model: User, as: 'Receiver', attributes: ['id', 'name', 'email'] }
+               { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED
+                { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED
             ],
             order: [['listing_id', 'ASC'], ['createdAt', 'DESC']] 
         });
@@ -171,10 +171,11 @@ exports.getMyChats = async (req, res) => {
                     listingId: listing.id,
                     listingTitle: listing.title,
                     isCurrentUserListingOwner: listing.owner_id === userId, 
-                    otherParticipant: {
+                  otherParticipant: {
                         id: otherUser.id,
                         name: otherUser.name,
-                        email: otherUser.email 
+                        email: otherUser.email,
+                        profile_photo_url: otherUser.profile_photo_url // ADDED
                     },
                     lastMessage: {
                         content: message.content,

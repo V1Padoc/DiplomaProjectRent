@@ -9,7 +9,7 @@ const { isTenant, isOwner } = require('../middleware/roleMiddleware');
 router.post(
     '/',
     authMiddleware,
-    isTenant,
+   // isTenant,
     bookingController.createBooking
 );
 

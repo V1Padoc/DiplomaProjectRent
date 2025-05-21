@@ -9,6 +9,7 @@ function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(''); // *** ADDED: State for phone number ***
   const [role, setRole] = useState('tenant'); // Default role is 'tenant'
   const [error, setError] = useState(''); // State for displaying registration errors
   const [success, setSuccess] = useState(''); // State for displaying success message
@@ -28,6 +29,7 @@ function RegisterPage() {
         email,
         password,
         name,
+        phoneNumber, // *** ADDED: Include phone number in the request body ***
         role
       });
 
@@ -103,7 +105,20 @@ function RegisterPage() {
               required // Make field required
             />
           </div>
-
+          <div className="mb-4"> {/* Assuming you add a phone number field here */}
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">
+                Phone Number
+            </label>
+            <input
+                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
+                id="phone_number" 
+                type="tel" 
+                placeholder="Phone Number"
+                value={phoneNumber} // *** CHANGED: Use phoneNumber state ***
+                onChange={(e) => setPhoneNumber(e.target.value)} // *** CHANGED: Use setPhoneNumber handler ***
+                required // *** ADDED: Make required ***
+            />
+          </div>
           <div className="mb-6">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="role">
               Register as:

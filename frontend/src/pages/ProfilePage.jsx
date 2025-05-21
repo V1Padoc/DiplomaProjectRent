@@ -167,13 +167,14 @@ function ProfilePage() {
                 className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
               ></textarea>
             </div>
-            <div className="mb-6">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">Phone Number</label>
-              <input
-                type="tel" name="phone_number" id="phone_number" value={formData.phone_number} onChange={handleInputChange}
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
-              />
-            </div>
+           <div className="mb-6">
+  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">Phone Number</label>
+  <input
+    type="tel" name="phone_number" id="phone_number" value={formData.phone_number} onChange={handleInputChange}
+    className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
+    required // *** ADDED: Make required ***
+  />
+</div>
             <div className="flex items-center justify-between">
               <button
                 type="submit"

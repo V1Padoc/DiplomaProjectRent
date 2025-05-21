@@ -1,8 +1,10 @@
 // backend/server.js
+const http = require('http'); // Node's built-in HTTP module
+const { Server } = require("socket.io"); // Correct import for Socket.IO Server class
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const path = require('path'); // Import the 'path' module
+const path = require('path');
 
 
 const sequelize = require('./config/database');
@@ -24,6 +26,18 @@ require('./models/Review');
 require('./models/Message');
 require('./models/Analytics');
 
+const app = express();
+
+const server = http.createServer(app);
+
+// *** FIX: Now 'server' is defined and can be used to initialize Socket.IO ***
+const io = new Server(server, { 
+    cors: {
+        origin: "http://localhost:3000", // Your frontend URL
+        methods: ["GET", "POST"]
+    }
+});
+
 // Define Associations (Keep this block if you added it)
 /*
 const User = require('./models/User');
@@ -35,7 +49,6 @@ Listing.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
 */
 
 
-const app = express();
 
 // Middleware
 app.use(cors());
@@ -64,16 +77,39 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use('/api/users', userRoutes);
+
+
+io.on('connection', (socket) => {
+    console.log('A user connected via WebSocket:', socket.id);
+
+    // TODO: Implement proper authentication for WebSocket connections
+    // ... (rest of your conceptual socket.io logic) ...
+
+    socket.on('join_chat_room', (roomNameOrData) => {
+        socket.join(roomNameOrData);
+        console.log(`User ${socket.id} joined room ${roomNameOrData}`);
+    });
+
+    socket.on('send_message', async (messageData) => {
+        console.log('Message received on server via WebSocket:', messageData);
+        // TODO: Full implementation
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected via WebSocket:', socket.id);
+    });
+});
 // Function to connect to the database and start the server
 async function startServer() {
   try {
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
+    // await sequelize.sync({ alter: true }); // Sync database schema if needed
 
-    // FIX: Corrected typo from process.envnpm.PORT to process.env.PORT
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+    // *** FIX: Use 'server.listen' because Socket.IO is attached to 'server' (the http.createServer instance) ***
+    server.listen(PORT, () => {
+        console.log(`Server with Socket.IO running on port ${PORT}`);
     });
 
   } catch (error) {
@@ -81,5 +117,6 @@ async function startServer() {
     process.exit(1);
   }
 }
+
 
 startServer();

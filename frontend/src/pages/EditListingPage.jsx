@@ -1,14 +1,109 @@
 // frontend/src/pages/EditListingPage.jsx
 
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom'; // Import useParams and useNavigate
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Added useRef, useCallback
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext'; // To get the token and user info
+import { useAuth } from '../context/AuthContext';
+
+// *** NEW: Leaflet Imports ***
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css'; // Core Leaflet CSS
+import L from 'leaflet'; // Leaflet library for icon fix
+
+// Leaflet Geosearch for address search
+import { GeoSearchControl, OpenStreetMapProvider } from 'leaflet-geosearch';
+import 'leaflet-geosearch/dist/geosearch.css'; // Geosearch CSS
+
+// *** Leaflet icon fix (important for markers to display correctly) ***
+// This is a common workaround for issues with Leaflet's default icon paths in Webpack environments.
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+    iconUrl: require('leaflet/dist/images/marker-icon.png'),
+    shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+});
+// *** END OF LEAFLET IMPORTS & ICON FIX ***
+
+
+// *** NEW: Component to handle map click events and display marker ***
+// This component listens for map clicks and updates the parent's position state.
+function LocationMarker({ onPositionChange, initialPosition }) {
+    const [position, setPosition] = useState(initialPosition);
+    const map = useMapEvents({
+        click(e) {
+            map.flyTo(e.latlng, map.getZoom()); // Fly to clicked location
+            setPosition(e.latlng); // Set marker position
+            onPositionChange(e.latlng); // Pass latlng back to parent component
+        },
+    });
+
+    // Effect to update marker position if initialPosition prop changes (e.g., from geocoding)
+    useEffect(() => {
+        // Only update if initialPosition is set and differs from current position
+        if (initialPosition && (!position || initialPosition.lat !== position.lat || initialPosition.lng !== position.lng)) {
+            setPosition(initialPosition);
+            // Ensure map is ready before flying to to prevent errors during unmount/remount
+            if (map) {
+                map.flyTo(initialPosition, map.getZoom());
+            }
+        }
+    }, [initialPosition, map, position]);
+
+    return position === null ? null : (
+        <Marker position={position}>
+            <Popup>
+                Property Location: <br/> Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)} <br/>
+                Click anywhere on the map to adjust.
+            </Popup>
+        </Marker>
+    );
+}
+// *** END OF LocationMarker COMPONENT ***
+
+
+// *** NEW: Component for Address Search Control using Leaflet-Geosearch ***
+// This component adds a search bar to the map that finds addresses and updates the map.
+const SearchField = ({ onLocationSelected }) => {
+    const map = useMap(); // Access the Leaflet map instance
+
+    useEffect(() => {
+        const provider = new OpenStreetMapProvider(); // Using OpenStreetMap for geocoding
+        const searchControl = new GeoSearchControl({
+            provider: provider,
+            style: 'bar', // Visual style of the search control ('bar' or 'button')
+            showMarker: false, // We'll handle the marker ourselves via LocationMarker
+            showPopup: false, // Don't show default popup
+            autoClose: true, // Close search results panel after selection
+            retainZoomLevel: false, // Do not keep current zoom level after search
+            animateZoom: true, // Animate map movement to result
+            keepResult: true, // Keep the search result text in the bar
+            searchLabel: 'Enter address to find on map...',
+        });
+
+        map.addControl(searchControl); // Add the search control to the map
+
+        // Listen to the geosearch result event
+        map.on('geosearch/showlocation', (result) => {
+            // result.location contains { x: longitude, y: latitude, label: address_string }
+            const { y: lat, x: lng, label } = result.location;
+            onLocationSelected({ lat, lng }, label); // Pass lat/lng and the full address label back
+        });
+
+        // Cleanup function: remove the control and event listener when component unmounts
+        return () => {
+            map.removeControl(searchControl);
+            map.off('geosearch/showlocation');
+        };
+    }, [map, onLocationSelected]); // Rerun effect if map instance or callback changes
+
+    return null; // This component doesn't render any visible JSX itself, it just adds a control to the map
+};
+// *** END OF SearchField COMPONENT ***
 
 
 function EditListingPage() {
   // Get the 'id' parameter from the URL (the listing ID)
-  const { id } = useParams();
+  const { id: listingId } = useParams(); // Renamed 'id' to 'listingId' for clarity
 
   // State for the original listing data fetched from the backend
   const [originalListing, setOriginalListing] = useState(null);
@@ -20,13 +115,13 @@ function EditListingPage() {
     price: '',
     rooms: '',
     area: '',
-    location: '',
-    latitude: '', // Added latitude/longitude
-    longitude: '', // Added latitude/longitude
+    location: '', // This will now hold the address string
+    latitude: '', // Managed by map interaction
+    longitude: '', // Managed by map interaction
     amenities: '',
-    type: 'rent', // Default type
-    existingPhotos: [], // Array of filenames of photos to keep
-    newPhotos: [] // Array of File objects for new uploads
+    type: 'rent',
+    existingPhotos: [],
+    newPhotos: []
   });
 
   // State for messages (loading, error, submission feedback)
@@ -36,7 +131,13 @@ function EditListingPage() {
   const [submitError, setSubmitError] = useState(null); // For form submission errors
   const [submitSuccess, setSubmitSuccess] = useState(null); // For form submission success
 
-  const navigate = useNavigate(); // For redirection after saving
+  // *** NEW: Map related state ***
+  const [markerPosition, setMarkerPosition] = useState(null); // { lat: number, lng: number }
+  // Default map center (e.g., a general location or a default city like London)
+  const [mapCenter, setMapCenter] = useState([51.505, -0.09]); // London coordinates
+  const mapRef = useRef(null); // Ref to access the Leaflet map instance directly if needed
+
+  const navigate = useNavigate();
   const { token, user } = useAuth(); // Get token and user info for auth/authz
 
 
@@ -46,49 +147,57 @@ function EditListingPage() {
       try {
         setLoading(true);
         setError(null);
-         setOriginalListing(null); // Clear previous listing data
+        setOriginalListing(null); // Clear previous listing data
 
-        // Make a GET request to the backend endpoint for editing a listing
-        // This route is protected, so include the Authorization header
         const config = {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         };
-        const response = await axios.get(`http://localhost:5000/api/listings/${id}/edit`, config);
+        const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/edit`, config);
 
         const fetchedListing = response.data;
-        setOriginalListing(fetchedListing); // Store original fetched data
+        setOriginalListing(fetchedListing);
 
         // --- Initialize form state with fetched data ---
         setFormData({
           title: fetchedListing.title || '',
           description: fetchedListing.description || '',
-          price: fetchedListing.price !== null ? fetchedListing.price.toString() : '', // Convert Decimal to String for input
-          rooms: fetchedListing.rooms !== null ? fetchedListing.rooms.toString() : '', // Convert Integer to String
-          area: fetchedListing.area !== null ? fetchedListing.area.toString() : '', // Convert Decimal to String
+          price: fetchedListing.price !== null ? fetchedListing.price.toString() : '',
+          rooms: fetchedListing.rooms !== null ? fetchedListing.rooms.toString() : '',
+          area: fetchedListing.area !== null ? fetchedListing.area.toString() : '',
           location: fetchedListing.location || '',
-          latitude: fetchedListing.latitude !== null ? fetchedListing.latitude.toString() : '', // Convert Decimal to String
-          longitude: fetchedListing.longitude !== null ? fetchedListing.longitude.toString() : '', // Convert Decimal to String
+          latitude: fetchedListing.latitude !== null ? fetchedListing.latitude.toString() : '',
+          longitude: fetchedListing.longitude !== null ? fetchedListing.longitude.toString() : '',
           amenities: fetchedListing.amenities || '',
           type: fetchedListing.type || 'rent',
-          existingPhotos: Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [], // Initialize with existing photo filenames
-          newPhotos: [] // Start with no new photos
+          existingPhotos: Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [],
+          newPhotos: []
         });
-        // --- End of initializing form state ---
 
-        console.log('Listing data for editing fetched:', fetchedListing); // Log fetched data
+        // *** NEW: Initialize map center and marker from fetched listing data ***
+        if (fetchedListing.latitude && fetchedListing.longitude) {
+            const initialPos = { lat: parseFloat(fetchedListing.latitude), lng: parseFloat(fetchedListing.longitude) };
+            setMarkerPosition(initialPos); // Set marker position
+            setMapCenter([initialPos.lat, initialPos.lng]); // Set map center
+        } else {
+            // If no coordinates in fetched listing, ensure marker is null (no marker shown initially)
+            setMarkerPosition(null);
+            // Keep default map center if no coordinates
+        }
+        // --- End of initializing form state & map state ---
+
+        console.log('Listing data for editing fetched:', fetchedListing);
 
       } catch (err) {
         console.error('Error fetching listing for edit:', err);
-        // Check for 404 or 403 errors specifically
         if (err.response) {
             if (err.response.status === 404) {
                  setError('Listing not found.');
             } else if (err.response.status === 403) {
                  setError('You do not have permission to edit this listing.');
             } else if (err.response.status === 401) {
-                 setError('Authentication required to edit listing.'); // Should be handled by ProtectedRoute, but safe fallback
+                 setError('Authentication required to edit listing.');
             } else {
                  setError('Failed to fetch listing data for editing. Please try again.');
             }
@@ -96,64 +205,81 @@ function EditListingPage() {
              setError('Network error while fetching listing data.');
         }
       } finally {
-        setLoading(false); // Set loading to false after fetch completes
+        setLoading(false);
       }
     };
 
-    // Fetch data only if ID and token are available
-    if (id && token) {
+    if (listingId && token) {
        fetchListingForEdit();
     } else if (!token) {
-        // This case should be handled by ProtectedRoute, but good practice
         setLoading(false);
         setError('Authentication token missing.');
     }
-  }, [id, token, navigate]); // Dependency array: re-run effect if id, token, or navigate changes
+  }, [listingId, token, navigate]);
 
-  // --- Handle form input changes ---
+
+  // --- NEW: Callback for map position change ---
+  const handleMapPositionChange = useCallback((latlng) => {
+    setMarkerPosition(latlng); // Update the state that controls the marker
+    setFormData(prevFormData => ({
+        ...prevFormData,
+        latitude: latlng.lat.toFixed(7), // Update latitude form field with high precision
+        longitude: latlng.lng.toFixed(7) // Update longitude form field with high precision
+    }));
+  }, []);
+
+  // --- NEW: Callback for geocode result (address search) ---
+  const handleGeocodeResult = useCallback((latlng, addressLabel) => {
+    handleMapPositionChange(latlng); // Update marker and lat/lng inputs
+    setFormData(prevFormData => ({
+        ...prevFormData,
+        location: addressLabel // Update the address form field with the geocoded address
+    }));
+    // If mapRef is available, fly to the new location and zoom in
+    if (mapRef.current) {
+        mapRef.current.flyTo(latlng, 15); // Zoom level 15 is a good street-level zoom
+    } else {
+        // Fallback for initial render if mapRef isn't ready yet, set mapCenter for the first render
+        setMapCenter([latlng.lat, latlng.lng]);
+    }
+  }, [handleMapPositionChange]);
+
+
+  // --- Handle form input changes (existing) ---
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: value // Update the corresponding field in formData state
+      [name]: value
     });
   };
-  // --- End of handle input changes ---
 
-  // --- Handle new file input change ---
+  // --- Handle new file input change (existing) ---
   const handleNewPhotosChange = (e) => {
-    // Add newly selected files to the newPhotos array state
     setFormData({
       ...formData,
       newPhotos: [...formData.newPhotos, ...Array.from(e.target.files)]
     });
-     // Optional: Clear the file input value after selection if you want
-     // e.target.value = null;
   };
-  // --- End of handle new file input change ---
 
-  // --- Handle removing an existing photo ---
+  // --- Handle removing an existing photo (existing) ---
   const handleRemoveExistingPhoto = (filenameToRemove) => {
-     // Filter out the filename to remove from the existingPhotos array
      setFormData({
        ...formData,
        existingPhotos: formData.existingPhotos.filter(filename => filename !== filenameToRemove)
      });
   };
-  // --- End of handle removing an existing photo ---
 
-   // --- Handle removing a newly selected photo before submission ---
+   // --- Handle removing a newly selected photo before submission (existing) ---
    const handleRemoveNewPhoto = (indexToRemove) => {
-       // Filter out the photo by index from the newPhotos array
        setFormData({
            ...formData,
            newPhotos: formData.newPhotos.filter((_, index) => index !== indexToRemove)
        });
    };
-  // --- End of handle removing a newly selected photo ---
 
 
-  // --- Handle form submission (Update Listing) ---
+  // --- Handle form submission (Update Listing) (existing, but uses new formData fields) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -161,58 +287,45 @@ function EditListingPage() {
     setSubmitSuccess(null);
     setSubmitting(true);
 
-    // --- Prepare FormData for submission ---
     const updateFormData = new FormData();
-    // Append text/number fields from formData state
     Object.keys(formData).forEach(key => {
-        // Don't append the photo arrays directly here
         if (key !== 'existingPhotos' && key !== 'newPhotos') {
             updateFormData.append(key, formData[key]);
         }
     });
 
-    // Append existing photos to keep (filenames array)
     formData.existingPhotos.forEach(filename => {
-        updateFormData.append('existingPhotos', filename); // Backend expects this key
+        updateFormData.append('existingPhotos', filename);
     });
 
-    // Append new photo files
     formData.newPhotos.forEach(file => {
-        updateFormData.append('photos', file); // Backend expects this key ('photos') for new uploads
+        updateFormData.append('photos', file);
     });
-     // --- End of preparing FormData ---
-
 
     try {
-      // Send the PUT request to the backend update endpoint
-      const response = await axios.put(`http://localhost:5000/api/listings/${id}`, updateFormData, {
+      const response = await axios.put(`http://localhost:5000/api/listings/${listingId}`, updateFormData, {
         headers: {
-           // Axios usually sets Content-Type for FormData, but Authorization is needed
-          'Authorization': `Bearer ${token}` // Include the JWT
+          'Authorization': `Bearer ${token}`
         }
       });
 
       setSubmitSuccess(response.data.message);
       console.log('Listing updated:', response.data.listing);
 
-      // Optional: Navigate to the listing detail page or management page after update
       setTimeout(() => {
-        // Navigate to the updated listing's detail page
-        navigate(`/listings/${id}`);
-        // Or navigate to the owner's management page: navigate('/manage-listings');
-      }, 2000); // Redirect after 2 seconds
+        navigate(`/listings/${listingId}`);
+      }, 2000);
 
     } catch (err) {
       console.error('Error updating listing:', err);
       setSubmitError(err.response?.data?.message || 'Failed to update listing. Please try again.');
     } finally {
-      setSubmitting(false); // Always set submitting to false
+      setSubmitting(false);
     }
   };
-  // --- End of Handle form submission ---
 
 
-  // --- Conditional Rendering for initial fetch states ---
+  // --- Conditional Rendering for initial fetch states (existing) ---
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 text-center text-gray-700 min-h-screen">
@@ -229,7 +342,6 @@ function EditListingPage() {
     );
   }
 
-  // If not loading and no error, but originalListing is null (shouldn't happen if 404 handled by error)
   if (!originalListing) {
       return (
           <div className="container mx-auto px-4 py-8 text-center text-gray-700 min-h-screen">
@@ -237,14 +349,12 @@ function EditListingPage() {
           </div>
       );
   }
-  // --- End of Conditional Rendering for initial fetch states ---
-
 
   // Render the edit form once data is loaded and user is authorized (handled by ProtectedRoute)
   return (
-    <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen"> {/* Consistent layout styling */}
-      <div className="w-full max-w-2xl mx-auto bg-white p-8 rounded-sm shadow-sm"> {/* Form container with card styling */}
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">Edit Listing</h1> {/* Styled heading */}
+    <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
+      <div className="w-full max-w-3xl mx-auto bg-white p-8 rounded-sm shadow-sm"> {/* Increased max-width for map */}
+        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">Edit Listing</h1>
 
         {/* Display messages */}
         {submitting && <div className="text-center text-blue-600 mb-4">Saving changes...</div>}
@@ -257,13 +367,7 @@ function EditListingPage() {
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="title">Title</label>
             <input
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="title"
-              type="text"
-              placeholder="Listing Title"
-              name="title" // Add name attribute to match state key
-              value={formData.title}
-              onChange={handleInputChange} // Use generic handler
-              required
+              id="title" type="text" placeholder="Listing Title" name="title" value={formData.title} onChange={handleInputChange} required
             />
           </div>
 
@@ -272,12 +376,7 @@ function EditListingPage() {
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="description">Description</label>
             <textarea
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="description"
-              placeholder="Detailed description of the property"
-              name="description" // Add name attribute
-              value={formData.description}
-              onChange={handleInputChange} // Use generic handler
-              rows="4"
+              id="description" placeholder="Detailed description of the property" name="description" value={formData.description} onChange={handleInputChange} rows="4"
             ></textarea>
           </div>
 
@@ -286,14 +385,7 @@ function EditListingPage() {
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="price">Price</label>
             <input
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="price"
-              type="number"
-              step="0.01"
-              placeholder="e.g. 1200.50 or 250000"
-              name="price" // Add name attribute
-              value={formData.price}
-              onChange={handleInputChange} // Use generic handler
-              required
+              id="price" type="number" step="0.01" placeholder="e.g. 1200.50 or 250000" name="price" value={formData.price} onChange={handleInputChange} required
             />
           </div>
 
@@ -303,87 +395,85 @@ function EditListingPage() {
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="rooms">Rooms</label>
               <input
                 className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="rooms"
-                type="number"
-                step="1"
-                placeholder="e.g. 3"
-                name="rooms" // Add name attribute
-                value={formData.rooms}
-                onChange={handleInputChange} // Use generic handler
+                id="rooms" type="number" step="1" placeholder="e.g. 3" name="rooms" value={formData.rooms} onChange={handleInputChange}
               />
             </div>
             <div className="w-1/2">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="area">Area (sq ft / sq m)</label>
               <input
                 className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="area"
-                type="number"
-                step="0.01"
-                placeholder="e.g. 150.75"
-                name="area" // Add name attribute
-                value={formData.area}
-                onChange={handleInputChange} // Use generic handler
+                id="area" type="number" step="0.01" placeholder="e.g. 150.75" name="area" value={formData.area} onChange={handleInputChange}
               />
             </div>
           </div>
 
-
-          {/* Location */}
+          {/* --- MODIFIED Location / Address Input --- */}
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="location">Location</label>
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="location">
+                Address / Location Description
+            </label>
             <input
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="location"
-              type="text"
-              placeholder="Address, City, State"
-              name="location" // Add name attribute
-              value={formData.location}
-              onChange={handleInputChange} // Use generic handler
-              required
+              id="location" type="text" placeholder="e.g., 123 Main St, City or use map search"
+              name="location" value={formData.location} onChange={handleInputChange} required
             />
           </div>
+          {/* --- END OF MODIFIED Location Input --- */}
+          
+          {/* --- NEW: MAP INTEGRATION --- */}
+          <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+                Update Property Location on Map (Click to place/move marker, use search bar)
+            </label>
+            <MapContainer
+                center={mapCenter} // Initial center, set from fetched data or default
+                zoom={markerPosition ? 15 : 13} // Zoom in if marker exists, otherwise default
+                scrollWheelZoom={true} // Allow zooming with mouse wheel
+                style={{ height: '400px', width: '100%' }} // Fixed size for the map container
+                className="rounded-sm border border-gray-300" // Add some styling
+                whenCreated={mapInstance => { mapRef.current = mapInstance; }} // Get reference to the map instance
+            >
+                <TileLayer
+                    attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" // OpenStreetMap tiles
+                />
+                {/* LocationMarker component handles clicks and displays the marker */}
+                <LocationMarker onPositionChange={handleMapPositionChange} initialPosition={markerPosition} />
+                {/* SearchField component adds the address search bar */}
+                <SearchField onLocationSelected={handleGeocodeResult} />
+            </MapContainer>
+            <p className="text-xs text-gray-600 mt-1">
+                Selected Coordinates: Lat: {formData.latitude || "N/A"}, Lng: {formData.longitude || "N/A"}
+            </p>
+          </div>
+          {/* --- END OF MAP INTEGRATION --- */}
 
-           {/* Latitude and Longitude Inputs */}
+          {/* Latitude and Longitude Inputs (now read-only, populated by map) */}
           <div className="mb-4 flex space-x-4">
              <div className="w-1/2">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="latitude">Latitude</label>
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="latitude">Latitude (from map)</label>
                 <input
-                   className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                   id="latitude"
-                   type="number"
-                   step="0.00000001"
-                   placeholder="e.g. 34.0522"
-                   name="latitude" // Add name attribute
-                   value={formData.latitude}
-                   onChange={handleInputChange} // Use generic handler
+                   className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 bg-gray-100 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                   id="latitude" type="text" name="latitude" value={formData.latitude} readOnly // Make read-only
+                   placeholder="Click on map or search"
                 />
              </div>
              <div className="w-1/2">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="longitude">Longitude</label>
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="longitude">Longitude (from map)</label>
                  <input
-                   className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                   id="longitude"
-                   type="number"
-                   step="0.00000001"
-                   placeholder="e.g. -118.2437"
-                   name="longitude" // Add name attribute
-                   value={formData.longitude}
-                   onChange={handleInputChange} // Use generic handler
+                   className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 bg-gray-100 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                   id="longitude" type="text" name="longitude" value={formData.longitude} readOnly // Make read-only
+                   placeholder="Click on map or search"
                 />
              </div>
           </div>
-
+          
            {/* Amenities */}
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="amenities">Amenities (comma-separated)</label>
             <input
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="amenities"
-              type="text"
-              placeholder="e.g. Parking, Gym, Pool"
-              name="amenities" // Add name attribute
-              value={formData.amenities}
-              onChange={handleInputChange} // Use generic handler
+              id="amenities" type="text" placeholder="e.g. Parking, Gym, Pool" name="amenities" value={formData.amenities} onChange={handleInputChange}
             />
           </div>
 
@@ -392,11 +482,7 @@ function EditListingPage() {
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="type">Listing Type</label>
             <select
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="type"
-              name="type" // Add name attribute
-              value={formData.type}
-              onChange={handleInputChange} // Use generic handler
-              required
+              id="type" name="type" value={formData.type} onChange={handleInputChange} required
             >
               <option value="rent">Rent</option>
               <option value="sale">Sale</option>
@@ -411,15 +497,15 @@ function EditListingPage() {
                    {formData.existingPhotos.map((filename, index) => (
                        <div key={filename} className="relative w-32 h-32 border border-gray-300 rounded-sm overflow-hidden">
                            <img
-                               src={`http://localhost:5000/uploads/${filename}`} // URL to the image
+                               src={`http://localhost:5000/uploads/${filename}`}
                                alt={`Existing Photo ${index + 1}`}
                                className="w-full h-full object-cover"
                            />
                            {/* Button to remove existing photo */}
                            <button
-                               type="button" // Important: type="button" to prevent form submission
+                               type="button"
                                 onClick={() => handleRemoveExistingPhoto(filename)}
-                               className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs"
+                               className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs leading-none flex items-center justify-center w-5 h-5"
                            >
                                X
                            </button>
@@ -430,29 +516,23 @@ function EditListingPage() {
                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPhotos">Add New Photos</label>
                 <input
                    className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                   id="newPhotos"
-                   type="file"
-                   multiple
-                   accept="image/*"
-                   onChange={handleNewPhotosChange} // Use new photos handler
+                   id="newPhotos" type="file" multiple accept="image/*" onChange={handleNewPhotosChange}
                 />
                 {/* Optional: Display previews of newly selected photos */}
                  {formData.newPhotos.length > 0 && (
                     <div className="flex flex-wrap gap-4 mt-4">
                         {formData.newPhotos.map((file, index) => (
                              <div key={index} className="relative w-32 h-32 border border-gray-300 rounded-sm overflow-hidden">
-                                 {/* Use URL.createObjectURL to create a temporary URL for preview */}
                                  <img
                                      src={URL.createObjectURL(file)}
-                                     alt={`New Photo ${index + 1}`}
+                                     alt={`New Photo ${file.name}`}
                                      className="w-full h-full object-cover"
                                      onLoad={() => URL.revokeObjectURL(file)} // Clean up the temporary URL after loading
                                  />
-                                 {/* Button to remove newly selected photo */}
                                 <button
                                     type="button"
                                      onClick={() => handleRemoveNewPhoto(index)}
-                                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs"
+                                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs leading-none flex items-center justify-center w-5 h-5"
                                 >
                                     X
                                 </button>
@@ -467,10 +547,9 @@ function EditListingPage() {
           <div className="flex items-center justify-center">
             <button
               className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out"
-              type="submit"
-              disabled={submitting || loading} // Disable button while submitting or initial loading
+              type="submit" disabled={submitting || loading}
             >
-              {submitting ? 'Saving...' : 'Save Changes'} {/* Button text changes based on submitting state */}
+              {submitting ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

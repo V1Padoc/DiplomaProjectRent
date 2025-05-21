@@ -2,20 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Apply Inter font and a light gray background to the body */
+/* ... your existing Inter font import and body styles ... */
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', sans-serif; /* Ensure Inter is applied */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  @apply bg-gray-50 text-gray-800; /* Apply light gray background and dark gray text */
+  @apply bg-gray-50 text-gray-800; /* Minimalistic body background and text */
 }
 
+/* Add this for consistent typography if not already fully covered by Tailwind */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter', sans-serif;
+}
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
-
+.react-calendar-override .react-calendar__tile--disabled,
+.react-calendar__tile--disabled { /* General fallback if custom class not always used */
+  background-color: #e9ecef !important; /* A light gray background */
+  color: #adb5bd !important;             /* A lighter gray text color */
+  text-decoration: line-through !important; /* Strike through the date number */
+  cursor: not-allowed !important;          /* Show a 'not-allowed' cursor */
+}
 #root {
   display: flex;
   flex-direction: column;

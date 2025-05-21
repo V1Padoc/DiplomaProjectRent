@@ -101,11 +101,12 @@ function ListingDetail() {
             setLoadingBookedDates(true);
             try {
                 const response = await axios.get(`http://localhost:5000/api/listings/${listingIdFromParams}/booked-dates`);
-
+                console.log("Raw booked dates from backend:", response.data); // Log raw
                 const ranges = response.data.map(range => ({
                     start: new Date(range.start),
                     end: new Date(range.end)
                 }));
+                console.log("Processed bookedRanges for calendar:", ranges); // Log processed
                 setBookedRanges(ranges);
             } catch (err) {
                 console.error("Error fetching booked dates:", err);
@@ -120,19 +121,20 @@ function ListingDetail() {
     const tileDisabled = ({ date, view }) => {
         if (view === 'month') {
             for (const range of bookedRanges) {
-                const startDate = new Date(range.start);
-                const endDate = new Date(range.end);
+                const startDate = new Date(range.start); // Assuming range.start is a valid date string or Date object
+                const endDate = new Date(range.end);   // Assuming range.end is a valid date string or Date object
 
-                const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                const normalizedStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-                const normalizedEndDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+                // Ensure we are comparing date parts only, ignoring time
+                const normalizedCurrentDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                const normalizedRangeStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                const normalizedRangeEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
 
-                if (normalizedDate >= normalizedStartDate && normalizedDate <= normalizedEndDate) {
-                    return true;
+                if (normalizedCurrentDate >= normalizedRangeStart && normalizedCurrentDate <= normalizedRangeEnd) {
+                    return true; // This date is within a booked range, so disable it
                 }
             }
         }
-        return false;
+        return false; // Otherwise, the date is enabled
     };
 
 
