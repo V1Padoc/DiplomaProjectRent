@@ -12,7 +12,9 @@ function ChatPage() {
 
     const [messages, setMessages] = useState([]);
     const [loadingMessages, setLoadingMessages] = useState(true);
-    const [isPolling, setIsPolling] = useState(false); // Used as a flag, not for function identity
+    // Renamed `isPolling` from useState to useRef to prevent unnecessary re-renders of useCallback
+    // and ensure the latest value is always accessed within the memoized function.
+    const isPollingRef = useRef(false); 
     const [errorMessages, setErrorMessages] = useState(null);
 
     const [listing, setListing] = useState(null);
@@ -33,13 +35,13 @@ function ChatPage() {
 
     // Memoized function to fetch only messages
     const fetchAndSetMessages = useCallback(async (currentFetchedListing) => {
-        // Guard conditions: use the `isPolling` state variable via closure
-        if (!currentToken || !currentUserId || !listingIdFromParams || !currentFetchedListing || isPolling) {
-            if (isPolling) console.log("Fetch messages skipped: already polling or missing data.");
+        // Guard conditions: use the `isPollingRef.current` value
+        if (!currentToken || !currentUserId || !listingIdFromParams || !currentFetchedListing || isPollingRef.current) {
+            if (isPollingRef.current) console.log("Fetch messages skipped: already polling or missing data.");
             return;
         }
         
-        setIsPolling(true); // Set flag to prevent concurrent fetches
+        isPollingRef.current = true; // Set flag to prevent concurrent fetches
         let messagesApiUrl = `http://localhost:5000/api/listings/${listingIdFromParams}/messages`;
         const params = new URLSearchParams();
 
@@ -58,7 +60,7 @@ function ChatPage() {
             setMessages(prevMessages => {
                 // Smart update to prevent re-renders if messages haven't changed
                 if (prevMessages.length !== newMessages.length ||
-                    (newMessages.length > 0 && prevMessages.length > 0 && prevMessages[prevMessages.length - 1].id !== newMessages[newMessages.length - 1].id) ||
+                    (newMessages.length > 0 && prevMessages.length > 0 && prevMessages[newMessages.length - 1]?.id !== newMessages[newMessages.length - 1]?.id) ||
                     (newMessages.length > 0 && prevMessages.length === 0)) {
                     return newMessages;
                 }
@@ -70,9 +72,9 @@ function ChatPage() {
             // Avoid setting persistent error for polling failures unless it's critical
             // setErrorMessages(err.response?.data?.message || 'Failed to poll messages.');
         } finally {
-            setIsPolling(false); // Clear flag
+            isPollingRef.current = false; // Clear flag
         }
-    }, [listingIdFromParams, otherParticipantIdFromQuery, currentToken, currentUserId]); // REMOVED `isPolling` from dependencies
+    }, [listingIdFromParams, otherParticipantIdFromQuery, currentToken, currentUserId]); // `isPollingRef` is not a dependency as its `current` value is mutable
 
     // Effect for initial data load (listing details AND initial messages)
     useEffect(() => {
@@ -120,6 +122,11 @@ function ChatPage() {
     // Effect for polling messages (starts after initial load is complete and listing is set)
     useEffect(() => {
         if (listing && token && user && !loadingListing && !loadingMessages) { 
+            // Clear any existing interval before setting a new one to prevent duplicates
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+            }
+
             pollingIntervalRef.current = setInterval(() => {
                 // Pass the current `listing` from state to `fetchAndSetMessages`
                 // This ensures it uses the most up-to-date listing info (like listing.owner_id)
@@ -211,21 +218,27 @@ function ChatPage() {
     const canSendMessage = isAuthenticated && user && listing &&
     (user.id !== listing.owner_id || (user.id === listing.owner_id && !!otherParticipantIdFromQuery));
 
-    // Determine the name of the other participant for the chat header
-    let otherParticipantName = 'Participant';
+    // Determine the details of the other participant for the chat header
+    let otherUserDetails = null;
     if (listing && user) {
         if (user.id === listing.owner_id && otherParticipantIdFromQuery) {
             // Owner chatting with someone specific
-            const otherUserInMessages = messages.find(m => 
-                (m.Sender?.id?.toString() === otherParticipantIdFromQuery && m.sender_id !== user.id) ||
-                (m.Receiver?.id?.toString() === otherParticipantIdFromQuery && m.receiver_id !== user.id)
+            const targetId = otherParticipantIdFromQuery;
+            // Find if any message has this targetId as sender or receiver
+            const participantMessage = messages.find(m =>
+                m.sender_id?.toString() === targetId || m.receiver_id?.toString() === targetId
             );
-            if (otherUserInMessages) {
-                otherParticipantName = (otherUserInMessages.sender_id.toString() === otherParticipantIdFromQuery ? otherUserInMessages.Sender?.name : otherUserInMessages.Receiver?.name) || 'Participant';
+
+            if (participantMessage) {
+                if (participantMessage.sender_id?.toString() === targetId) {
+                    otherUserDetails = participantMessage.Sender;
+                } else if (participantMessage.receiver_id?.toString() === targetId) {
+                    otherUserDetails = participantMessage.Receiver;
+                }
             }
         } else if (user.id !== listing.owner_id && listing.Owner) {
             // Non-owner chatting with the listing owner
-            otherParticipantName = `${listing.Owner?.name || listing.Owner?.email} (Owner)`;
+            otherUserDetails = listing.Owner;
         }
     }
 
@@ -239,11 +252,14 @@ function ChatPage() {
                         <> for <RouterLink to={`/listings/${listingIdFromParams}`} className="text-blue-600 hover:underline">{listing.title}</RouterLink></>
                     )}
                 </h1>
-                {listing && user && (
-                    (user.id === listing.owner_id && otherParticipantIdFromQuery) || (user.id !== listing.owner_id)
-                ) && (
+                {/* *** MODIFIED: Link other participant's name in title to their profile *** */}
+                {otherUserDetails && (
                     <p className="text-sm text-gray-600">
-                        with {otherParticipantName}
+                        with{' '}
+                        <RouterLink to={`/profiles/${otherUserDetails.id}`} className="font-semibold text-blue-600 hover:underline">
+                            {otherUserDetails.name || otherUserDetails.email}
+                        </RouterLink>
+                        {listing && user && user.id !== listing.owner_id && listing.Owner && otherUserDetails.id === listing.Owner.id && " (Owner)"}
                     </p>
                 )}
             </div>
@@ -265,39 +281,48 @@ function ChatPage() {
                     const isCurrentUserSender = message.sender_id === user?.id;
                     // Determine the other user involved in the message, whether sender or receiver.
                     // This assumes Sender and Receiver objects are populated from the backend.
-                    const otherUserInMessage = isCurrentUserSender ? message.Receiver : message.Sender;
+                    const otherMessageUser = isCurrentUserSender ? message.Receiver : message.Sender;
 
                     return (
                         <div
                             key={message.id}
                             className={`flex items-end ${isCurrentUserSender ? 'justify-end' : 'justify-start'}`}
                         >
-                            {!isCurrentUserSender && otherUserInMessage && (
-                                <img
-                                    src={otherUserInMessage.profile_photo_url ? `http://localhost:5000/uploads/profiles/${otherUserInMessage.profile_photo_url}` : 'https://via.placeholder.com/40'}
-                                    alt={otherUserInMessage.name || 'User'}
-                                    className="w-8 h-8 rounded-full mr-2 object-cover self-start flex-shrink-0"
-                                />
+                            {/* Display other participant's photo (and make it a link) if message is from them */}
+                            {!isCurrentUserSender && otherMessageUser && (
+                                <RouterLink to={`/profiles/${otherMessageUser.id}`}>
+                                    <img
+                                        src={otherMessageUser.profile_photo_url ? `http://localhost:5000/uploads/profiles/${otherMessageUser.profile_photo_url}` : 'https://via.placeholder.com/40'}
+                                        alt={otherMessageUser.name || 'User'}
+                                        title={`View profile of ${otherMessageUser.name || 'User'}`}
+                                        className="w-8 h-8 rounded-full mr-2 object-cover self-start flex-shrink-0 cursor-pointer hover:opacity-80"
+                                    />
+                                </RouterLink>
                             )}
                             <div className={`rounded-lg p-3 max-w-xs lg:max-w-md shadow-sm ${
                                 isCurrentUserSender ? 'bg-blue-500 text-white ml-auto' : 'bg-gray-200 text-gray-800'
                             }`}>
-                                {!isCurrentUserSender && otherUserInMessage && (
-                                     <div className="text-xs font-semibold mb-1 opacity-80">
-                                        {otherUserInMessage.name || otherUserInMessage.email}
-                                     </div>
+                                {/* Display sender name (and make it a link) if it's not the current user */}
+                                {!isCurrentUserSender && otherMessageUser && (
+                                     <RouterLink to={`/profiles/${otherMessageUser.id}`} className="text-xs font-semibold mb-1 opacity-80 hover:underline text-gray-700 hover:text-gray-900">
+                                        {otherMessageUser.name || otherMessageUser.email}
+                                     </RouterLink>
                                 )}
                                 <p className="break-words">{message.content}</p>
                                  <div className="text-xs mt-1 opacity-75 text-right">
                                     {new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                  </div>
                             </div>
-                            {isCurrentUserSender && user && ( // Current user's avatar
-                                <img
-                                    src={user.profile_photo_url ? `http://localhost:5000/uploads/profiles/${user.profile_photo_url}` : 'https://via.placeholder.com/40'}
-                                    alt={user.name || 'You'}
-                                    className="w-8 h-8 rounded-full ml-2 object-cover self-start flex-shrink-0"
-                                />
+                             {/* Display current user's photo (and make it a link to their own editable profile) */}
+                            {isCurrentUserSender && user && (
+                                <RouterLink to={`/profile`}> {/* Links to own editable profile */}
+                                    <img
+                                        src={user.profile_photo_url ? `http://localhost:5000/uploads/profiles/${user.profile_photo_url}` : 'https://via.placeholder.com/40'}
+                                        alt={user.name || 'You'}
+                                        title="View your profile"
+                                        className="w-8 h-8 rounded-full ml-2 object-cover self-start flex-shrink-0 cursor-pointer hover:opacity-80"
+                                    />
+                                </RouterLink>
                             )}
                         </div>
                     );
@@ -329,8 +354,8 @@ function ChatPage() {
             ) : (
                  <div className="bg-gray-100 p-4 rounded-sm text-center text-gray-700">
                      {!isAuthenticated ? "Please log in to send a message." :
-                      (user && listing && user.id === listing.owner_id && !otherParticipantIdFromQuery ?
-                        "To reply to a specific user, please select the conversation from 'My Chats'." :
+                      (user && listing && user.id === listing.owner_id && !otherParticipantIdFromQuery ? 
+                        "To reply to a specific user, please select the conversation from 'My Chats'." : 
                         "You cannot send messages in this chat at the moment.")
                      }
                  </div>

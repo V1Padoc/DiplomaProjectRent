@@ -20,7 +20,7 @@ import MyChatsPage from './pages/MyChatsPage';
 import BookingRequestsPage from './pages/BookingRequestsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import MyBookingsPage from './pages/MyBookingsPage'; // *** NEW IMPORT ***
-
+import PublicProfilePage from './pages/PublicProfilePage';
 function App() {
   return (
     <div className="flex flex-col min-h-screen">
@@ -117,11 +117,12 @@ function App() {
          <Route
             path="/my-bookings"
             element={
-              <ProtectedRoute allowedRoles={['tenant']}> {/* Or just <ProtectedRoute> if owners can also be tenants */}
+              <ProtectedRoute allowedRoles={['tenant', 'owner']}> {/* Or just <ProtectedRoute> if owners can also be tenants */}
                 <MyBookingsPage />
               </ProtectedRoute>
             }
           />
+          <Route path="/profiles/:userId" element={<PublicProfilePage />} /> 
         </Routes>
         
       </main>

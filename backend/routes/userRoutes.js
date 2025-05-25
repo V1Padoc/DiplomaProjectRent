@@ -12,5 +12,18 @@ router.put(
     profileUpload.single('profilePhoto'), // Expect a single file from 'profilePhoto' field
     userController.updateUserProfile
 );
+router.post(
+    '/change-password',
+    authMiddleware, // Must be logged in
+    userController.changePassword
+);
+
+router.get(
+    '/public-profile/:userId', // :userId is a route parameter
+    // No authMiddleware needed if profiles are truly public.
+    // If you want to restrict viewing public profiles to logged-in users, add authMiddleware.
+    userController.getPublicUserProfile 
+);
+
 
 module.exports = router;

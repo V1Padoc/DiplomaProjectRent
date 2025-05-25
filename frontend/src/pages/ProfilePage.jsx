@@ -15,9 +15,18 @@ function ProfilePage() {
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
   
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [submitting, setSubmitting] = useState(false); // For general profile update
+  const [error, setError] = useState(''); // For general profile update
+  const [success, setSuccess] = useState(''); // For general profile update
+
+  // State for password change form
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
 
   const fileInputRef = useRef(null);
 
@@ -49,6 +58,8 @@ function ProfilePage() {
     setSubmitting(true);
     setError('');
     setSuccess('');
+    setPasswordError(''); // Clear password errors
+    setPasswordSuccess(''); // Clear password successes
 
     const data = new FormData();
     data.append('name', formData.name);
@@ -66,17 +77,9 @@ function ProfilePage() {
         },
       });
       setSuccess(response.data.message);
-      // Refresh user data in AuthContext by re-triggering the login logic (which fetches user)
-      // or by adding a dedicated refreshUser function to AuthContext.
-      // For simplicity, if 'login' in AuthContext fetches user data, this works.
-      // A more robust way would be an explicit refreshUser function in AuthContext.
-      // For now, let's assume `login(token)` implicitly refreshes user data.
-      if (response.data.user && token) {
-          // Manually update user in context for immediate reflection IF AuthContext doesn't auto-refresh.
-          // This is a simplified approach. A dedicated refreshUser in AuthContext is better.
-          // Forcing a re-fetch or update via AuthContext is key.
-          // Let's call login again to force user data refetch in AuthContext.
-          login(token); // This should update the user in AuthContext
+      // Re-login to refresh user data in AuthContext
+      if (token) {
+          login(token); 
       }
       setIsEditing(false);
       setProfilePhotoFile(null); // Clear selected file after upload
@@ -87,6 +90,45 @@ function ProfilePage() {
       setSubmitting(false);
     }
   };
+
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPasswordSubmitting(true);
+    setPasswordError('');
+    setPasswordSuccess('');
+    setError(''); // Clear general errors
+    setSuccess(''); // Clear general successes
+
+    if (newPassword !== confirmNewPassword) {
+        setPasswordError('New password and confirmation do not match.');
+        setPasswordSubmitting(false);
+        return;
+    }
+    if (newPassword.length < 6) { // Example: minimum password length
+        setPasswordError('New password must be at least 6 characters long.');
+        setPasswordSubmitting(false);
+        return;
+    }
+
+    try {
+        // *** FIXED: Added confirmNewPassword to the payload ***
+        const response = await axios.post('http://localhost:5000/api/users/change-password', 
+            { oldPassword, newPassword, confirmNewPassword }, 
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setPasswordSuccess(response.data.message);
+        // Clear password fields on success
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        // setShowPasswordForm(false); // Optionally hide form on success, but success message is good
+    } catch (err) {
+        console.error("Password change error:", err);
+        setPasswordError(err.response?.data?.message || 'Failed to change password.');
+    } finally {
+        setPasswordSubmitting(false);
+    }
+};
 
   if (authLoading) {
     return <div className="container mx-auto px-4 py-8 text-center">Loading profile...</div>;
@@ -120,7 +162,7 @@ function ProfilePage() {
           )}
         </div>
 
-        {!isEditing ? (
+        {!isEditing && !showPasswordForm ? ( // Only show profile details and buttons if neither form is active
           <>
             <div className="mb-4">
               <strong className="block text-gray-700">Name:</strong>
@@ -143,13 +185,33 @@ function ProfilePage() {
               <p className="text-gray-800">{user.phone_number || 'Not set'}</p>
             </div>
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                setIsEditing(true);
+                setShowPasswordForm(false); // Hide password form if it was showing
+                setError(''); 
+                setSuccess('');
+                setPasswordError(''); 
+                setPasswordSuccess('');
+              }}
               className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline"
             >
               Edit Profile
             </button>
+            <button
+                onClick={() => {
+                    setShowPasswordForm(true);
+                    setIsEditing(false); // Hide general edit form
+                    setError(''); 
+                    setSuccess('');
+                    setPasswordError(''); 
+                    setPasswordSuccess('');
+                }}
+                className="mt-4 w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline"
+            >
+                Change Password
+            </button>
           </>
-        ) : (
+        ) : isEditing ? ( // Show general edit form if isEditing
           <form onSubmit={handleSubmit}>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
             
@@ -168,13 +230,13 @@ function ProfilePage() {
               ></textarea>
             </div>
            <div className="mb-6">
-  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">Phone Number</label>
-  <input
-    type="tel" name="phone_number" id="phone_number" value={formData.phone_number} onChange={handleInputChange}
-    className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
-    required // *** ADDED: Make required ***
-  />
-</div>
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">Phone Number</label>
+              <input
+                type="tel" name="phone_number" id="phone_number" value={formData.phone_number} onChange={handleInputChange}
+                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
+                required // *** ADDED: Make required ***
+              />
+            </div>
             <div className="flex items-center justify-between">
               <button
                 type="submit"
@@ -202,6 +264,60 @@ function ProfilePage() {
               </button>
             </div>
           </form>
+        ) : ( // Show password change form if showPasswordForm
+            <form onSubmit={handleChangePasswordSubmit} className="mt-6 pt-6 border-t border-gray-200">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">Change Password</h2>
+                {passwordError && <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">{passwordError}</div>}
+                {passwordSuccess && <div className="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded" role="alert">{passwordSuccess}</div>}
+                
+                <div className="mb-4">
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="oldPassword">Old Password</label>
+                    <input
+                        type="password" name="oldPassword" id="oldPassword" value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" required
+                    />
+                </div>
+                <div className="mb-4">
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPassword">New Password</label>
+                    <input
+                        type="password" name="newPassword" id="newPassword" value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" required
+                    />
+                </div>
+                <div className="mb-6">
+                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="confirmNewPassword">Confirm New Password</label>
+                    <input
+                        type="password" name="confirmNewPassword" id="confirmNewPassword" value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" required
+                    />
+                </div>
+                <div className="flex items-center justify-between">
+                    <button
+                        type="submit"
+                        disabled={passwordSubmitting}
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline disabled:opacity-50"
+                    >
+                        {passwordSubmitting ? 'Changing...' : 'Update Password'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setShowPasswordForm(false);
+                            setOldPassword('');
+                            setNewPassword('');
+                            setConfirmNewPassword('');
+                            setPasswordError('');
+                            setPasswordSuccess('');
+                        }}
+                        className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </form>
         )}
       </div>
     </div>

@@ -82,7 +82,7 @@ function BookingRequestsPage() {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Listing</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tenant</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tenant</th> {/* Header for Tenant */}
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -97,15 +97,17 @@ function BookingRequestsPage() {
                                         </Link>
                                         <div className="text-xs text-gray-500">{booking.Listing?.location}</div>
                                     </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-    {/* If public profiles existed:
-    <Link to={`/profiles/${booking.User?.id}`} className="text-sm text-blue-600 hover:underline">
-        {booking.User?.name || 'N/A'}
-    </Link>
-    */}
-    <div className="text-sm text-gray-900">{booking.User?.name || 'N/A'}</div> {/* Current display */}
-    <div className="text-xs text-gray-500">{booking.User?.email}</div>
-</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        {/* MODIFIED: Link tenant name to their profile */}
+                                        {booking.User ? (
+                                            <Link to={`/profiles/${booking.User.id}`} className="text-sm text-blue-600 hover:underline">
+                                                {booking.User.name || 'N/A'}
+                                            </Link>
+                                        ) : (
+                                            <div className="text-sm text-gray-900">N/A</div>
+                                        )}
+                                        <div className="text-xs text-gray-500">{booking.User?.email}</div>
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                         {new Date(booking.start_date).toLocaleDateString()} - {new Date(booking.end_date).toLocaleDateString()}
                                     </td>

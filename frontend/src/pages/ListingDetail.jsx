@@ -309,8 +309,17 @@ function ListingDetail() {
 
                 {listing.Owner && (
                     <div className="mb-6 pb-4 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-800 mb-3">Contact Information</h2>
-                        <p className="text-gray-700"><strong>Owner:</strong> {listing.Owner.name || listing.Owner.email}</p>
+                        <h2 className="text-xl font-semibold text-gray-800 mb-3">Property Owner</h2>
+                        <p className="text-gray-700">
+                            <strong>Name:</strong>
+                            {/* *** MODIFIED: Link owner's name to their public profile *** */}
+                            <Link
+                                to={`/profiles/${listing.Owner.id}`}
+                                className="text-blue-600 hover:underline ml-1"
+                            >
+                                {listing.Owner.name || listing.Owner.email}
+                            </Link>
+                        </p>
                     </div>
                 )}
 
