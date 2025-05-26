@@ -7,78 +7,91 @@ const authMiddleware = require('../middleware/authMiddleware'); // Import the au
 const upload = require('../config/multerConfig'); // Import the configured multer instance
 const messageController = require('../controllers/messageController');
 
-// Keep your existing GET / route above this
-router.get('/', listingController.getListings); // <-- This should be there
+// --- General GET routes ---
+// Most specific paths first, then paths with parameters.
 
+// GET all listings (public)
+router.get('/', listingController.getListings);
 
+// GET listings for the map (public) - Specific route, placed before /:id
+router.get('/map-data', listingController.getMapData);
+
+// GET listings owned by the authenticated user (requires auth)
 router.get(
-  '/owner', // The path for this route (relative to /api/listings)
-  authMiddleware, // Requires authentication
-  listingController.getOwnerListings // The controller function
-); 
-
-router.get(
-  '/:id/edit', // The path for this route
-  authMiddleware, // Requires authentication
-  listingController.getListingForEdit // The controller function
+  '/owner',
+  authMiddleware,
+  listingController.getOwnerListings
 );
 
+// GET a specific listing for editing (requires auth, owner or admin)
+// This is more specific than /:id because of the /edit suffix
+router.get(
+  '/:id/edit',
+  authMiddleware,
+  listingController.getListingForEdit
+);
+
+// GET a specific listing by ID (public) - Generic route for a single listing
 router.get('/:id', listingController.getListingById);
 
+// --- Routes related to reviews for a specific listing ---
+
+// GET reviews for a specific listing (public)
 router.get('/:listingId/reviews', listingController.getReviewsByListingId);
-// --- Make sure this POST route block is present and correct ---
 
-
-
-router.post(
-  '/', // The path for this route (relative to where the router is mounted, /api/listings)
-  authMiddleware, // Apply authMiddleware first
-  upload.array('photos', 10), // Apply multer middleware (expecting multiple files named 'photos')
-  listingController.createListing // The controller function
-);
-// --- End of POST route block ---
-router.post(
-  '/:listingId/reviews', // URL path with the listing ID parameter
-  authMiddleware,      // Requires authentication
-  listingController.createReview // The controller function
-);
-
-router.delete(
-  '/:id', // The path for this route (relative to /api/listings) with the listing ID parameter
-  authMiddleware, // Requires authentication
-  listingController.deleteListing // The controller function
-); 
-// Keep other listing routes below this
-// router.get('/:id', listingController.getListingById);
-// router.put('/:id', authMiddleware, listingController.updateListing);
-// router.delete('/:id', authMiddleware, listingController.deleteListing);
-
-router.put(
-  '/:id', // The path for this route with the listing ID parameter
-  authMiddleware, // Requires authentication
-  upload.array('photos', 10), // Apply multer middleware (expecting *new* files named 'photos')
-  listingController.updateListing // The controller function
-);
-
-router.get('/:listingId/reviews', listingController.getReviewsByListingId);
+// POST a new review for a specific listing (requires auth)
 router.post(
   '/:listingId/reviews',
   authMiddleware,
   listingController.createReview
 );
 
-router.get(
-  '/:listingId/messages', // URL path
-  authMiddleware,        // Requires authentication
-  messageController.getMessagesByListingId // The controller function
-); // <-- Add this line
+// --- Routes related to messages for a specific listing ---
 
-// --- Define the POST route for creating a message for a specific listing ---
-// This route is protected.
+// GET messages for a specific listing (requires auth)
+router.get(
+  '/:listingId/messages',
+  authMiddleware,
+  messageController.getMessagesByListingId
+);
+
+// POST a new message for a specific listing (requires auth)
 router.post(
-  '/:listingId/messages', // URL path (Note: listing_id also expected in body in controller)
-  authMiddleware,      // Requires authentication
-  messageController.createMessage // The controller function
-); // <-- Add this line
+  '/:listingId/messages',
+  authMiddleware,
+  messageController.createMessage
+);
+
+// --- Route to get booked dates for a listing ---
+router.get(
+    '/:listingId/booked-dates',
+    listingController.getListingBookedDates
+);
+
+
+// --- POST, PUT, DELETE for listings (generally require auth) ---
+
+// POST (create) a new listing (requires auth)
+router.post(
+  '/',
+  authMiddleware,
+  upload.array('photos', 10), // Expecting multiple files named 'photos'
+  listingController.createListing
+);
+
+// PUT (update) an existing listing (requires auth, owner or admin)
+router.put(
+  '/:id',
+  authMiddleware,
+  upload.array('photos', 10), // Expecting *new* files named 'photos' for update
+  listingController.updateListing
+);
+
+// DELETE a listing (requires auth, owner)
+router.delete(
+  '/:id',
+  authMiddleware,
+  listingController.deleteListing
+);
 
 module.exports = router;

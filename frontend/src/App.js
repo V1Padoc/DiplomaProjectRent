@@ -21,6 +21,9 @@ import BookingRequestsPage from './pages/BookingRequestsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import MyBookingsPage from './pages/MyBookingsPage'; // *** NEW IMPORT ***
 import PublicProfilePage from './pages/PublicProfilePage';
+import MapListingsPage from './pages/MapListingsPage'; 
+
+
 function App() {
   return (
     <div className="flex flex-col min-h-screen">
@@ -31,6 +34,8 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/listings/:id" element={<ListingDetailPage />} />
           <Route path="/listings" element={<ListingsPage />} />
+          <Route path="/map-listings" element={<MapListingsPage />} />
+         
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           {/* Add other public routes here */}
@@ -123,6 +128,9 @@ function App() {
             }
           />
           <Route path="/profiles/:userId" element={<PublicProfilePage />} /> 
+            
+       
+       
         </Routes>
         
       </main>

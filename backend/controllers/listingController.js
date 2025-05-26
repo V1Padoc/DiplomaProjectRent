@@ -1,84 +1,54 @@
 // backend/controllers/listingController.js
 
-const { Op } = require('sequelize'); // Import Op for operators like equals, like, etc. (will use later for search/filter)
-const Listing = require('../models/Listing'); // Import the Listing model
-const User = require('../models/User'); // Import User model if you need to include owner info
-const Review = require('../models/Review'); // Import the Review model// Import the Review model
+const { Op } = require('sequelize');
+const Listing = require('../models/Listing');
+const User = require('../models/User');
+const Review = require('../models/Review');
 const path = require('path');
-const fs = require('fs').promises; // Use promises version of fs for async operations
-// Controller function to get all listings
+const fs = require('fs').promises;
 const Booking = require('../models/Booking');
+const Analytics = require('../models/Analytics'); // Ensure Analytics is imported
 
+// ... (getListings, createListing, getListingById, etc. remain mostly the same) ...
+// ... (Make sure all existing functions are present)
 
 exports.getListings = async (req, res) => {
   try {
     const {
-      page = 1, // Default to page 1
-      limit = 10, // Default to 10 listings per page
-      sortBy = 'created_at', // Default sort by creation date
-      sortOrder = 'DESC', // Default sort order (newest first)
-      type, // 'rent' or 'sale'
-      priceMin,
-      priceMax,
-      roomsMin, // Minimum number of rooms
-      location, // Search term for location
-      search, // General keyword search for title/description
+      page = 1, limit = 10, sortBy = 'created_at', sortOrder = 'DESC',
+      type, priceMin, priceMax, roomsMin, location, search,
     } = req.query;
 
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const parsedLimit = parseInt(limit, 10);
 
-    let whereClause = {
-      status: 'active', // Always filter by active status for public listings
-    };
+    let whereClause = { status: 'active' };
 
-    // --- Build dynamic where clause ---
-    if (type) {
-      whereClause.type = type;
-    }
-    if (priceMin && priceMax) {
-      whereClause.price = { [Op.between]: [parseFloat(priceMin), parseFloat(priceMax)] };
-    } else if (priceMin) {
-      whereClause.price = { [Op.gte]: parseFloat(priceMin) };
-    } else if (priceMax) {
-      whereClause.price = { [Op.lte]: parseFloat(priceMax) };
-    }
-
-    if (roomsMin) {
-      whereClause.rooms = { [Op.gte]: parseInt(roomsMin, 10) };
-    }
-
-    if (location) {
-      whereClause.location = { [Op.iLike]: `%${location}%` }; // Case-insensitive search for location
-    }
-
+    if (type) whereClause.type = type;
+    if (priceMin && priceMax) whereClause.price = { [Op.between]: [parseFloat(priceMin), parseFloat(priceMax)] };
+    else if (priceMin) whereClause.price = { [Op.gte]: parseFloat(priceMin) };
+    else if (priceMax) whereClause.price = { [Op.lte]: parseFloat(priceMax) };
+    if (roomsMin) whereClause.rooms = { [Op.gte]: parseInt(roomsMin, 10) };
+    
+    if (location) whereClause.location = { [Op.like]: `%${location}%` }; 
     if (search) {
       whereClause[Op.or] = [
-        { title: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
-        // You could extend search to other fields like amenities if needed
+        { title: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
       ];
     }
-    // --- End of building where clause ---
 
-    // --- Build order clause ---
-    const validSortFields = ['created_at', 'price', 'rooms', 'area']; // Add other valid fields
+    const validSortFields = ['created_at', 'price', 'rooms', 'area'];
     const order = [];
     if (validSortFields.includes(sortBy)) {
       order.push([sortBy, sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC']);
     } else {
-      order.push(['created_at', 'DESC']); // Default sort if sortBy is invalid
+      order.push(['created_at', 'DESC']);
     }
-    // --- End of building order clause ---
 
-    // Fetch listings with pagination, filtering, and sorting
     const { count, rows: listings } = await Listing.findAndCountAll({
       where: whereClause,
-      include: [{
-        model: User,
-        as: 'Owner',
-        attributes: ['name', 'email'],
-      }],
+      include: [{ model: User, as: 'Owner', attributes: ['id', 'name', 'email', 'profile_photo_url'] }],
       order: order,
       limit: parsedLimit,
       offset: offset,
@@ -88,7 +58,7 @@ exports.getListings = async (req, res) => {
       totalItems: count,
       totalPages: Math.ceil(count / parsedLimit),
       currentPage: parseInt(page, 10),
-      listings, // The array of listings for the current page
+      listings,
     });
 
   } catch (error) {
@@ -96,6 +66,7 @@ exports.getListings = async (req, res) => {
     res.status(500).json({ message: 'Server error while fetching listings.' });
   }
 };
+
 exports.createListing = async (req, res) => {
   const owner_id = req.user.id;
   const { title, description, price, rooms, area, location, amenities, type, latitude, longitude } = req.body;
@@ -141,27 +112,25 @@ exports.createListing = async (req, res) => {
 exports.getListingById = async (req, res) => {
   const listingId = req.params.id;
   try {
-    const listing = await Listing.findByPk(listingId, {
+    const listing = await Listing.findOne({
       where: {
+         id: listingId,
          status: 'active'
       },
       include: [
         {
           model: User,
           as: 'Owner',
-          attributes: ['id', 'name', 'email']
+          attributes: ['id', 'name', 'email', 'profile_photo_url']
         }
       ]
     });
+
     if (!listing) {
       return res.status(404).json({ message: 'Listing not found or is not active.' });
     }
-    // --- Increment views_count (Placeholder for Analytics) ---
-    // This is a simplified way. In a real app, you might want to avoid double counting
-    // for the same user session, or use a dedicated analytics service/table.
-    // For now, let's just increment if the Analytics model exists.
+
     try {
-        const Analytics = require('../models/Analytics'); // Make sure Analytics model is imported or required here
         const [analyticsEntry, created] = await Analytics.findOrCreate({
             where: { listing_id: listingId },
             defaults: { listing_id: listingId, views_count: 1 }
@@ -169,15 +138,17 @@ exports.getListingById = async (req, res) => {
         if (!created) {
             await analyticsEntry.increment('views_count');
         }
-        console.log(`Views for listing ${listingId} updated.`);
     } catch (analyticsError) {
         console.error('Error updating views count:', analyticsError);
-        // Don't let analytics error break the main listing fetch
     }
-    // --- End of Increment views_count ---
+
     res.status(200).json(listing);
+
   } catch (error) {
     console.error('Error fetching listing by ID:', error);
+    if (error.name === 'SequelizeDatabaseError' && error.original && error.original.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
+        return res.status(400).json({ message: 'Invalid listing ID format.' });
+    }
     res.status(500).json({ message: 'Server error while fetching listing.' });
   }
 };
@@ -191,7 +162,7 @@ exports.getReviewsByListingId = async (req, res) => {
       include: [{
         model: User,
         as: 'User',
-        attributes: ['id', 'name', 'email']
+        attributes: ['id', 'name', 'email', 'profile_photo_url'] // Added profile photo
       }]
     });
     res.status(200).json(reviews);
@@ -201,9 +172,6 @@ exports.getReviewsByListingId = async (req, res) => {
   }
 };
 
-
-// Controller function to create a new review for a listing
-// This requires authentication, so it will run after authMiddleware
 exports.createReview = async (req, res) => {
   const listingId = req.params.listingId;
   const userId = req.user.id;
@@ -222,7 +190,7 @@ exports.createReview = async (req, res) => {
         include: [{
             model: User,
             as: 'User',
-            attributes: ['id', 'name', 'email']
+            attributes: ['id', 'name', 'email', 'profile_photo_url'] // Added profile photo
         }]
     });
     res.status(201).json({
@@ -236,121 +204,72 @@ exports.createReview = async (req, res) => {
 };
 
 exports.getOwnerListings = async (req, res) => {
-  // Get the authenticated user's ID from req.user (set by authMiddleware)
   const ownerId = req.user.id;
-
   try {
-    // Find all listings where the owner_id matches the authenticated user's ID
     const listings = await Listing.findAll({
       where: {
-        owner_id: ownerId // Filter listings by the owner's ID
+        owner_id: ownerId
       },
-      // Order listings, e.g., by creation date (newest first)
       order: [['created_at', 'DESC']],
-       // You might choose to include associated data here like reviews count, etc.
-       // include: [...]
     });
-
-    // Send the fetched listings back as a JSON response
     res.status(200).json(listings);
-
   } catch (error) {
-    // If any error occurs during the database query
     console.error('Error fetching owner listings:', error);
-    // Send a 500 Internal Server Error response
     res.status(500).json({ message: 'Server error while fetching owner listings.' });
   }
 };
 
-
 exports.deleteListing = async (req, res) => {
-  // Get the listing ID from the request parameters
   const listingId = req.params.id;
-  // Get the authenticated user's ID from req.user
   const userId = req.user.id;
-
   try {
-    // Find the listing by its ID and verify it belongs to the authenticated user
     const listing = await Listing.findOne({
       where: {
         id: listingId,
-        owner_id: userId // Ensure the listing belongs to the authenticated user
+        owner_id: userId
       }
     });
-
-    // If listing not found or doesn't belong to the user
     if (!listing) {
-      // 404 Not Found: Listing with this ID for this owner does not exist
-      // or 403 Forbidden: The user is authenticated but does not own this listing
-      // Sending 404 is often safer as it doesn't reveal if the listing exists but belongs to someone else.
       return res.status(404).json({ message: 'Listing not found or you do not have permission to delete it.' });
     }
-
-    // --- Optional: Delete associated image files from the server ---
     if (listing.photos && listing.photos.length > 0) {
-        const uploadDir = path.join(__dirname, '../uploads'); // Path to your uploads folder
+        const uploadDir = path.join(__dirname, '../uploads');
         for (const filename of listing.photos) {
             const filePath = path.join(uploadDir, filename);
             try {
-                await fs.unlink(filePath); // Delete the file asynchronously
-                console.log(`Deleted file: ${filePath}`);
+                await fs.unlink(filePath);
             } catch (fileError) {
-                // Log file deletion errors but don't stop the listing deletion process
                 console.error(`Error deleting file ${filePath}:`, fileError);
             }
         }
     }
-    // --- End of Optional File Deletion ---
-
-
-    // Delete the listing from the database
-    await listing.destroy(); // Sequelize instance method to delete the record
-
-    // Send a success response
+    await listing.destroy();
     res.status(200).json({ message: 'Listing deleted successfully.' });
-
   } catch (error) {
-    // If any error occurs during the process (e.g., database error)
     console.error('Error deleting listing:', error);
     res.status(500).json({ message: 'Server error during listing deletion.' });
   }
 };
 
 exports.getListingForEdit = async (req, res) => {
-  // Get the listing ID from the request parameters
   const listingId = req.params.id;
-  // Get the authenticated user's ID and role from req.user
   const userId = req.user.id;
   const userRole = req.user.role;
-
   try {
-    // Find the listing by its ID
     const listing = await Listing.findByPk(listingId, {
-      // You might still want to include the owner's basic info
       include: [{
         model: User,
         as: 'Owner',
-        attributes: ['id', 'name', 'email']
+        attributes: ['id', 'name', 'email', 'profile_photo_url']
       }]
-       // We do NOT filter by status here, as owner needs to edit pending/rejected listings
     });
-
-    // If listing not found
     if (!listing) {
       return res.status(404).json({ message: 'Listing not found.' });
     }
-
-    // --- Authorization Check: Verify if the authenticated user is the owner or an admin ---
     if (listing.owner_id !== userId && userRole !== 'admin') {
-      // 403 Forbidden: The user is authenticated but does not own this listing and is not an admin
       return res.status(403).json({ message: 'You do not have permission to edit this listing.' });
     }
-    // --- End of Authorization Check ---
-
-
-    // If listing found and user is authorized, send the listing data back
     res.status(200).json(listing);
-
   } catch (error) {
     console.error('Error fetching listing for edit:', error);
     res.status(500).json({ message: 'Server error while fetching listing for edit.' });
@@ -358,99 +277,67 @@ exports.getListingForEdit = async (req, res) => {
 };
 
 exports.updateListing = async (req, res) => {
-  // Get the listing ID from the request parameters
   const listingId = req.params.id;
-  // Get the authenticated user's ID and role from req.user
   const userId = req.user.id;
   const userRole = req.user.role;
-
-  // req.body contains the text/number fields from the form
-  // Make sure to parse numerical values
-  const { title, description, price, rooms, area, location, amenities, type }
-      = req.body; // Note: latitude and longitude also come from req.body
-
-  // req.files contains an array of file objects provided by multer for *new* uploads
+  const { title, description, price, rooms, area, location, amenities, type, latitude, longitude } = req.body;
   const newPhotoFilenames = req.files ? req.files.map(file => file.filename) : [];
-
-  // --- Handling existing photos ---
-  // The frontend needs to tell the backend which existing photos to keep.
-  // A common way is to send an array of filenames to keep in the request body.
-  // We'll assume the frontend sends a 'existingPhotos' array in req.body.
-  // If 'existingPhotos' is not provided, we assume all old photos should be removed except new ones.
-  const existingPhotosToKeep = Array.isArray(req.body.existingPhotos) ? req.body.existingPhotos : [];
-  // Note: req.body might parse 'existingPhotos' as a single string if only one is sent without array notation,
-  // or as an array if multiple are sent. Array.isArray() handles this.
-
-  // --- End of Handling existing photos ---
-
+  const existingPhotosToKeep = Array.isArray(req.body.existingPhotos) ? req.body.existingPhotos : (req.body.existingPhotos ? [req.body.existingPhotos] : []);
 
   try {
-    // Find the listing by its ID
     const listing = await Listing.findByPk(listingId);
-
-    // If listing not found
     if (!listing) {
       return res.status(404).json({ message: 'Listing not found.' });
     }
-
-    // --- Authorization Check: Verify if the authenticated user is the owner or an admin ---
     if (listing.owner_id !== userId && userRole !== 'admin') {
       return res.status(403).json({ message: 'You do not have permission to update this listing.' });
     }
-    // --- End of Authorization Check ---
 
-
-    // --- Optional: Delete old photos that are NOT in the 'existingPhotosToKeep' list ---
      const oldPhotosToDelete = listing.photos
          ? listing.photos.filter(photo => !existingPhotosToKeep.includes(photo))
-         : []; // Find photos currently in DB but not in the 'keep' list
+         : [];
 
      if (oldPhotosToDelete.length > 0) {
-         const uploadDir = path.join(__dirname, '../uploads'); // Path to your uploads folder
+         const uploadDir = path.join(__dirname, '../uploads');
          for (const filename of oldPhotosToDelete) {
              const filePath = path.join(uploadDir, filename);
              try {
-                 // Use fs.access to check if the file exists before trying to delete
-                 await fs.access(filePath); // Check if file is accessible (exists)
-                 await fs.unlink(filePath); // Delete the file asynchronously
-                 console.log(`Deleted old file: ${filePath}`);
+                 await fs.access(filePath);
+                 await fs.unlink(filePath);
              } catch (fileError) {
-                 // If access or unlink fails (e.g., file didn't exist or permission issue)
                  console.warn(`Could not delete old file ${filePath}:`, fileError.message);
-                 // Continue with the process even if a file couldn't be deleted
              }
          }
      }
-    // --- End of Optional Old File Deletion ---
 
-
-    // Combine photos to keep with newly uploaded photo filenames
     const updatedPhotos = [...existingPhotosToKeep, ...newPhotoFilenames];
 
-    // Update the listing attributes
     const updatedListing = await listing.update({
-      title: title || listing.title, // Use new value or keep old if not provided
+      title: title || listing.title,
       description: description || listing.description,
       price: price ? parseFloat(price) : listing.price,
-      rooms: rooms !== undefined ? parseInt(rooms, 10) : listing.rooms, // Handle 0 rooms correctly
-      area: area !== undefined ? parseFloat(area) : listing.area, // Handle 0 area correctly
+      rooms: rooms !== undefined ? (rooms === '' ? null : parseInt(rooms, 10)) : listing.rooms,
+      area: area !== undefined ? (area === '' ? null : parseFloat(area)) : listing.area,
       location: location || listing.location,
       amenities: amenities || listing.amenities,
       type: type || listing.type,
-      // Note: Status is typically updated by admin, not the owner directly via this form
-      // status: 'pending', // You might set status back to pending if significant changes require re-approval
-      photos: updatedPhotos.length > 0 ? updatedPhotos : null, // Save the updated array of filenames (or null)
-      // --- Update latitude and longitude ---
-      latitude: req.body.latitude !== undefined ? parseFloat(req.body.latitude) : listing.latitude,
-      longitude: req.body.longitude !== undefined ? parseFloat(req.body.longitude) : listing.longitude,
-      // --- End of latitude and longitude update ---
-      // Sequelize automatically updates 'updated_at' when using .update()
+      photos: updatedPhotos.length > 0 ? updatedPhotos : null,
+      latitude: latitude !== undefined ? (latitude === '' ? null : parseFloat(latitude)) : listing.latitude,
+      longitude: longitude !== undefined ? (longitude === '' ? null : parseFloat(longitude)) : listing.longitude,
+      // status: userRole === 'admin' ? (req.body.status || listing.status) : 'pending', // Admin can change status, others reset to pending on edit.
     });
+    // If owner edits, set status to 'pending' for re-approval, unless it's an admin.
+    // This logic can be more nuanced based on which fields are changed.
+    if (userRole !== 'admin' && listing.status !== 'pending') {
+        await updatedListing.update({ status: 'pending' });
+    } else if (userRole === 'admin' && req.body.status) {
+        await updatedListing.update({status: req.body.status });
+    }
 
-    // If update is successful, send a success response
+
     res.status(200).json({
       message: 'Listing updated successfully!',
-      listing: { // Send back some details of the updated listing
+      listing: {
         id: updatedListing.id,
         title: updatedListing.title,
         owner_id: updatedListing.owner_id,
@@ -469,28 +356,75 @@ exports.updateListing = async (req, res) => {
 
 exports.getListingBookedDates = async (req, res) => {
     const { listingId } = req.params;
-
     try {
         const confirmedBookings = await Booking.findAll({
             where: {
                 listing_id: listingId,
-                status: 'confirmed' // Only fetch confirmed bookings
+                status: 'confirmed'
             },
-            attributes: ['start_date', 'end_date'] // We only need these fields
+            attributes: ['start_date', 'end_date']
         });
-
-        // The frontend will expect an array of objects like [{start: Date, end: Date}, ...]
-        // Or just an array of individual dates to disable.
-        // Let's return ranges for now, frontend can process into individual dates.
         const bookedDateRanges = confirmedBookings.map(b => ({
             start: b.start_date,
             end: b.end_date
         }));
-
         res.status(200).json(bookedDateRanges);
-
     } catch (error) {
         console.error("Error fetching booked dates:", error);
         res.status(500).json({ message: "Server error while fetching booked dates." });
     }
+};
+
+// MODIFIED getMapData to accept filters
+exports.getMapData = async (req, res) => {
+  try {
+    const { type, priceMin, priceMax, roomsMin, location, search } = req.query;
+
+    let whereClause = {
+      status: 'active',
+      latitude: { [Op.ne]: null },
+      longitude: { [Op.ne]: null }
+    };
+
+    // Apply filters similar to getListings
+    if (type) whereClause.type = type;
+    if (priceMin && priceMax) whereClause.price = { [Op.between]: [parseFloat(priceMin), parseFloat(priceMax)] };
+    else if (priceMin) whereClause.price = { [Op.gte]: parseFloat(priceMin) };
+    else if (priceMax) whereClause.price = { [Op.lte]: parseFloat(priceMax) };
+    if (roomsMin) whereClause.rooms = { [Op.gte]: parseInt(roomsMin, 10) };
+    
+    if (location) whereClause.location = { [Op.like]: `%${location}%` }; 
+    if (search) {
+      // Ensure search is applied to title and description for map data as well
+      // If you want search to affect other fields for map data, add them here.
+      whereClause[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+        // Potentially add location to search criteria here if distinct from location filter
+        // { location: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const listings = await Listing.findAll({
+      where: whereClause,
+      attributes: [
+        'id', 
+        'title', 
+        'latitude', 
+        'longitude', 
+        'price', 
+        'type', 
+        'photos',
+        'location', // For popup
+        'rooms' // Good to have for tooltip/popup
+      ]
+      // No pagination for map data, we want all matching markers
+    });
+
+    res.status(200).json(listings);
+
+  } catch (error) {
+    console.error('Error fetching map data listings:', error);
+    res.status(500).json({ message: 'Server error while fetching map data.' });
+  }
 };

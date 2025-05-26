@@ -22,7 +22,7 @@ function Header() {
             <li>
               <Link to="/listings" className="text-gray-700 hover:text-gray-900">Listings</Link>
             </li>
-
+ <li><Link to="/map-listings" className="text-gray-700 hover:text-gray-900">Map View</Link></li>
             {isAuthenticated ? (
               <> 
                   {/* *** NEW: Link to My Chats *** */}
