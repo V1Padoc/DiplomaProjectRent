@@ -53,6 +53,19 @@ exports.createBooking = async (req, res) => {
             end_date: endDateObj,
             status: 'pending'
         });
+       // Inside createBooking, after newBooking is created
+  const io = req.app.get('socketio');
+        // Make sure 'listing' variable is populated from your DB query earlier in the function
+        if (io && listing && listing.owner_id) { 
+            io.to(listing.owner_id.toString()).emit('new_booking_request_owner', {
+                message: `New booking request for your listing '${listing.title}'.`,
+                bookingId: newBooking.id,
+                listingId: listing.id,
+                listingTitle: listing.title,
+                tenantId: tenantId // Good to include
+            });
+            console.log(`Emitted 'new_booking_request_owner' to owner ${listing.owner_id} for booking ${newBooking.id}`);
+        }
         res.status(201).json({
             message: 'Booking request submitted successfully. Awaiting owner confirmation.',
             booking: newBooking
@@ -160,15 +173,24 @@ exports.updateBookingStatus = async (req, res) => {
             }
         }
 
-
+  if (status === 'confirmed' || status === 'rejected') {
+            booking.is_update_seen_by_tenant = false;
+        }
         // 5. Update the booking status
         booking.status = status;
         await booking.save();
-
-        // Optional: If confirming, you might want to auto-reject other pending bookings
-        // for the same listing that now conflict with this newly confirmed booking.
-        // This can be complex and depends on business logic. For now, we'll skip this.
-
+// Inside updateBookingStatus, after booking.save()
+const io = req.app.get('socketio');
+if (io && booking.tenant_id) {
+    io.to(booking.tenant_id.toString()).emit('booking_status_update_tenant', { // Event name matches AuthContext
+        message: `Booking for '${booking.Listing?.title}' is now ${status}.`, // Simplified
+        bookingId: booking.id,
+        newStatus: status,
+        listingId: booking.listing_id,
+        tenantId: booking.tenant_id // Good to include for client-side checks
+    });
+    console.log(`Emitted 'booking_status_update_tenant' to tenant ${booking.tenant_id} for booking ${booking.id}`);
+}
         res.status(200).json({
             message: `Booking successfully ${status}.`,
             booking: booking
@@ -206,5 +228,60 @@ exports.getMyBookings = async (req, res) => {
     } catch (error) {
         console.error("Error fetching tenant bookings:", error);
         res.status(500).json({ message: "Server error while fetching tenant bookings." });
+    }
+};
+
+exports.getOwnerPendingBookingsCount = async (req, res) => {
+    const ownerId = req.user.id;
+    try {
+        const ownerListings = await Listing.findAll({
+            where: { owner_id: ownerId },
+            attributes: ['id']
+        });
+        if (!ownerListings.length) {
+            return res.status(200).json({ pendingCount: 0 });
+        }
+        const listingIds = ownerListings.map(l => l.id);
+
+        const count = await Booking.count({
+            where: {
+                listing_id: { [Op.in]: listingIds },
+                status: 'pending' // Only count pending ones
+            }
+        });
+        res.status(200).json({ pendingCount: count });
+    } catch (error) {
+        console.error('Error fetching owner pending bookings count:', error);
+        res.status(500).json({ message: 'Server error.' });
+    }
+};
+
+exports.getOwnerPendingBookingsCount = async (req, res) => {
+    const ownerId = req.user.id;
+    try {
+        // Find all listings owned by the current user
+        const ownerListings = await Listing.findAll({
+            where: { owner_id: ownerId },
+            attributes: ['id'] // We only need the IDs of their listings
+        });
+
+        if (!ownerListings.length) {
+            // Owner has no listings, so no pending bookings for them
+            return res.status(200).json({ pendingCount: 0 });
+        }
+
+        const listingIds = ownerListings.map(l => l.id);
+
+        // Count bookings for these listings that are 'pending'
+        const count = await Booking.count({
+            where: {
+                listing_id: { [Op.in]: listingIds },
+                status: 'pending'
+            }
+        });
+        res.status(200).json({ pendingCount: count });
+    } catch (error) {
+        console.error('Error fetching owner pending bookings count:', error);
+        res.status(500).json({ message: 'Server error while fetching pending count.' });
     }
 };

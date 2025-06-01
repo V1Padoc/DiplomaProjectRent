@@ -11,5 +11,13 @@ router.get(
     authMiddleware, // Requires authentication
     messageController.getMyChats // We will create this controller function next
 );
+router.get('/my-unread-count', authMiddleware, messageController.getTotalUnreadCount);
 
+// New route to mark messages as read
+router.put('/mark-as-read', authMiddleware, messageController.markMessagesAsRead);
+
+
+
+router.get('/listing/:listingId', authMiddleware, messageController.getMessagesByListingId); // For fetching messages for a specific chat
+router.post('/send', authMiddleware, messageController.createMessage);
 module.exports = router;

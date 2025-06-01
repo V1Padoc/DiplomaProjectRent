@@ -8,7 +8,8 @@ function BookingRequestsPage() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const { token, user } = useAuth(); // Assuming user role is 'owner' is checked by ProtectedRoute
+    // Destructure new functions from useAuth for updating the booking request count
+    const { token, user, refreshBookingRequestsCountForOwner, fetchUnreadBookingRequestsCountForOwner } = useAuth();
 
     const fetchBookingRequests = useCallback(async () => {
         if (!token) {
@@ -23,13 +24,17 @@ function BookingRequestsPage() {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setBookings(response.data);
+            // When owner views this page, refresh their booking request count in AuthContext
+            if (user?.role === 'owner') {
+                refreshBookingRequestsCountForOwner();
+            }
         } catch (err) {
             console.error("Error fetching booking requests:", err);
             setError(err.response?.data?.message || "Failed to load booking requests.");
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, [token, user?.role, refreshBookingRequestsCountForOwner]); // Add dependencies
 
     useEffect(() => {
         fetchBookingRequests();
@@ -57,8 +62,11 @@ function BookingRequestsPage() {
                     b.id === bookingId ? { ...b, processing: false } : b
                 )
             );
-            // Optionally, re-fetch or just rely on optimistic update if backend is source of truth
-            // fetchBookingRequests(); // Could re-fetch to ensure data consistency
+            // After a successful status update, refresh the unread booking requests count
+            // to update any badges in the header/navigation.
+            if (user?.role === 'owner') {
+                fetchUnreadBookingRequestsCountForOwner(token);
+            }
         } catch (err) {
             console.error(`Error updating booking ${bookingId} to ${newStatus}:`, err);
             alert(err.response?.data?.message || `Failed to update booking status. ${err.message}`);

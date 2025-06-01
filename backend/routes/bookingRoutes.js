@@ -30,10 +30,14 @@ router.put(
 );
 router.get(
     '/my-bookings',
-    authMiddleware,
-    isTenant,       // Only tenants can access this
+    authMiddleware,    
     bookingController.getMyBookings // We'll create this controller function
 );
 // We will add GET /api/bookings/my-bookings (for tenants) later
-
+router.get(
+    '/owner/pending-count',
+    authMiddleware,
+    isOwner,
+    bookingController.getOwnerPendingBookingsCount // Add this controller function
+);
 module.exports = router;

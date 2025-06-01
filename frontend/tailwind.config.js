@@ -6,5 +6,8 @@ module.exports = {
   theme: {
     extend: {},
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/forms'), // If you use form-specific styling often
+    // require('@tailwindcss/aspect-ratio'), // For aspect ratio utilities if needed for images/videos
+  ],
 }

@@ -51,14 +51,14 @@ exports.getMessagesByListingId = async (req, res) => {
         return res.status(200).json([]); // No specific chat thread targeted by owner
     }
 
-
     const messages = await Message.findAll({
       where: queryConditions,
       order: [['created_at', 'ASC']],
       include: [
          { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED profile_photo_url
          { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED profile_photo_url
-       ]
+       ],
+       attributes: { include: ['is_read'] } // Ensure is_read is included
     });
     res.status(200).json(messages);
 
@@ -116,9 +116,29 @@ exports.createMessage = async (req, res) => {
             { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED
         ]
     });
+
+    const io = req.app.get('socketio'); // Get io instance
+    if (io) {
+        console.log(`Emitting 'new_message_notification' to room: ${actualReceiverId.toString()}`)
+        io.to(actualReceiverId.toString()).emit('new_message_notification', {
+            message: messageWithUsers, // Send the full message object
+            listingId: listing_id,
+            senderId: senderId,
+        });
+        // Notify sender (for other tabs/devices or UI update)
+        io.to(senderId.toString()).emit('message_sent_confirmation', {
+            message: messageWithUsers,
+            listingId: listing_id,
+            receiverId: actualReceiverId,
+        });
+         console.log(`Emitting 'message_sent_confirmation' to room: ${senderId.toString()}`)
+    } else {
+      console.warn("Socket.IO instance not available. Real-time events not emitted for new message.");
+    }
+
     res.status(201).json({
       message: 'Message sent successfully!',
-      message: messageWithUsers
+      newMessage: messageWithUsers // Use 'newMessage' key for clarity
     });
   } catch (error) {
     console.error('Error creating message:', error);
@@ -147,7 +167,7 @@ exports.getMyChats = async (req, res) => {
                { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED
                 { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED
             ],
-            order: [['listing_id', 'ASC'], ['createdAt', 'DESC']] 
+            order: [['created_at', 'DESC']] // Changed to 'created_at' and descending order
         });
 
         if (!allUserMessages || allUserMessages.length === 0) {
@@ -156,37 +176,52 @@ exports.getMyChats = async (req, res) => {
 
         const conversationsMap = new Map();
 
-        allUserMessages.forEach(message => {
+        // Use for...of loop to correctly await inside the loop
+        for (const message of allUserMessages) {
             const otherUser = message.sender_id === userId ? message.Receiver : message.Sender;
             const listing = message.Listing;
 
             if (!otherUser || !listing) {
                 console.warn(`Message ID ${message.id} is missing related User or Listing data. Skipping.`);
-                return; 
+                continue; // Use continue for for...of loop
             }
             const conversationKey = `${listing.id}-${otherUser.id}`;
 
             if (!conversationsMap.has(conversationKey)) {
+                // Calculate unread count for current user for this specific conversation
+                const unreadCountForCurrentUser = await Message.count({
+                    where: {
+                        listing_id: listing.id,
+                        sender_id: otherUser.id, // Messages sent by the other participant
+                        receiver_id: userId,     // And received by the current user
+                        is_read: false           // And are unread
+                    }
+                });
+
                 conversationsMap.set(conversationKey, {
                     listingId: listing.id,
                     listingTitle: listing.title,
                     isCurrentUserListingOwner: listing.owner_id === userId, 
-                  otherParticipant: {
+                    otherParticipant: {
                         id: otherUser.id,
                         name: otherUser.name,
                         email: otherUser.email,
                         profile_photo_url: otherUser.profile_photo_url // ADDED
                     },
                     lastMessage: {
+                        id: message.id, // Good to have message ID
                         content: message.content,
-                        timestamp: message.createdAt,
-                        senderId: message.sender_id 
+                        timestamp: message.created_at, // Use created_at from model
+                        senderId: message.sender_id, 
+                        isReadByReceiver: message.receiver_id === userId ? message.is_read : (message.sender_id === userId ? true : null) // is_read relevant if current user is receiver
                     },
+                    unreadCountForCurrentUser // <-- ADDED
                 });
             }
-        });
+        }
 
         const conversations = Array.from(conversationsMap.values());
+        // Sort by last message timestamp (already handled by initial query order, but re-sort for safety)
         conversations.sort((a, b) => new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp));
 
         res.status(200).json(conversations);
@@ -194,5 +229,64 @@ exports.getMyChats = async (req, res) => {
     } catch (error) {
         console.error('Error fetching user chats:', error);
         res.status(500).json({ message: 'Server error while fetching chats.' });
+    }
+};
+
+exports.getTotalUnreadCount = async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const count = await Message.count({
+            where: {
+                receiver_id: userId,
+                is_read: false
+            }
+        });
+        res.status(200).json({ unreadCount: count });
+    } catch (error) {
+        console.error('Error fetching total unread message count:', error);
+        res.status(500).json({ message: 'Server error while fetching unread count.' });
+    }
+};
+
+exports.markMessagesAsRead = async (req, res) => {
+    const currentUserId = req.user.id;
+    // chatPartnerId is the ID of the user who sent the messages to the current user
+    const { listingId, chatPartnerId } = req.body;
+
+    if (!listingId || !chatPartnerId) {
+        return res.status(400).json({ message: 'Listing ID and Chat Partner ID are required.' });
+    }
+
+    try {
+        const [updatedCount] = await Message.update(
+            { is_read: true },
+            {
+                where: {
+                    listing_id: listingId,
+                    receiver_id: currentUserId,
+                    sender_id: chatPartnerId,
+                    is_read: false // Only mark unread messages as read
+                }
+            }
+        );
+        // Optionally, emit an event if other clients of the same user need to know
+         const io = req.app.get('socketio');
+         if (io) {
+             io.to(currentUserId.toString()).emit('messages_read_update', {
+                 listingId,
+                 chatPartnerId,
+                 updatedCount // Number of messages actually marked as read
+             });
+             // Also notify the chat partner that their messages have been read
+             io.to(chatPartnerId.toString()).emit('partner_messages_read', {
+                 listingId,
+                 readerId: currentUserId
+             });
+         }
+
+        res.status(200).json({ message: `${updatedCount} messages marked as read.`, count: updatedCount });
+    } catch (error) {
+        console.error('Error marking messages as read:', error);
+        res.status(500).json({ message: 'Server error while marking messages as read.' });
     }
 };

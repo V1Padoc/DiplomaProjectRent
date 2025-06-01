@@ -35,6 +35,10 @@ const Message = sequelize.define('Message', {
       model: Listing,
       key: 'id'
     }
+  }, is_read: { // <-- NEW FIELD
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
   },
   content: {
     type: DataTypes.TEXT, // Use TEXT for message content

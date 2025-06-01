@@ -3,13 +3,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import Slider from 'react-slick';
+// import Slider from 'react-slick'; // Replaced with gallery view
 import { useAuth } from '../context/AuthContext';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import L from 'leaflet'; // Leaflet library for icon fix
+import Lightbox from "yet-another-react-lightbox"; // <-- Updated import
+import "yet-another-react-lightbox/styles.css"; // <-- Updated styles import
+import { Captions, Download, Fullscreen, Thumbnails, Zoom } from "yet-another-react-lightbox/plugins"; // <-- Optional plugins
+import "yet-another-react-lightbox/plugins/captions.css";
+import "yet-another-react-lightbox/plugins/thumbnails.css";
+import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline'; // For favorites
+import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';     // For favorites
+
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
@@ -19,7 +27,7 @@ L.Icon.Default.mergeOptions({
 
 
 function ListingDetail() {
-    const { id: listingId } = useParams();
+    const { id: listingId } = useParams(); // Use this consistently
 
     const [listing, setListing] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -30,6 +38,10 @@ function ListingDetail() {
     const [reviewError, setReviewError] = useState(null);
     const [newReviewRating, setNewReviewRating] = useState(5);
     const [newReviewComment, setNewReviewComment] = useState('');
+
+    const [photoIndex, setPhotoIndex] = useState(0);
+    const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
     const [reviewSubmitting, setReviewSubmitting] = useState(false);
     const [reviewSubmitError, setReviewSubmitError] = useState(null);
     const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState(null);
@@ -39,24 +51,29 @@ function ListingDetail() {
     const [bookingError, setBookingError] = useState(null);
     const [bookingSuccess, setBookingSuccess] = useState(null);
 
-    const { isAuthenticated, user, token } = useAuth();
+    const [isFavorited, setIsFavorited] = useState(false);
 
-    const [listingIdFromParams, setListingIdFromParams] = useState(useParams().id);
+    const { isAuthenticated, user, token, favorites, toggleFavorite } = useAuth();
+
+    // Removed: const [listingIdFromParams, setListingIdFromParams] = useState(useParams().id); // This was problematic
 
     const [bookedRanges, setBookedRanges] = useState([]);
     const [loadingBookedDates, setLoadingBookedDates] = useState(true);
 
+    // Effect to fetch main listing details
     useEffect(() => {
         const fetchListing = async () => {
+            if (!listingId) return;
             try {
                 setLoading(true);
                 setError(null);
-
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}`);
-
+                const config = {};
+                if (token) {
+                    config.headers = { Authorization: `Bearer ${token}` };
+                }
+                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}`, config);
                 setListing(response.data);
-                console.log('Listing details fetched:', response.data);
-
+                console.log('Listing details fetched (on ID change):', response.data); // Log to confirm it runs less often
             } catch (err) {
                 console.error('Error fetching listing details:', err);
                 if (err.response && err.response.status === 404) {
@@ -68,14 +85,22 @@ function ListingDetail() {
                 setLoading(false);
             }
         };
+        fetchListing();
+    }, [listingId, token]); // Depends on listingId and token (for auth header)
 
+    // Effect to synchronize isFavorited state with favorites from context
+    useEffect(() => {
         if (listingId) {
-            fetchListing();
+            // favorites might be null/undefined if AuthContext is still loading them.
+            // Default to false if favorites is not yet an array.
+            setIsFavorited(favorites ? favorites.includes(listingId) : false);
         }
-    }, [listingId]);
+    }, [listingId, favorites]); // Depends on listingId and the global favorites list
 
+    // Effect to fetch reviews
     useEffect(() => {
         const fetchReviews = async () => {
+            if (!listingId) return;
             try {
                 setReviewLoading(true);
                 setReviewError(null);
@@ -89,24 +114,22 @@ function ListingDetail() {
                 setReviewLoading(false);
             }
         };
-
-        if (listingId) {
-            fetchReviews();
-        }
+        fetchReviews();
     }, [listingId]);
 
+    // Effect to fetch booked dates for the listing
     useEffect(() => {
         const fetchBookedDatesForListing = async () => {
-            if (!listingIdFromParams) return;
+            if (!listingId) return; // Use listingId from useParams()
             setLoadingBookedDates(true);
             try {
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingIdFromParams}/booked-dates`);
-                console.log("Raw booked dates from backend:", response.data); // Log raw
+                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
+                console.log("Raw booked dates from backend:", response.data);
                 const ranges = response.data.map(range => ({
                     start: new Date(range.start),
                     end: new Date(range.end)
                 }));
-                console.log("Processed bookedRanges for calendar:", ranges); // Log processed
+                console.log("Processed bookedRanges for calendar:", ranges);
                 setBookedRanges(ranges);
             } catch (err) {
                 console.error("Error fetching booked dates:", err);
@@ -115,32 +138,30 @@ function ListingDetail() {
             }
         };
         fetchBookedDatesForListing();
-    }, [listingIdFromParams]);
+    }, [listingId]); // Use listingId from useParams()
 
 
     const tileDisabled = ({ date, view }) => {
         if (view === 'month') {
             for (const range of bookedRanges) {
-                const startDate = new Date(range.start); // Assuming range.start is a valid date string or Date object
-                const endDate = new Date(range.end);   // Assuming range.end is a valid date string or Date object
+                const startDate = new Date(range.start);
+                const endDate = new Date(range.end);
 
-                // Ensure we are comparing date parts only, ignoring time
                 const normalizedCurrentDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
                 const normalizedRangeStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
                 const normalizedRangeEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
 
                 if (normalizedCurrentDate >= normalizedRangeStart && normalizedCurrentDate <= normalizedRangeEnd) {
-                    return true; // This date is within a booked range, so disable it
+                    return true;
                 }
             }
         }
-        return false; // Otherwise, the date is enabled
+        return false;
     };
 
 
     const handleReviewSubmit = async (e) => {
         e.preventDefault();
-
         setReviewSubmitError(null);
         setReviewSubmitSuccess(null);
         setReviewSubmitting(true);
@@ -153,25 +174,14 @@ function ListingDetail() {
 
         try {
             const response = await axios.post(`http://localhost:5000/api/listings/${listingId}/reviews`,
-                {
-                    rating: newReviewRating,
-                    comment: newReviewComment
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                }
+                { rating: newReviewRating, comment: newReviewComment },
+                { headers: { 'Authorization': `Bearer ${token}` } }
             );
-
             setReviewSubmitSuccess(response.data.message);
             console.log('Review submitted:', response.data.review);
-
             setReviews([response.data.review, ...reviews]);
-
             setNewReviewRating(5);
             setNewReviewComment('');
-
         } catch (err) {
             console.error('Error submitting review:', err);
             setReviewSubmitError(err.response?.data?.message || 'Failed to submit review. Please try again.');
@@ -205,11 +215,45 @@ function ListingDetail() {
             });
             setBookingSuccess(response.data.message);
             setBookingDates([null, null]);
+
+            // Re-fetch booked dates to update the calendar immediately
+            try {
+                console.log("Re-fetching booked dates after successful booking...");
+                const bookedResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
+                const ranges = bookedResponse.data.map(range => ({
+                    start: new Date(range.start),
+                    end: new Date(range.end)
+                }));
+                setBookedRanges(ranges);
+                console.log("Booked ranges updated for calendar after booking.");
+            } catch (fetchErr) {
+                console.error("Error re-fetching booked dates after booking:", fetchErr);
+                // Optionally, set an error message for this part if critical
+            }
+
         } catch (err) {
             console.error("Error requesting booking:", err);
             setBookingError(err.response?.data?.message || "Failed to submit booking request.");
         } finally {
             setBookingSubmitting(false);
+        }
+    };
+
+    const handleFavoriteToggle = async () => {
+        if (!isAuthenticated || !listingId) return;
+
+        try {
+            // toggleFavorite is expected to:
+            // 1. Make the API call.
+            // 2. Update favorites in AuthContext.
+            // 3. Return the new favorite status (true if favorited, false if not).
+            const newFavoriteStatus = await toggleFavorite(listingId);
+            setIsFavorited(newFavoriteStatus); // Update local state for immediate UI response
+        } catch (error) {
+            console.error("Failed to toggle favorite status:", error);
+            // Optionally, show an error message to the user.
+            // The useEffect syncing with context.favorites will eventually correct the state if toggleFavorite failed
+            // to update context but an error occurred.
         }
     };
 
@@ -237,49 +281,64 @@ function ListingDetail() {
         );
     }
 
-    const sliderSettings = {
-        dots: true,
-        infinite: true,
-        speed: 500,
-        slidesToShow: 1,
-        slidesToScroll: 1,
-        autoplay: true,
-        autoplaySpeed: 3000,
-        arrows: true,
-    };
+    const slides = listing.photos ? listing.photos.map((photoFilename, index) => ({
+        src: `http://localhost:5000/uploads/${photoFilename}`,
+        title: `${listing.title} - Photo ${index + 1}`,
+    })) : [];
 
     const mapPosition = (listing && listing.latitude && listing.longitude)
         ? [parseFloat(listing.latitude), parseFloat(listing.longitude)]
-        : [51.505, -0.09];
+        : [51.505, -0.09]; // Default position
 
     const isOwner = user && listing && user.id === listing.owner_id;
+    const canBook = listing.type === 'daily-rental';
 
     return (
         <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
             <div className="bg-white rounded-sm shadow-md overflow-hidden p-6 md:p-8">
 
-                <div className="mb-6 pb-4 border-b border-gray-200">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">{listing.title}</h1>
+                <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-800 mb-2">{listing.title}</h1>
+                        <p className="text-sm text-gray-600 mb-1">Location: {listing.location}</p>
+                    </div>
+                    {isAuthenticated && (
+                        <button onClick={handleFavoriteToggle} className="p-2 rounded-full hover:bg-red-100 transition-colors">
+                            {isFavorited ? (
+                                <HeartSolid className="w-7 h-7 text-red-500" />
+                            ) : (
+                                <HeartOutline className="w-7 h-7 text-red-500" />
+                            )}
+                        </button>
+                    )}
+                </div>
+                 <div className="mb-6 pb-4 border-b border-gray-200">
                     <p className="text-2xl font-semibold text-blue-600">
-                        {listing.type === 'rent' ? `$${listing.price}/month` : `$${listing.price}`}
+                        {listing.type === 'monthly-rental' ? `$${listing.price}/month` :
+                         (listing.type === 'daily-rental' ? `$${listing.price}/day` : `$${listing.price}`)}
                     </p>
                 </div>
 
                 <div className="mb-6">
                     <h2 className="text-xl font-semibold text-gray-800 mb-3">Photos</h2>
-                    {listing.photos && listing.photos.length > 0 ? (
-                        <div className="w-full max-w-xl mx-auto">
-                            <Slider {...sliderSettings}>
-                                {listing.photos.map((photoFilename, index) => (
-                                    <div key={index}>
-                                        <img
-                                            src={`http://localhost:5000/uploads/${photoFilename}`}
-                                            alt={`${listing.title} Photo ${index + 1}`}
-                                            className="w-full h-96 object-cover rounded-sm"
-                                        />
-                                    </div>
-                                ))}
-                            </Slider>
+                    {slides.length > 0 ? (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {slides.map((slide, index) => (
+                                <img
+                                    key={index}
+                                    src={slide.src}
+                                    alt={`${listing.title} Photo ${index + 1}`}
+                                    className="w-full h-40 object-cover rounded-sm cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => { setPhotoIndex(index); setIsLightboxOpen(true); }}
+                                />
+                            ))}
+                             <Lightbox
+                                open={isLightboxOpen}
+                                close={() => setIsLightboxOpen(false)}
+                                slides={slides}
+                                index={photoIndex}
+                                plugins={[Captions, Download, Fullscreen, Thumbnails, Zoom]}
+                             />
                         </div>
                     ) : (
                         <div className="w-full h-64 bg-gray-200 flex items-center justify-center text-gray-600 rounded-sm">
@@ -296,10 +355,12 @@ function ListingDetail() {
                 <div className="mb-6 pb-4 border-b border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <h3 className="text-lg font-semibold text-gray-800 mb-2">Details</h3>
-                        <p className="text-gray-700"><strong>Type:</strong> {listing.type === 'rent' ? 'For Rent' : 'For Sale'}</p>
+                        <p className="text-gray-700"><strong>Type:</strong> 
+                            {listing.type === 'monthly-rental' ? 'Monthly Rental' : 
+                             (listing.type === 'daily-rental' ? 'Daily Rental' : listing.type)}
+                        </p>
                         {listing.rooms && <p className="text-gray-700"><strong>Rooms:</strong> {listing.rooms}</p>}
                         {listing.area && <p className="text-gray-700"><strong>Area:</strong> {listing.area} sq ft/m²</p>}
-                        <p className="text-gray-700"><strong>Location:</strong> {listing.location}</p>
                     </div>
                     <div>
                         <h3 className="text-lg font-semibold text-gray-800 mb-2">Amenities</h3>
@@ -312,7 +373,6 @@ function ListingDetail() {
                         <h2 className="text-xl font-semibold text-gray-800 mb-3">Property Owner</h2>
                         <p className="text-gray-700">
                             <strong>Name:</strong>
-                            {/* *** MODIFIED: Link owner's name to their public profile *** */}
                             <Link
                                 to={`/profiles/${listing.Owner.id}`}
                                 className="text-blue-600 hover:underline ml-1"
@@ -350,7 +410,7 @@ function ListingDetail() {
                     )}
                 </div>
 
-                {listing.type === 'rent' && isAuthenticated && !isOwner && (
+                {canBook && isAuthenticated && !isOwner && (
                     <div className="my-8 p-6 bg-gray-50 rounded-sm shadow">
                         <h2 className="text-2xl font-semibold text-gray-800 mb-4">Request to Book</h2>
                          {loadingBookedDates && <p className="text-sm text-gray-600 mb-2">Loading availability...</p>}
@@ -364,7 +424,7 @@ function ListingDetail() {
                                     tileDisabled={tileDisabled}
                                     className="border-gray-300 rounded-sm shadow-sm react-calendar-override"
                                     tileClassName={({ date, view }) => {
-                                        return null;
+                                        return null; // Custom class logic can go here if needed
                                     }}
                                 />
                             </div>
@@ -380,7 +440,7 @@ function ListingDetail() {
                                     disabled={bookingSubmitting || !bookingDates || !bookingDates[0] || !bookingDates[1] || loadingBookedDates}
                                     className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out disabled:opacity-50"
                                 >
-                                    {bookingSubmitting ? 'Submitting Request...' : 'Request to Book'}
+                                    {bookingSubmitting ? 'Submitting Request...' : (loadingBookedDates ? 'Loading Availability...' : 'Request to Book')}
                                 </button>
                                 {bookingError && <p className="mt-2 text-sm text-red-600">{bookingError}</p>}
                                 {bookingSuccess && <p className="mt-2 text-sm text-green-600">{bookingSuccess}</p>}
@@ -388,9 +448,14 @@ function ListingDetail() {
                         </div>
                     </div>
                 )}
-                {!isAuthenticated && listing.type === 'rent' && (
+                {!isAuthenticated && canBook && (
                     <div className="my-8 p-4 bg-gray-100 rounded-sm text-center text-gray-700">
                         Please <Link to="/login" className="text-blue-600 hover:underline">log in</Link> or <Link to="/register" className="text-blue-600 hover:underline">register</Link> to book this rental.
+                    </div>
+                )}
+                {listing.type === 'monthly-rental' && (
+                     <div className="my-8 p-4 bg-blue-50 rounded-sm text-center text-blue-800">
+                        For monthly rentals, please contact the owner directly to arrange terms and booking.
                     </div>
                 )}
 

@@ -7,7 +7,7 @@ import {
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
-    getPaginationRowModel, // For client-side pagination if needed, or server-side
+    getPaginationRowModel,
     useReactTable,
 } from '@tanstack/react-table';
 import { Link } from 'react-router-dom';
@@ -21,7 +21,8 @@ const formatDate = (dateString) => {
 const columnHelper = createColumnHelper();
 
 function AdminPage() {
-    const { user, token } = useAuth();
+    // Destructure refreshAdminTasksCount from useAuth
+    const { user, token, refreshAdminTasksCount } = useAuth(); 
     const [listings, setListings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -49,13 +50,19 @@ function AdminPage() {
             });
             setListings(response.data.listings);
             setPageCount(response.data.totalPages);
+
+            // When admin views this page, refresh their task count in the AuthContext
+            if (user?.role === 'admin') {
+                refreshAdminTasksCount();
+            }
+
         } catch (err) {
             console.error("Error fetching listings for admin:", err);
             setError(err.response?.data?.message || "Failed to load listings.");
         } finally {
             setLoading(false);
         }
-    }, [token, filterStatus, pagination.pageIndex, pagination.pageSize]);
+    }, [token, filterStatus, pagination.pageIndex, pagination.pageSize, user?.role, refreshAdminTasksCount]); // Add dependencies for refreshAdminTasksCount and user.role
 
     useEffect(() => {
         fetchData();
@@ -70,8 +77,9 @@ function AdminPage() {
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            // Refetch data to get the updated list and pagination
-            fetchData();
+            // Refetch data to get the updated list and pagination.
+            // This will also trigger refreshAdminTasksCount via the fetchData useCallback.
+            fetchData(); 
         } catch (err) {
             console.error(`Error updating listing ${listingId} to ${newStatus}:`, err);
             alert(err.response?.data?.message || `Failed to update status. ${err.message}`);
@@ -205,7 +213,8 @@ function AdminPage() {
                     <option value="">All</option>
                     <option value="pending">Pending</option>
                     <option value="active">Active</option>
-                    <option value="rejected">Rejected</option>
+                    <option value="rejected">Rejected</option>                   
+                    <option value="archived">Archived</option> {/* View archived listings */}
                 </select>
             </div>
 

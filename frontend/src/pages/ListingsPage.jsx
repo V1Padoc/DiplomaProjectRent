@@ -3,6 +3,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Link, useSearchParams } from 'react-router-dom'; // useSearchParams for URL query management
+import Slider from 'react-slick'; // For carousel
+import "slick-carousel/slick/slick.css"; 
+import "slick-carousel/slick/slick-theme.css";
+import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline'; // For favorites
+import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';     // For favorites
+import { useAuth } from '../context/AuthContext'; // For favorites
 
 function ListingsPage() {
   const [listings, setListings] = useState([]);
@@ -13,12 +19,12 @@ function ListingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Initialize filter states from URL or defaults
-  const [filters, setFilters] = useState({
+   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
     type: searchParams.get('type') || '',
     priceMin: searchParams.get('priceMin') || '',
     priceMax: searchParams.get('priceMax') || '',
-    roomsMin: searchParams.get('roomsMin') || '',
+    roomsMin: searchParams.get('roomsMin') || '', // Ensure this is initialized
     location: searchParams.get('location') || '',
   });
 
@@ -32,8 +38,10 @@ function ListingsPage() {
     totalPages: 1,
     totalItems: 0,
   });
-  const itemsPerPage = 10; // Or get from backend if dynamic
+  const itemsPerPage = 9; // Adjusted for potentially larger cards
   // --- End of state ---
+
+  const { isAuthenticated, favorites, toggleFavorite } = useAuth(); // For favorites
 
 
   // --- Function to fetch listings ---
@@ -120,6 +128,16 @@ function ListingsPage() {
     }
   };
   // --- End of Event Handlers ---
+  
+  const sliderSettings = {
+    dots: true,
+    infinite: true,
+    speed: 500,
+    slidesToShow: 1,
+    slidesToScroll: 1,
+    autoplay: true,
+    autoplaySpeed: 4000, // Auto change every 4 seconds
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
@@ -151,9 +169,9 @@ function ListingsPage() {
               onChange={handleFilterChange}
               className="mt-1 block w-full border-gray-300 rounded-sm shadow-sm p-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
-              <option value="">All Types</option>
-              <option value="rent">Rent</option>
-              <option value="sale">Sale</option>
+              <option value="">All Types</option>              
+              <option value="monthly-rental">Monthly Rental</option>
+              <option value="daily-rental">Daily Rental</option>
             </select>
           </div>
           {/* Location Search */}
@@ -267,37 +285,64 @@ function ListingsPage() {
 
       {!loading && !error && listings.length > 0 && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5"> {/* Reduced gap, potentially smaller cards */}
             {listings.map((listing) => (
-              <Link to={`/listings/${listing.id}`} key={listing.id} className="block">
-                <div className="bg-white rounded-sm shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200 h-full flex flex-col">
+              <div key={listing.id} className="bg-white rounded-sm shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200 h-full flex flex-col relative">
+                {isAuthenticated && (
+                    <button 
+                        onClick={async (e) => { 
+                            e.stopPropagation(); // Prevent link navigation
+                            e.preventDefault(); // Prevent default button action (e.g., form submission if button type is submit)
+                            await toggleFavorite(listing.id); 
+                        }}
+                        className="absolute top-2 right-2 z-10 p-1.5 bg-black bg-opacity-30 rounded-full text-white hover:bg-opacity-50 focus:outline-none"
+                        aria-label={favorites.includes(String(listing.id)) ? "Remove from favorites" : "Add to favorites"} // Added aria-label
+                    >
+                        {/* MODIFIED LINE HERE: Convert listing.id to string for comparison */}
+                        {favorites.includes(String(listing.id)) ? (
+                            <HeartSolid className="w-5 h-5 text-red-400"/> 
+                        ) : (
+                            <HeartOutline className="w-5 h-5 text-white"/> // Explicitly set to white for unfavorited
+                        )}
+                    </button>
+                )}
+                <Link to={`/listings/${listing.id}`} className="block flex flex-col flex-grow"> {/* Ensure Link takes up space if div is flex container */}
                   {listing.photos && listing.photos.length > 0 ? (
-                    <img
-                      src={`http://localhost:5000/uploads/${listing.photos[0]}`}
-                      alt={`${listing.title} Thumbnail`}
-                      className="w-full h-48 object-cover"
-                    />
+                    <div className="w-full h-40 slick-carousel-container"> {/* Reduced height */}
+                       <Slider {...sliderSettings}>
+                            {listing.photos.map((photo, index) => (
+                                <div key={index}>
+                                    <img
+                                      src={`http://localhost:5000/uploads/${photo}`}
+                                      alt={`${listing.title} Photo ${index + 1}`}
+                                      className="w-full h-40 object-cover" // Consistent height for slider images
+                                    />
+                                </div>
+                            ))}
+                        </Slider>
+                    </div>
                   ) : (
-                    <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-600 text-sm">
+                    <div className="w-full h-40 bg-gray-200 flex items-center justify-center text-gray-600 text-xs"> {/* Reduced height */}
                       No Image
                     </div>
                   )}
-                  <div className="p-4 flex flex-col flex-grow">
-                    <h3 className="text-xl font-semibold mb-1 text-gray-800">{listing.title}</h3>
-                    <p className="text-gray-600 mb-2 text-sm">{listing.location}</p>
+                  <div className="p-3 flex flex-col flex-grow"> {/* Reduced padding */}
+                    <h3 className="text-md font-semibold mb-0.5 text-gray-800 truncate">{listing.title}</h3> {/* Truncate, smaller margin */}
+                    <p className="text-gray-500 mb-1 text-xs truncate">{listing.location}</p> {/* Truncate, smaller size */}
                     <div className="mt-auto"> {/* Pushes price and rooms to the bottom */}
-                      <div className="flex items-center justify-between text-gray-700 text-lg font-bold">
-                        <span>
-                          {listing.type === 'rent' ? `$${parseFloat(listing.price).toFixed(2)}/month` : `$${parseFloat(listing.price).toFixed(2)}`}
+                      <div className="flex items-center justify-between text-gray-700">
+                        <span className="text-sm font-bold"> {/* Smaller price */}
+                          {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/mo` :
+                           (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/day` : `$${parseFloat(listing.price).toFixed(0)}`)}
                         </span>
                         {listing.rooms !== null && (
-                          <span className="text-sm font-normal text-gray-600">{listing.rooms} {listing.rooms === 1 ? 'room' : 'rooms'}</span>
+                          <span className="text-xs font-normal text-gray-500">{listing.rooms} {listing.rooms === 1 ? 'room' : 'rooms'}</span>
                         )}
                       </div>
                     </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
 
@@ -336,5 +381,14 @@ function ListingsPage() {
     </div>
   );
 }
+
+const slickArrowStyles = `
+.slick-prev:before, .slick-next:before {
+    color: black; /* Or your preferred color */
+    opacity: 0.5;
+}
+.slick-dots li button:before {
+    font-size: 8px; /* Smaller dots */
+}`;
 
 export default ListingsPage;

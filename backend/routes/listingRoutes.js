@@ -3,9 +3,11 @@
 const express = require('express');
 const router = express.Router();
 const listingController = require('../controllers/listingController');
+const optionalAuthMiddleware = require('../middleware/optionalAuthMiddleware');
 const authMiddleware = require('../middleware/authMiddleware'); // Import the auth middleware
 const upload = require('../config/multerConfig'); // Import the configured multer instance
 const messageController = require('../controllers/messageController');
+const favoriteController = require('../controllers/favoriteController'); 
 
 // --- General GET routes ---
 // Most specific paths first, then paths with parameters.
@@ -30,10 +32,12 @@ router.get(
   authMiddleware,
   listingController.getListingForEdit
 );
-
+router.get(
+  '/:id',
+  optionalAuthMiddleware, // <-- USE THE MIDDLEWARE HERE
+  listingController.getListingById
+);
 // GET a specific listing by ID (public) - Generic route for a single listing
-router.get('/:id', listingController.getListingById);
-
 // --- Routes related to reviews for a specific listing ---
 
 // GET reviews for a specific listing (public)
@@ -93,5 +97,7 @@ router.delete(
   authMiddleware,
   listingController.deleteListing
 );
-
+router.post('/:listingId/favorite', authMiddleware, favoriteController.addFavorite);
+// Remove a listing from favorites
+router.delete('/:listingId/favorite', authMiddleware, favoriteController.removeFavorite);
 module.exports = router;

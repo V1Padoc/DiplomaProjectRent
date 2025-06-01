@@ -5,22 +5,23 @@ const { Op } = require('sequelize');
 
 // GET /api/admin/listings - Admin fetches listings
 exports.getAdminListings = async (req, res) => {
-    const { status, page = 1, limit = 10 } = req.query; // Allow filtering by status
+    const { status, page = 1, limit = 10 } = req.query;
 
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const parsedLimit = parseInt(limit, 10);
 
     let whereClause = {};
-    if (status) {
-        if (['pending', 'active', 'rejected', 'archived'].includes(status)) {
-            whereClause.status = status;
-        } else {
-            return res.status(400).json({ message: "Invalid status filter value." });
-        }
+    // If status is an empty string (from "All" filter option), this 'if' block is skipped,
+    // and whereClause remains {}, so all listings are fetched (correct for "All").
+    if (status && ['pending', 'active', 'rejected', 'archived'].includes(status)) {
+        whereClause.status = status;
+    } else if (status && status !== '') { // Catch invalid non-empty statuses
+        return res.status(400).json({ message: "Invalid status filter value." });
     }
 
     try {
-        const { count, rows: listings } = await Listing.findAndCountAll({
+        // MODIFICATION: Add .unscoped() here to bypass default scopes and fetch all listings
+        const { count, rows: listings } = await Listing.unscoped().findAndCountAll({
             where: whereClause,
             include: [{
                 model: User,
@@ -47,33 +48,53 @@ exports.getAdminListings = async (req, res) => {
 // PUT /api/admin/listings/:listingId/status - Admin updates listing status
 exports.updateListingStatusByAdmin = async (req, res) => {
     const { listingId } = req.params;
-    const { status } = req.body; // New status: 'active', 'rejected'
+    const { status } = req.body; // New status: 'active', 'rejected', etc.
+    const adminUserId = req.user.id; // Admin performing the action
 
-    if (!['active', 'rejected'].includes(status)) {
-        return res.status(400).json({ message: "Invalid status. Must be 'active' or 'rejected'." });
+    if (!['active', 'rejected', 'pending', 'archived'].includes(status)) { // Admin can set to more statuses
+        return res.status(400).json({ message: "Invalid status provided." });
     }
 
     try {
-        const listing = await Listing.findByPk(listingId);
+        // MODIFICATION: Add .unscoped() here to ensure the listing can be found regardless of its current status
+        const listing = await Listing.unscoped().findByPk(listingId);
         if (!listing) {
             return res.status(404).json({ message: "Listing not found." });
         }
 
-        // Only allow updating from 'pending' to 'active' or 'rejected' by admin via this route
-        // Or from 'active' to 'rejected' (e.g. if reported)
-        // Or from 'rejected' to 'active' (e.g. if issue resolved)
-        // More complex state transitions can be added if needed.
         if (listing.status === status) {
              return res.status(400).json({ message: `Listing is already ${status}.`});
         }
 
+        const previousStatus = listing.status; // Store current status before update
 
         listing.status = status;
         await listing.save();
+        
+        // Notify owner of the listing about status change (optional, good for UX)
+ const io = req.app.get('socketio');
+        if (io) {
+            // Notify owner (your existing logic here is good)
+            if (listing.owner_id && (status === 'active' || status === 'rejected' || previousStatus === 'pending')) {
+                 io.to(listing.owner_id.toString()).emit('listing_status_updated_by_admin', {
+                    // ... your payload ...
+                });
+            }
+            
+            // If the status change affects the pending count, notify all admins
+            if (status === 'pending' || previousStatus === 'pending') { // If new status is pending OR old status was pending
+                io.to('admin_room').emit('admin_pending_count_changed', { // Use this new event name
+                    message: `Listing '${listing.title}' status changed by admin ${req.user.name}. Pending count may be affected.`,
+                    listingId: listing.id,
+                });
+                console.log(`Emitted 'admin_pending_count_changed' to admin_room.`);
+            }
+        }
+
 
         res.status(200).json({
             message: `Listing status updated to ${status}.`,
-            listing: listing
+            listing: listing // Send back the unscoped, updated listing
         });
 
     } catch (error) {
@@ -82,4 +103,15 @@ exports.updateListingStatusByAdmin = async (req, res) => {
     }
 };
 
-// User management functions (getUsers, blockUser) will be added here later
+// GET /api/admin/tasks-count - Admin gets count of their pending tasks (e.g., listings)
+exports.getAdminPendingListingsCount = async (req, res) => {
+    try {
+        const count = await Listing.count({
+            where: { status: 'pending' }
+        });
+        res.status(200).json({ pendingListingsCount: count });
+    } catch (error) {
+        console.error("Error fetching admin's pending listings count:", error);
+        res.status(500).json({ message: "Server error while fetching pending listings count." });
+    }
+};

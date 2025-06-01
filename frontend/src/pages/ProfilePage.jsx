@@ -147,7 +147,7 @@ function ProfilePage() {
 
         <div className="text-center mb-6">
           <img
-            src={previewPhoto || 'https://via.placeholder.com/150'} // Fallback placeholder
+            src={previewPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'U')}&background=random&size=128`} // Fallback placeholder
             alt="Profile"
             className="w-32 h-32 rounded-full mx-auto object-cover border-2 border-gray-300"
           />

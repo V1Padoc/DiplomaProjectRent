@@ -54,7 +54,7 @@ function PublicProfilePage() {
             <div className="max-w-3xl mx-auto bg-white p-8 rounded-sm shadow-md">
                 <div className="flex flex-col items-center md:flex-row md:items-start md:space-x-6">
                     <img
-                        src={profileUser.profile_photo_url ? `http://localhost:5000/uploads/profiles/${profileUser.profile_photo_url}` : 'https://via.placeholder.com/150'}
+                        src={profileUser.profile_photo_url ? `http://localhost:5000/uploads/profiles/${profileUser.profile_photo_url}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(profileUser.name || profileUser.email || 'U')}&background=random&size=160`}
                         alt={profileUser.name || 'User profile'}
                         className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-2 border-gray-300 mb-4 md:mb-0"
                     />

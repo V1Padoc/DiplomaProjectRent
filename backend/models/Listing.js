@@ -64,7 +64,7 @@ const Listing = sequelize.define('Listing', {
     allowNull: true
   },
   type: {
-    type: DataTypes.ENUM('rent', 'sale'), // Restrict values to 'rent' or 'sale'
+    type: DataTypes.ENUM('monthly-rental', 'daily-rental'), // Updated types
     allowNull: false
   },
   status: {

@@ -20,7 +20,12 @@ router.put(
     isAdmin,
     adminController.updateListingStatusByAdmin
 );
-
+router.get(
+    '/tasks-count', // This path, when router is mounted at /api/admin, becomes /api/admin/tasks-count
+    authMiddleware,
+    isAdmin,
+    adminController.getAdminPendingListingsCount // Ensure this controller function exists and is correctly named
+);
 // We can add user management routes here later (e.g., GET /users, PUT /users/:id/block)
 
 module.exports = router;

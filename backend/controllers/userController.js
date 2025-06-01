@@ -5,7 +5,8 @@ const Review = require('../models/Review');
 const fs = require('fs').promises;
 const path = require('path');
 const bcrypt = require('bcryptjs'); 
-
+const { Op } = require('sequelize');
+const Booking = require('../models/Booking');
 // PUT /api/users/profile - Update current user's profile
 exports.updateUserProfile = async (req, res) => {
     const userId = req.user.id; // From authMiddleware
@@ -161,5 +162,53 @@ exports.changePassword = async (req, res) => {
     } catch (error) {
         console.error("Error changing password:", error);
         res.status(500).json({ message: "Server error while changing password." });
+    }
+};
+
+// backend/controllers/userController.js
+// const Booking = require('../models/Booking'); // Ensure this is imported
+// const { Op } = require('sequelize');      // Ensure this is imported
+
+exports.getUnreadBookingUpdatesCountForTenant = async (req, res) => {
+    const tenantId = req.user.id; // 1. Is req.user defined? Is req.user.id present?
+                                  // (authMiddleware should ensure this, but worth checking if middleware is correctly applied to the route)
+    try {
+        // 2. Is 'Booking' model correctly imported and initialized?
+        // 3. Is 'Op' from sequelize correctly imported for query operators?
+        const count = await Booking.count({
+            where: {
+                tenant_id: tenantId,
+                is_update_seen_by_tenant: false,
+                status: { [Op.in]: ['confirmed', 'rejected'] }
+            }
+        });
+        res.status(200).json({ unreadCount: count });
+    } catch (error) {
+        // THIS IS WHERE THE DETAILED ERROR WILL BE LOGGED ON THE BACKEND
+        console.error('Error fetching unread booking updates count for tenant:', error); // 4. What is this error object?
+        res.status(500).json({ message: 'Server error.' }); // This is the generic message the frontend receives
+    }
+};
+// backend/controllers/userController.js
+exports.acknowledgeBookingUpdatesForTenant = async (req, res) => {
+    const tenantId = req.user.id; // 1. Is req.user.id present?
+    try {
+        // 2. Is 'Booking' model okay?
+        const [updatedCount] = await Booking.update(
+            { is_update_seen_by_tenant: true },
+            {
+                where: {
+                    tenant_id: tenantId,
+                    is_update_seen_by_tenant: false,
+                    status: { [Op.in]: ['confirmed', 'rejected'] }
+                }
+            }
+        );
+        console.log(`${updatedCount} booking updates acknowledged for tenant ${tenantId}`);
+        res.status(200).json({ message: 'Booking updates acknowledged.', count: updatedCount });
+    } catch (error) {
+        // THIS IS WHERE THE DETAILED ERROR WILL BE LOGGED ON THE BACKEND
+        console.error('Error acknowledging booking updates for tenant:', error); // 3. What is this error object?
+        res.status(500).json({ message: 'Server error.' });
     }
 };

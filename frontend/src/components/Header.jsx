@@ -3,9 +3,25 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { BellIcon, ChatBubbleLeftEllipsisIcon, CalendarDaysIcon, UserGroupIcon, HeartIcon as FavHeartIcon } from '@heroicons/react/24/outline';
+
+const NotificationBadge = ({ count }) => {
+  if (count === 0) return null;
+  return (
+    // MODIFIED: Changed sizing and text color for the badge
+    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold leading-none text-white bg-red-600 rounded-full">
+      {count > 9 ? '9+' : count}
+    </span>
+  );
+};
 
 function Header() {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, logout, 
+          unreadMessagesCount, 
+          unreadBookingRequestsCount, // For owner's booking requests
+          unreadMyBookingsUpdatesCount, // For tenant's booking updates
+          unreadAdminTasksCount         // For admin tasks
+        } = useAuth();
 
   return (
     <header className="bg-white shadow-sm py-4">
@@ -22,22 +38,36 @@ function Header() {
             <li>
               <Link to="/listings" className="text-gray-700 hover:text-gray-900">Listings</Link>
             </li>
- <li><Link to="/map-listings" className="text-gray-700 hover:text-gray-900">Map View</Link></li>
+            <li><Link to="/map-listings" className="text-gray-700 hover:text-gray-900">Map View</Link></li>
             {isAuthenticated ? (
-              <> 
-                  {/* *** NEW: Link to My Chats *** */}
-                <li>
-                    <Link to="/my-chats" className="text-gray-700 hover:text-gray-900">My Chats</Link>
+              <>
+                <li className="relative">
+                    <Link to="/my-chats" className="text-gray-700 hover:text-gray-900 flex items-center">
+                        <ChatBubbleLeftEllipsisIcon className="w-5 h-5 mr-1"/> Chats
+                        <NotificationBadge count={unreadMessagesCount} />
+                    </Link>
                 </li>
-                   {(user?.role === 'tenant' || user?.role === 'owner') && ( // Show if tenant or if owner (owners might book too)
-                   <li>
-                       <Link to="/my-bookings" className="text-gray-700 hover:text-gray-900">My Bookings</Link>
+                 <li className="relative">
+                    <Link to="/favorites" className="text-gray-700 hover:text-gray-900 flex items-center">
+                        <FavHeartIcon className="w-5 h-5 mr-1"/> Favorites
+                    </Link>
+                </li>
+                   {(user?.role === 'tenant' || user?.role === 'owner') && (
+                   <li className="relative">
+                       <Link to="/my-bookings" className="text-gray-700 hover:text-gray-900 flex items-center">
+                           <CalendarDaysIcon className="w-5 h-5 mr-1" /> My Bookings
+                           {/* Badge for tenant updates */}
+                           {user?.role === 'tenant' && <NotificationBadge count={unreadMyBookingsUpdatesCount} />}
+                       </Link>
                    </li>
                 )}
                 {/* Link for creating a listing - visible only to owners */}
                  {user && user.role === 'owner' && (
-                   <li>
-                       <Link to="/booking-requests" className="text-gray-700 hover:text-gray-900">Booking Requests</Link>
+                   <li className="relative">
+                       <Link to="/booking-requests" className="text-gray-700 hover:text-gray-900 flex items-center">
+                           <BellIcon className="w-5 h-5 mr-1" /> Booking Requests
+                           <NotificationBadge count={unreadBookingRequestsCount} />
+                       </Link>
                    </li>
                 )}
                 {user && user.role === 'owner' && (
@@ -53,8 +83,11 @@ function Header() {
                    </li>
                 )}
                  {user && user.role === 'admin' && (
-                    <li>
-                         <Link to="/admin" className="text-gray-700 hover:text-gray-900">Admin Panel</Link>
+                    <li className="relative">
+                         <Link to="/admin" className="text-gray-700 hover:text-gray-900 flex items-center">
+                            <UserGroupIcon className="w-5 h-5 mr-1"/> Admin
+                            <NotificationBadge count={unreadAdminTasksCount} />
+                         </Link>
                     </li>
                  )}
                 <li>

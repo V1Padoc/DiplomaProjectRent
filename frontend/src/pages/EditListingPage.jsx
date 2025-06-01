@@ -1,11 +1,11 @@
 // frontend/src/pages/EditListingPage.jsx
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // Added useRef, useCallback
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
-// *** NEW: Leaflet Imports ***
+// Leaflet Imports
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css'; // Core Leaflet CSS
 import L from 'leaflet'; // Leaflet library for icon fix
@@ -14,7 +14,28 @@ import L from 'leaflet'; // Leaflet library for icon fix
 import { GeoSearchControl, OpenStreetMapProvider } from 'leaflet-geosearch';
 import 'leaflet-geosearch/dist/geosearch.css'; // Geosearch CSS
 
-// *** Leaflet icon fix (important for markers to display correctly) ***
+// @dnd-kit imports for drag-and-drop photo reordering
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay, // For a smoother dragging visual
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy, // Or verticalListSortingStrategy / horizontalListSortingStrategy
+} from '@dnd-kit/sortable';
+
+// Import the reusable SortablePhotoItem component
+import { SortablePhotoItem } from '../components/SortablePhotoItem'; // Adjust path if needed
+
+
+// Leaflet icon fix (important for markers to display correctly)
 // This is a common workaround for issues with Leaflet's default icon paths in Webpack environments.
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -22,11 +43,9 @@ L.Icon.Default.mergeOptions({
     iconUrl: require('leaflet/dist/images/marker-icon.png'),
     shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
-// *** END OF LEAFLET IMPORTS & ICON FIX ***
 
 
-// *** NEW: Component to handle map click events and display marker ***
-// This component listens for map clicks and updates the parent's position state.
+// Component to handle map click events and display marker
 function LocationMarker({ onPositionChange, initialPosition }) {
     const [position, setPosition] = useState(initialPosition);
     const map = useMapEvents({
@@ -51,18 +70,12 @@ function LocationMarker({ onPositionChange, initialPosition }) {
 
     return position === null ? null : (
         <Marker position={position}>
-            <Popup>
-                Property Location: <br/> Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)} <br/>
-                Click anywhere on the map to adjust.
-            </Popup>
+            <Popup>Property Location</Popup>
         </Marker>
     );
 }
-// *** END OF LocationMarker COMPONENT ***
 
-
-// *** NEW: Component for Address Search Control using Leaflet-Geosearch ***
-// This component adds a search bar to the map that finds addresses and updates the map.
+// Component for Address Search Control using Leaflet-Geosearch
 const SearchField = ({ onLocationSelected }) => {
     const map = useMap(); // Access the Leaflet map instance
 
@@ -98,7 +111,6 @@ const SearchField = ({ onLocationSelected }) => {
 
     return null; // This component doesn't render any visible JSX itself, it just adds a control to the map
 };
-// *** END OF SearchField COMPONENT ***
 
 
 function EditListingPage() {
@@ -119,10 +131,14 @@ function EditListingPage() {
     latitude: '', // Managed by map interaction
     longitude: '', // Managed by map interaction
     amenities: '',
-    type: 'rent',
-    existingPhotos: [],
-    newPhotos: []
+    type: 'monthly-rental', // Default to new type
+    status: '', // For admin to change status
   });
+
+  // `displayPhotos` manages all photos (existing from server + newly added files)
+  // Each item: { id: string, type: 'existing' | 'new', originalFilename?: string, file?: File, previewUrl: string }
+  const [displayPhotos, setDisplayPhotos] = useState([]);
+  const [activePhotoId, setActivePhotoId] = useState(null); // For DragOverlay
 
   // State for messages (loading, error, submission feedback)
   const [loading, setLoading] = useState(true); // For initial data fetch loading
@@ -131,15 +147,20 @@ function EditListingPage() {
   const [submitError, setSubmitError] = useState(null); // For form submission errors
   const [submitSuccess, setSubmitSuccess] = useState(null); // For form submission success
 
-  // *** NEW: Map related state ***
+  // Map related state
   const [markerPosition, setMarkerPosition] = useState(null); // { lat: number, lng: number }
-  // Default map center (e.g., a general location or a default city like London)
   const [mapCenter, setMapCenter] = useState([51.505, -0.09]); // London coordinates
   const mapRef = useRef(null); // Ref to access the Leaflet map instance directly if needed
+  const newPhotoInputRef = useRef(null); // Ref to clear the file input
 
   const navigate = useNavigate();
   const { token, user } = useAuth(); // Get token and user info for auth/authz
 
+  // Dnd-kit Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   // --- Effect to fetch the listing data for editing ---
   useEffect(() => {
@@ -170,40 +191,30 @@ function EditListingPage() {
           latitude: fetchedListing.latitude !== null ? fetchedListing.latitude.toString() : '',
           longitude: fetchedListing.longitude !== null ? fetchedListing.longitude.toString() : '',
           amenities: fetchedListing.amenities || '',
-          type: fetchedListing.type || 'rent',
-          existingPhotos: Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [],
-          newPhotos: []
+          type: fetchedListing.type || 'monthly-rental',
+          status: fetchedListing.status || '', // Initialize status for admin
         });
 
-        // *** NEW: Initialize map center and marker from fetched listing data ***
+        // Initialize displayPhotos with existing photos from the fetched listing
+        const existingPhotos = Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [];
+        setDisplayPhotos(existingPhotos.map((filename, index) => ({
+          id: `existing-${Date.now()}-${index}-${filename}`, // Create a unique ID for DND
+          type: 'existing',
+          originalFilename: filename, // Store original filename for server-side processing
+          previewUrl: `http://localhost:5000/uploads/${filename}` // URL for displaying
+        })));
+
+        // Initialize map center and marker from fetched listing data
         if (fetchedListing.latitude && fetchedListing.longitude) {
             const initialPos = { lat: parseFloat(fetchedListing.latitude), lng: parseFloat(fetchedListing.longitude) };
             setMarkerPosition(initialPos); // Set marker position
             setMapCenter([initialPos.lat, initialPos.lng]); // Set map center
         } else {
-            // If no coordinates in fetched listing, ensure marker is null (no marker shown initially)
-            setMarkerPosition(null);
-            // Keep default map center if no coordinates
+            setMarkerPosition(null); // No marker if no coordinates
         }
-        // --- End of initializing form state & map state ---
-
-        console.log('Listing data for editing fetched:', fetchedListing);
-
       } catch (err) {
         console.error('Error fetching listing for edit:', err);
-        if (err.response) {
-            if (err.response.status === 404) {
-                 setError('Listing not found.');
-            } else if (err.response.status === 403) {
-                 setError('You do not have permission to edit this listing.');
-            } else if (err.response.status === 401) {
-                 setError('Authentication required to edit listing.');
-            } else {
-                 setError('Failed to fetch listing data for editing. Please try again.');
-            }
-        } else {
-             setError('Network error while fetching listing data.');
-        }
+        setError(err.response?.data?.message || 'Failed to fetch listing data.');
       } finally {
         setLoading(false);
       }
@@ -215,10 +226,24 @@ function EditListingPage() {
         setLoading(false);
         setError('Authentication token missing.');
     }
-  }, [listingId, token, navigate]);
+  }, [listingId, token]);
+
+  // Effect to revoke object URLs for new photos when the component unmounts
+  // This is intentionally run only on unmount because re-running on `displayPhotos` change
+  // can be tricky with DND-kit, as `displayPhotos` updates frequently during drag operations.
+  // Removal of individual `blob:` URLs is handled by `handleRemovePhoto` and `handleSubmit`.
+  useEffect(() => {
+    return () => {
+      displayPhotos.forEach(photo => {
+        if (photo.type === 'new' && photo.previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(photo.previewUrl);
+        }
+      });
+    };
+  }, []);
 
 
-  // --- NEW: Callback for map position change ---
+  // Callback for map position change
   const handleMapPositionChange = useCallback((latlng) => {
     setMarkerPosition(latlng); // Update the state that controls the marker
     setFormData(prevFormData => ({
@@ -228,7 +253,7 @@ function EditListingPage() {
     }));
   }, []);
 
-  // --- NEW: Callback for geocode result (address search) ---
+  // Callback for geocode result (address search)
   const handleGeocodeResult = useCallback((latlng, addressLabel) => {
     handleMapPositionChange(latlng); // Update marker and lat/lng inputs
     setFormData(prevFormData => ({
@@ -245,7 +270,7 @@ function EditListingPage() {
   }, [handleMapPositionChange]);
 
 
-  // --- Handle form input changes (existing) ---
+  // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -254,32 +279,53 @@ function EditListingPage() {
     });
   };
 
-  // --- Handle new file input change (existing) ---
+  // Handle adding new file(s)
   const handleNewPhotosChange = (e) => {
-    setFormData({
-      ...formData,
-      newPhotos: [...formData.newPhotos, ...Array.from(e.target.files)]
+    const files = Array.from(e.target.files);
+    const newPhotoItems = files.map((file, index) => ({
+      id: `new-${Date.now()}-${index}-${file.name}`, // Unique ID for DND
+      type: 'new',
+      file: file, // Store the actual File object
+      previewUrl: URL.createObjectURL(file) // Create temporary URL for preview
+    }));
+    setDisplayPhotos(prevPhotos => [...prevPhotos, ...newPhotoItems]);
+    if (newPhotoInputRef.current) newPhotoInputRef.current.value = ""; // Clear file input
+  };
+
+  // Handle removing a photo (existing or new)
+  const handleRemovePhoto = (idToRemove) => {
+    setDisplayPhotos(prevPhotos => {
+      const photoToRemove = prevPhotos.find(p => p.id === idToRemove);
+      if (photoToRemove && photoToRemove.type === 'new' && photoToRemove.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoToRemove.previewUrl); // Revoke URL for new photos
+      }
+      return prevPhotos.filter(photo => photo.id !== idToRemove);
     });
   };
 
-  // --- Handle removing an existing photo (existing) ---
-  const handleRemoveExistingPhoto = (filenameToRemove) => {
-     setFormData({
-       ...formData,
-       existingPhotos: formData.existingPhotos.filter(filename => filename !== filenameToRemove)
-     });
-  };
+  // DND Handlers
+  function handleDragStart(event) {
+    setActivePhotoId(event.active.id); // Set the ID of the photo being dragged
+  }
 
-   // --- Handle removing a newly selected photo before submission (existing) ---
-   const handleRemoveNewPhoto = (indexToRemove) => {
-       setFormData({
-           ...formData,
-           newPhotos: formData.newPhotos.filter((_, index) => index !== indexToRemove)
-       });
-   };
+  function handleDragEnd(event) {
+    const { active, over } = event;
+    setActivePhotoId(null); // Clear active item after drag ends
+
+    if (over && active.id !== over.id) {
+      setDisplayPhotos((items) => {
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex); // Reorder photos array
+      });
+    }
+  }
+  function handleDragCancel() {
+    setActivePhotoId(null); // Clear active item if drag is cancelled
+  }
 
 
-  // --- Handle form submission (Update Listing) (existing, but uses new formData fields) ---
+  // Handle form submission (Update Listing)
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -289,17 +335,25 @@ function EditListingPage() {
 
     const updateFormData = new FormData();
     Object.keys(formData).forEach(key => {
-        if (key !== 'existingPhotos' && key !== 'newPhotos') {
+        // Only append status if it's explicitly set AND different from original for admin
+        if (key === 'status' && user?.role === 'admin' && formData.status !== originalListing?.status) {
+             updateFormData.append(key, formData[key]);
+        } else if (key !== 'status') { // Always append other fields
             updateFormData.append(key, formData[key]);
         }
     });
 
-    formData.existingPhotos.forEach(filename => {
-        updateFormData.append('existingPhotos', filename);
+    // Create a manifest of photo filenames/placeholders in their current order
+    const photoManifest = displayPhotos.map(photo => {
+      return photo.type === 'existing' ? photo.originalFilename : '__NEW_PHOTO__';
     });
+    updateFormData.append('photoManifest', JSON.stringify(photoManifest));
 
-    formData.newPhotos.forEach(file => {
-        updateFormData.append('photos', file);
+    // Append actual new photo files
+    displayPhotos.forEach(photo => {
+      if (photo.type === 'new' && photo.file) {
+        updateFormData.append('photos', photo.file); // 'photos' field for new files
+      }
     });
 
     try {
@@ -312,8 +366,25 @@ function EditListingPage() {
       setSubmitSuccess(response.data.message);
       console.log('Listing updated:', response.data.listing);
 
+      // Clean up blob URLs for any new photos that were just uploaded
+      displayPhotos.forEach(p => {
+          if (p.type === 'new' && p.previewUrl.startsWith('blob:')) URL.revokeObjectURL(p.previewUrl);
+      });
+
+      // Update `displayPhotos` state with the new list of existing photos from the server
+      const updatedListingFromServer = response.data.listing;
+      setOriginalListing(prev => ({...prev, ...updatedListingFromServer })); // Update original listing with fresh data
+      
+      const serverPhotos = updatedListingFromServer.photos || [];
+      setDisplayPhotos(serverPhotos.map((filename, index) => ({
+        id: `updated-${Date.now()}-${index}-${filename}`, // Generate new IDs
+        type: 'existing',
+        originalFilename: filename,
+        previewUrl: `http://localhost:5000/uploads/${filename}`
+      })));
+
       setTimeout(() => {
-        navigate(`/listings/${listingId}`);
+       navigate('/manage-listings'); // Redirect after successful update
       }, 2000);
 
     } catch (err) {
@@ -325,7 +396,7 @@ function EditListingPage() {
   };
 
 
-  // --- Conditional Rendering for initial fetch states (existing) ---
+  // Conditional Rendering for initial fetch states
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 text-center text-gray-700 min-h-screen">
@@ -349,6 +420,9 @@ function EditListingPage() {
           </div>
       );
   }
+
+  // Find the photo currently being dragged for the DragOverlay
+  const activePhotoForOverlay = activePhotoId ? displayPhotos.find(p => p.id === activePhotoId) : null;
 
   // Render the edit form once data is loaded and user is authorized (handled by ProtectedRoute)
   return (
@@ -407,7 +481,7 @@ function EditListingPage() {
             </div>
           </div>
 
-          {/* --- MODIFIED Location / Address Input --- */}
+          {/* Location / Address Input */}
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="location">
                 Address / Location Description
@@ -418,9 +492,8 @@ function EditListingPage() {
               name="location" value={formData.location} onChange={handleInputChange} required
             />
           </div>
-          {/* --- END OF MODIFIED Location Input --- */}
           
-          {/* --- NEW: MAP INTEGRATION --- */}
+          {/* Map Integration */}
           <div className="mb-6">
             <label className="block text-gray-700 text-sm font-bold mb-2">
                 Update Property Location on Map (Click to place/move marker, use search bar)
@@ -446,7 +519,6 @@ function EditListingPage() {
                 Selected Coordinates: Lat: {formData.latitude || "N/A"}, Lng: {formData.longitude || "N/A"}
             </p>
           </div>
-          {/* --- END OF MAP INTEGRATION --- */}
 
           {/* Latitude and Longitude Inputs (now read-only, populated by map) */}
           <div className="mb-4 flex space-x-4">
@@ -484,67 +556,83 @@ function EditListingPage() {
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               id="type" name="type" value={formData.type} onChange={handleInputChange} required
             >
-              <option value="rent">Rent</option>
-              <option value="sale">Sale</option>
+              <option value="monthly-rental">Monthly Rental</option>
+              <option value="daily-rental">Daily Rental</option>
             </select>
           </div>
 
-          {/* Photos Section */}
-           <div className="mb-6">
-               <label className="block text-gray-700 text-sm font-bold mb-2">Current Photos</label>
-               <div className="flex flex-wrap gap-4 mb-4">
-                   {/* Display previews of existing photos */}
-                   {formData.existingPhotos.map((filename, index) => (
-                       <div key={filename} className="relative w-32 h-32 border border-gray-300 rounded-sm overflow-hidden">
-                           <img
-                               src={`http://localhost:5000/uploads/${filename}`}
-                               alt={`Existing Photo ${index + 1}`}
-                               className="w-full h-full object-cover"
-                           />
-                           {/* Button to remove existing photo */}
-                           <button
-                               type="button"
-                                onClick={() => handleRemoveExistingPhoto(filename)}
-                               className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs leading-none flex items-center justify-center w-5 h-5"
-                           >
-                               X
-                           </button>
-                       </div>
-                   ))}
-               </div>
-
-               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPhotos">Add New Photos</label>
-                <input
-                   className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                   id="newPhotos" type="file" multiple accept="image/*" onChange={handleNewPhotosChange}
-                />
-                {/* Optional: Display previews of newly selected photos */}
-                 {formData.newPhotos.length > 0 && (
-                    <div className="flex flex-wrap gap-4 mt-4">
-                        {formData.newPhotos.map((file, index) => (
-                             <div key={index} className="relative w-32 h-32 border border-gray-300 rounded-sm overflow-hidden">
-                                 <img
-                                     src={URL.createObjectURL(file)}
-                                     alt={`New Photo ${file.name}`}
-                                     className="w-full h-full object-cover"
-                                     onLoad={() => URL.revokeObjectURL(file)} // Clean up the temporary URL after loading
-                                 />
-                                <button
-                                    type="button"
-                                     onClick={() => handleRemoveNewPhoto(index)}
-                                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs leading-none flex items-center justify-center w-5 h-5"
-                                >
-                                    X
-                                </button>
-                             </div>
-                        ))}
-                    </div>
-                 )}
-           </div>
+          {/* Admin: Status update */}
+          {user && user.role === 'admin' && originalListing && (
+             <div className="mb-4 p-4 border border-orange-300 rounded-md bg-orange-50">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="status">
+                    Listing Status (Admin Control)
+                </label>
+                <select
+                    id="status"
+                    name="status"
+                    value={formData.status} // Controlled by formData.status
+                    onChange={handleInputChange}
+                    className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                >
+                    <option value="pending">Pending</option>
+                    <option value="active">Active</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="archived">Archived</option>
+                </select>
+                <p className="text-xs text-gray-600 mt-1">Current status: {originalListing.status}. Change will apply on save.</p>
+            </div>
+          )}
 
 
-          {/* Submit Button */}
-          <div className="flex items-center justify-center">
+          {/* Photos Section with @dnd-kit */}
+          <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="new-photos-input">
+              Photos (Drag to reorder, add new below)
+            </label>
+            <input
+              ref={newPhotoInputRef} // Assign ref to clear input
+              id="new-photos-input"
+              type="file" multiple accept="image/*" onChange={handleNewPhotosChange}
+              className="block w-full text-sm text-gray-900 border border-gray-300 rounded-sm cursor-pointer bg-gray-50 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4"
+            />
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <SortableContext items={displayPhotos.map(p => p.id)} strategy={rectSortingStrategy}>
+                <div className="flex flex-wrap gap-2 p-2 border border-gray-300 rounded-sm min-h-[120px] bg-gray-50">
+                  {displayPhotos.map((photo) => (
+                    <SortablePhotoItem
+                      key={photo.id}
+                      id={photo.id}
+                      photo={photo}
+                      onRemove={handleRemovePhoto}
+                      isExisting={photo.type === 'existing'} // Pass prop to differentiate existing vs. new
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+              <DragOverlay dropAnimation={null}>
+                {activePhotoForOverlay ? (
+                  <div className="relative w-32 h-32 border rounded-sm overflow-hidden shadow-xl bg-white">
+                     <img src={activePhotoForOverlay.previewUrl} alt="Dragging preview" className="w-full h-full object-cover"/>
+                     {/* Optional labels for drag overlay */}
+                     {activePhotoForOverlay.type === 'existing' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-gray-700 opacity-75">Saved</span>}
+                     {activePhotoForOverlay.type === 'new' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-blue-600 opacity-75">New</span>}
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+             {displayPhotos.length === 0 && (
+                <p className="text-sm text-gray-500 mt-2">No photos for this listing. Add some new photos.</p>
+            )}
+          </div>
+          {/* End of Photos Section */}
+
+          <div className="flex items-center justify-center mt-6">
             <button
               className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out"
               type="submit" disabled={submitting || loading}

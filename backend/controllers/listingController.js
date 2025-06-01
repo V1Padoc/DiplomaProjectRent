@@ -9,9 +9,6 @@ const fs = require('fs').promises;
 const Booking = require('../models/Booking');
 const Analytics = require('../models/Analytics'); // Ensure Analytics is imported
 
-// ... (getListings, createListing, getListingById, etc. remain mostly the same) ...
-// ... (Make sure all existing functions are present)
-
 exports.getListings = async (req, res) => {
   try {
     const {
@@ -91,6 +88,18 @@ exports.createListing = async (req, res) => {
       status: 'pending',
       photos: photoFilenames.length > 0 ? photoFilenames : null
     });
+    // Emit socket event if status is 'pending'
+  if (newListing.status === 'pending') { // This condition will always be true here given the above
+      const io = req.app.get('socketio');
+      if (io) {
+        io.to('admin_room').emit('admin_new_pending_listing', { // <-- THIS IS THE CORRECT EVENT NAME
+          message: `New listing '${newListing.title}' needs approval.`,
+          listingId: newListing.id,
+        });
+        console.log(`Emitted 'admin_new_pending_listing' to admin_room for listing ${newListing.id}`);
+      }
+    }
+
     res.status(201).json({
       message: 'Listing created successfully! Awaiting admin approval.',
       listing: {
@@ -109,14 +118,27 @@ exports.createListing = async (req, res) => {
   }
 };
 
+// backend/controllers/listingController.js
+// TEMPORARY DEBUGGING VERSION of getListingById
 exports.getListingById = async (req, res) => {
   const listingId = req.params.id;
+
+  console.log("\n--- getListingById Controller START ---");
+  console.log(`Timestamp: ${new Date().toISOString()}`);
+  console.log(`Requested Listing ID: ${listingId} (type: ${typeof listingId})`);
+
+  // Robust check for req.user and admin role
+  let isAdmin = false;
+  if (req.user && typeof req.user === 'object' && req.user.role === 'admin') {
+    isAdmin = true;
+  }
+  
+  console.log("req.user (from middleware):", req.user ? {id: req.user.id, role: req.user.role, name: req.user.name} : 'undefined'); // Log the whole req.user object or null
+  console.log(`Calculated 'isAdmin': ${isAdmin}`);
+
   try {
-    const listing = await Listing.findOne({
-      where: {
-         id: listingId,
-         status: 'active'
-      },
+    let queryOptions = {
+      where: { id: listingId },
       include: [
         {
           model: User,
@@ -124,31 +146,55 @@ exports.getListingById = async (req, res) => {
           attributes: ['id', 'name', 'email', 'profile_photo_url']
         }
       ]
-    });
+    };
 
+    let listing;
+
+    if (isAdmin) {
+      // Admin can see listings of any status.
+      console.log(`ADMIN Scoped Query: Fetching listing ID ${listingId} (owner ID: ${req.user.id})`);
+      // queryOptions.where should ONLY have { id: listingId }
+      // Use .unscoped() to bypass any defaultScope on Listing model
+      listing = await Listing.unscoped().findOne(queryOptions); 
+    } else {
+      // Non-admins (or unauthenticated users) can only see 'active' listings.
+      queryOptions.where.status = 'active'; // Add status constraint
+      console.log(`PUBLIC Scoped Query: Fetching listing ID ${listingId}. Query with status='active':`, JSON.stringify(queryOptions.where));
+      listing = await Listing.findOne(queryOptions);
+    }
+
+    // ... (rest of your function: if (!listing), analytics, res.status(200), etc.)
     if (!listing) {
-      return res.status(404).json({ message: 'Listing not found or is not active.' });
+      const message = isAdmin ? `Listing ID ${listingId} not found (admin view).` : `Listing ID ${listingId} not found or is not active.`;
+      console.log(message);
+      return res.status(404).json({ message: message });
     }
 
-    try {
-        const [analyticsEntry, created] = await Analytics.findOrCreate({
-            where: { listing_id: listingId },
-            defaults: { listing_id: listingId, views_count: 1 }
-        });
-        if (!created) {
-            await analyticsEntry.increment('views_count');
+    // Increment views count only for active listings
+    if (listing.status === 'active') {
+        try {
+            const [analyticsEntry, created] = await Analytics.findOrCreate({
+                where: { listing_id: listingId },
+                defaults: { listing_id: listingId, views_count: 1 }
+            });
+            if (!created) {
+                await analyticsEntry.increment('views_count');
+            }
+        } catch (analyticsError) {
+            console.error('Error updating views count:', analyticsError);
+            // Non-critical, so don't fail the main request
         }
-    } catch (analyticsError) {
-        console.error('Error updating views count:', analyticsError);
     }
-
+    console.log(`--- getListingById Controller END (Success) ---\n`);
     res.status(200).json(listing);
 
   } catch (error) {
-    console.error('Error fetching listing by ID:', error);
+    console.error('Error in getListingById:', error);
     if (error.name === 'SequelizeDatabaseError' && error.original && error.original.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
+        console.log(`--- getListingById Controller END (Error: Invalid ID Format) ---\n`);
         return res.status(400).json({ message: 'Invalid listing ID format.' });
     }
+    console.log(`--- getListingById Controller END (Error: Server Error) ---\n`);
     res.status(500).json({ message: 'Server error while fetching listing.' });
   }
 };
@@ -211,6 +257,7 @@ exports.getOwnerListings = async (req, res) => {
         owner_id: ownerId
       },
       order: [['created_at', 'DESC']],
+      include: [{ model: Analytics, attributes: ['views_count'] }] // Include Analytics
     });
     res.status(200).json(listings);
   } catch (error) {
@@ -256,7 +303,8 @@ exports.getListingForEdit = async (req, res) => {
   const userId = req.user.id;
   const userRole = req.user.role;
   try {
-    const listing = await Listing.findByPk(listingId, {
+    // Admins should be able to fetch listings for edit regardless of status
+    const listing = await Listing.unscoped().findByPk(listingId, { // Added .unscoped() here
       include: [{
         model: User,
         as: 'Owner',
@@ -280,60 +328,117 @@ exports.updateListing = async (req, res) => {
   const listingId = req.params.id;
   const userId = req.user.id;
   const userRole = req.user.role;
-  const { title, description, price, rooms, area, location, amenities, type, latitude, longitude } = req.body;
-  const newPhotoFilenames = req.files ? req.files.map(file => file.filename) : [];
-  const existingPhotosToKeep = Array.isArray(req.body.existingPhotos) ? req.body.existingPhotos : (req.body.existingPhotos ? [req.body.existingPhotos] : []);
+  // Destructure photoManifestRaw directly from req.body
+  const { photoManifest: photoManifestRaw, ...restOfBody } = req.body;
+  const newlyUploadedServerFilenames = req.files ? req.files.map(file => file.filename) : [];
 
   try {
-    const listing = await Listing.findByPk(listingId);
-    if (!listing) {
+    // Admins should be able to update listings regardless of status
+    const listingToUpdate = await Listing.unscoped().findByPk(listingId);
+    if (!listingToUpdate) {
       return res.status(404).json({ message: 'Listing not found.' });
     }
-    if (listing.owner_id !== userId && userRole !== 'admin') {
+    if (listingToUpdate.owner_id !== userId && userRole !== 'admin') {
       return res.status(403).json({ message: 'You do not have permission to update this listing.' });
     }
 
-     const oldPhotosToDelete = listing.photos
-         ? listing.photos.filter(photo => !existingPhotosToKeep.includes(photo))
-         : [];
+    const updateData = {
+      title: restOfBody.title || listingToUpdate.title,
+      description: restOfBody.description || listingToUpdate.description,
+      price: restOfBody.price ? parseFloat(restOfBody.price) : listingToUpdate.price,
+      // Handle number fields to be null if empty string
+      rooms: restOfBody.rooms !== undefined ? (restOfBody.rooms === '' ? null : parseInt(restOfBody.rooms, 10)) : listingToUpdate.rooms,
+      area: restOfBody.area !== undefined ? (restOfBody.area === '' ? null : parseFloat(restOfBody.area)) : listingToUpdate.area,
+      location: restOfBody.location || listingToUpdate.location,
+      amenities: restOfBody.amenities || listingToUpdate.amenities,
+      type: restOfBody.type || listingToUpdate.type,
+      latitude: restOfBody.latitude !== undefined ? (restOfBody.latitude === '' ? null : parseFloat(restOfBody.latitude)) : listingToUpdate.latitude,
+      longitude: restOfBody.longitude !== undefined ? (restOfBody.longitude === '' ? null : parseFloat(restOfBody.longitude)) : listingToUpdate.longitude,
+    };
 
-     if (oldPhotosToDelete.length > 0) {
-         const uploadDir = path.join(__dirname, '../uploads');
-         for (const filename of oldPhotosToDelete) {
-             const filePath = path.join(uploadDir, filename);
-             try {
-                 await fs.access(filePath);
-                 await fs.unlink(filePath);
-             } catch (fileError) {
-                 console.warn(`Could not delete old file ${filePath}:`, fileError.message);
-             }
-         }
-     }
+    let finalPhotoArrayForDb = [];
+    const oldPhotoFilenamesInDb = listingToUpdate.photos || [];
 
-    const updatedPhotos = [...existingPhotosToKeep, ...newPhotoFilenames];
+    if (photoManifestRaw) {
+        const parsedPhotoManifest = JSON.parse(photoManifestRaw);
+        let newFileIdx = 0; // Index for newlyUploadedServerFilenames
 
-    const updatedListing = await listing.update({
-      title: title || listing.title,
-      description: description || listing.description,
-      price: price ? parseFloat(price) : listing.price,
-      rooms: rooms !== undefined ? (rooms === '' ? null : parseInt(rooms, 10)) : listing.rooms,
-      area: area !== undefined ? (area === '' ? null : parseFloat(area)) : listing.area,
-      location: location || listing.location,
-      amenities: amenities || listing.amenities,
-      type: type || listing.type,
-      photos: updatedPhotos.length > 0 ? updatedPhotos : null,
-      latitude: latitude !== undefined ? (latitude === '' ? null : parseFloat(latitude)) : listing.latitude,
-      longitude: longitude !== undefined ? (longitude === '' ? null : parseFloat(longitude)) : listing.longitude,
-      // status: userRole === 'admin' ? (req.body.status || listing.status) : 'pending', // Admin can change status, others reset to pending on edit.
-    });
-    // If owner edits, set status to 'pending' for re-approval, unless it's an admin.
-    // This logic can be more nuanced based on which fields are changed.
-    if (userRole !== 'admin' && listing.status !== 'pending') {
-        await updatedListing.update({ status: 'pending' });
-    } else if (userRole === 'admin' && req.body.status) {
-        await updatedListing.update({status: req.body.status });
+        for (const manifestItem of parsedPhotoManifest) {
+            if (manifestItem === '__NEW_PHOTO__') {
+                if (newFileIdx < newlyUploadedServerFilenames.length) {
+                    finalPhotoArrayForDb.push(newlyUploadedServerFilenames[newFileIdx]);
+                    newFileIdx++;
+                } else {
+                    // This case means the manifest expected a new photo, but not enough files were uploaded.
+                    // This could happen if a file upload failed or was filtered by multer, but the manifest was still generated.
+                    console.warn(`[UpdateListing] Manifest inconsistency: Expected '__NEW_PHOTO__', but no more uploaded files available.`);
+                }
+            } else {
+                // This 'manifestItem' is a filename of an supposedly existing photo.
+                // We trust the manifest to tell us which existing photos to keep.
+                finalPhotoArrayForDb.push(manifestItem);
+            }
+        }
+        
+        // Determine photos to delete from storage:
+        // These are photos that were in the DB but are NOT in the final desired array.
+        const photosToDeleteFromStorage = oldPhotoFilenamesInDb.filter(
+            oldFilename => !finalPhotoArrayForDb.includes(oldFilename)
+        );
+
+        if (photosToDeleteFromStorage.length > 0) {
+            const uploadDir = path.join(__dirname, '../uploads');
+            for (const filename of photosToDeleteFromStorage) {
+                const filePath = path.join(uploadDir, filename);
+                try {
+                    await fs.access(filePath); // Check if file exists
+                    await fs.unlink(filePath); // Delete the file
+                    console.log(`[UpdateListing] Deleted old photo from storage: ${filename}`);
+                } catch (fileError) {
+                    if (fileError.code === 'ENOENT') {
+                        console.warn(`[UpdateListing] File not found for deletion, skipping: ${filePath}`);
+                    } else {
+                        console.error(`[UpdateListing] Error deleting old file ${filePath}:`, fileError);
+                    }
+                }
+            }
+        }
+        updateData.photos = finalPhotoArrayForDb.length > 0 ? finalPhotoArrayForDb : null;
+
+    } else if (newlyUploadedServerFilenames.length > 0) {
+        // Fallback: No manifest, but new files uploaded. Append them to existing.
+        // This path should ideally not be hit if frontend always sends manifest for photo ops.
+        console.warn("[UpdateListing] No photoManifest received, but new files were uploaded. Appending new files to existing ones.");
+        updateData.photos = [...oldPhotoFilenamesInDb, ...newlyUploadedServerFilenames];
+    } else {
+        // If no photoManifestRaw and no new files, assume user wants to keep existing photos as is.
+        updateData.photos = oldPhotoFilenamesInDb.length > 0 ? oldPhotoFilenamesInDb : null;
     }
 
+    const updatedListing = await listingToUpdate.update(updateData);
+
+    const updatedListingInstance = await listingToUpdate.update(updateData);
+     let finalStatus = updatedListingInstance.status;
+    // If owner edits, set status to 'pending' for re-approval, unless it's an admin.
+    // This logic can be more nuanced based on which fields are changed.
+    if (userRole !== 'admin' && updatedListingInstance.status !== 'pending') {
+        await updatedListingInstance.update({ status: 'pending' });
+        finalStatus = 'pending'; // Update finalStatus if changed
+    } else if (userRole === 'admin' && restOfBody.status && restOfBody.status !== updatedListingInstance.status) {
+        // If admin explicitly sets a new status
+        await updatedListingInstance.update({status: restOfBody.status });
+        finalStatus = restOfBody.status;
+    }
+ if (finalStatus === 'pending') {
+        const io = req.app.get('socketio');
+        if (io) {
+            io.to('admin_room').emit('admin_new_pending_listing', { // Or 'admin_pending_count_changed'
+                message: `Listing '${updatedListingInstance.title}' was updated and now requires approval.`,
+                listingId: updatedListingInstance.id,
+            });
+            console.log(`Emitted 'admin_new_pending_listing' (or similar) to admin_room for listing ${updatedListingInstance.id} after edit by owner.`);
+        }
+    }
 
     res.status(200).json({
       message: 'Listing updated successfully!',
@@ -342,7 +447,7 @@ exports.updateListing = async (req, res) => {
         title: updatedListing.title,
         owner_id: updatedListing.owner_id,
         status: updatedListing.status,
-        photos: updatedListing.photos,
+        photos: updatedListing.photos, // Ensure photos are part of the response
         latitude: updatedListing.latitude,
         longitude: updatedListing.longitude
       }

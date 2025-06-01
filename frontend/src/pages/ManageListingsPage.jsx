@@ -164,8 +164,11 @@ function ManageListingsPage() {
                 {/* Price and Rooms (Optional Display) */}
                 <div className="text-gray-700 text-lg font-bold mb-3">
                     <span>
-                      {listing.type === 'rent' ? `$${parseFloat(listing.price).toFixed(2)}/month` : `$${parseFloat(listing.price).toFixed(2)}`}
+                      {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(2)}/month` : 
+                       (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(2)}/day` : `$${parseFloat(listing.price).toFixed(2)}`)
+                      }
                     </span>
+                    <p className="text-xs text-gray-500 mt-1">Views: {listing.Analytics && listing.Analytics.length > 0 ? listing.Analytics[0].views_count : 0}</p>
                      {listing.rooms && (
                         <span className="text-sm font-normal text-gray-600 ml-2">{listing.rooms} {listing.rooms === 1 ? 'room' : 'rooms'}</span>
                     )}

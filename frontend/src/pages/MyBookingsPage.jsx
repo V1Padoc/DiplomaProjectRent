@@ -8,7 +8,8 @@ function MyBookingsPage() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const { token, user } = useAuth(); // Assuming user role 'tenant' is checked by ProtectedRoute
+    // Destructure acknowledgeBookingUpdates from useAuth
+    const { token, user, acknowledgeBookingUpdates } = useAuth(); // Add acknowledgeBookingUpdates
 
     const fetchMyBookings = useCallback(async () => {
         if (!token) {
@@ -33,11 +34,17 @@ function MyBookingsPage() {
 
     useEffect(() => {
         fetchMyBookings();
-    }, [fetchMyBookings]);
+        // If the user is a tenant, acknowledge that they've seen their booking updates.
+        // This will reset the unread count in the AuthContext and thus in the UI (e.g., header badge).
+        if (user?.role === 'tenant') {
+            acknowledgeBookingUpdates();
+        }
+    }, [fetchMyBookings, user?.role, acknowledgeBookingUpdates]); // Add acknowledgeBookingUpdates to dependencies
 
     if (loading) return <div className="container mx-auto px-4 py-8 text-center">Loading your bookings...</div>;
     if (error) return <div className="container mx-auto px-4 py-8 text-center text-red-500">Error: {error}</div>;
     
+    // Filter bookings into active/upcoming and past/other statuses
     const activeBookings = bookings.filter(b => b.status === 'confirmed' && new Date(b.end_date) >= new Date());
     const pastBookings = bookings.filter(b => b.status !== 'confirmed' || new Date(b.end_date) < new Date());
 
@@ -87,6 +94,7 @@ function MyBookingsPage() {
 
             {/* Past and Other Status Bookings */}
             <h2 className="text-2xl font-semibold mb-4 text-gray-700">Booking History</h2>
+            {/* Conditional rendering for messages when no history or no bookings at all */}
             {pastBookings.length === 0 && activeBookings.length === 0 && bookings.length > 0 && ( 
                  <p className="text-center text-gray-600 bg-white p-4 rounded-sm shadow-sm">No other booking history.</p>
             )}

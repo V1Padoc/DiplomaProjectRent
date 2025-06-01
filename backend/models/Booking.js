@@ -41,6 +41,11 @@ const Booking = sequelize.define('Booking', {
     allowNull: false,
     defaultValue: 'pending' // New bookings start as pending
   },
+   is_update_seen_by_tenant: { // <-- NEW FIELD
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  },
   // Sequelize will add createdAt and updatedAt automatically because timestamps: true
 }, {
   // Model options go here

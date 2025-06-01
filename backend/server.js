@@ -38,6 +38,9 @@ const io = new Server(server, {
     }
 });
 
+// Make io instance accessible throughout the app via req.app.get('socketio')
+app.set('socketio', io);
+
 // Define Associations (Keep this block if you added it)
 /*
 const User = require('./models/User');
@@ -47,7 +50,6 @@ User.hasMany(Listing, { foreignKey: 'owner_id', as: 'Listings' });
 Listing.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
 // ... etc.
 */
-
 
 
 // Middleware
@@ -82,17 +84,37 @@ app.use('/api/users', userRoutes);
 io.on('connection', (socket) => {
     console.log('A user connected via WebSocket:', socket.id);
 
-    // TODO: Implement proper authentication for WebSocket connections
-    // ... (rest of your conceptual socket.io logic) ...
+    socket.on('authenticate_socket', (authData) => { // <--- CHANGED parameter name
+        // **Step 1.1 Logging**
+        console.log(`authenticate_socket: Received authData:`, authData);
 
-    socket.on('join_chat_room', (roomNameOrData) => {
-        socket.join(roomNameOrData);
-        console.log(`User ${socket.id} joined room ${roomNameOrData}`);
+        if (authData && authData.userId) { // <--- CHECK authData and authData.userId
+            // Log the attempt
+            console.log(`Socket ${socket.id} for User ${authData.userId} (Role: ${authData.role}) attempting to join room ${authData.userId.toString()}`);
+
+            // Join a room named after the user's ID.
+            socket.join(authData.userId.toString());
+            console.log(`Socket ${socket.id} for User ${authData.userId} joined room ${authData.userId.toString()}`);
+
+            // **Additionally join admin room if user is admin**
+            if (authData.role === 'admin') {
+                console.log(`Admin user ${authData.userId} attempting to join 'admin_room'.`);
+                socket.join('admin_room');
+                console.log(`Admin user ${authData.userId} joined room 'admin_room'.`);
+            }
+
+        } else {
+            console.warn(`Attempted to authenticate socket ${socket.id} without a valid user ID in authData. Received:`, authData);
+        }
+    });
+
+    socket.on('join_chat_room', (roomName) => {
+        socket.join(roomName);
+        console.log(`Socket ${socket.id} joined chat room ${roomName}`);
     });
 
     socket.on('send_message', async (messageData) => {
-        console.log('Message received on server via WebSocket:', messageData);
-        // TODO: Full implementation
+        console.log('Consider sending messages via HTTP POST /api/chats. Received on WebSocket:', messageData);
     });
 
     socket.on('disconnect', () => {
@@ -104,8 +126,9 @@ async function startServer() {
   try {
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
-    // await sequelize.sync({ alter: true }); // Sync database schema if needed
-
+    //await sequelize.sync({ alter: true }); // Sync database schema if needed
+    //console.log('Database synchronized with alter:true. Tables updated.');
+    
     const PORT = process.env.PORT || 5000;
     // *** FIX: Use 'server.listen' because Socket.IO is attached to 'server' (the http.createServer instance) ***
     server.listen(PORT, () => {
@@ -117,6 +140,5 @@ async function startServer() {
     process.exit(1);
   }
 }
-
 
 startServer();

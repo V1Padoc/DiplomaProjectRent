@@ -29,7 +29,7 @@ function RegisterPage() {
         email,
         password,
         name,
-        phoneNumber, // *** ADDED: Include phone number in the request body ***
+        phone_number: phoneNumber, // *** ADDED: Include phone number in the request body ***
         role
       });
 

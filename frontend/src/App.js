@@ -1,7 +1,7 @@
 // frontend/src/App.js
 
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom'; // <--- Import useLocation
 import Header from './components/Header';
 import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
@@ -14,17 +14,26 @@ import AdminPage from './pages/AdminPage';
 import CreateListingPage from './pages/CreateListingPage';
 import ListingDetailPage from './pages/ListingDetail';
 import EditListingPage from './pages/EditListingPage';
-// Import the new ChatPage
-import ChatPage from './pages/ChatPage'; // <-- Import the new page
-import MyChatsPage from './pages/MyChatsPage'; 
+import ChatPage from './pages/ChatPage';
+import MyChatsPage from './pages/MyChatsPage';
 import BookingRequestsPage from './pages/BookingRequestsPage';
 import ProtectedRoute from './components/ProtectedRoute';
-import MyBookingsPage from './pages/MyBookingsPage'; // *** NEW IMPORT ***
+import MyBookingsPage from './pages/MyBookingsPage';
 import PublicProfilePage from './pages/PublicProfilePage';
-import MapListingsPage from './pages/MapListingsPage'; 
+import MapListingsPage from './pages/MapListingsPage';
+import FavoritesPage from './pages/FavoritesPage';
 
 
-function App() {
+// Create a wrapper component to use the useLocation hook
+function AppContent() {
+  const location = useLocation(); // Get the current location object
+
+  // Define an array of paths where the footer should NOT be displayed
+  const noFooterPaths = ['/map-listings']; // Add '/map-listings' here
+
+  // Check if the current path is in the noFooterPaths array
+  const showFooter = !noFooterPaths.includes(location.pathname);
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
@@ -35,7 +44,7 @@ function App() {
           <Route path="/listings/:id" element={<ListingDetailPage />} />
           <Route path="/listings" element={<ListingsPage />} />
           <Route path="/map-listings" element={<MapListingsPage />} />
-         
+
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           {/* Add other public routes here */}
@@ -86,19 +95,15 @@ function App() {
              }
            />
 
-           {/* --- Add the route for the Chat Page, protected for authenticated users --- */}
-           {/* The route path includes the listingId parameter */}
            <Route
-             path="/listings/:listingId/chat" // Path matching the backend endpoint structure
+             path="/listings/:listingId/chat"
              element={
-               <ProtectedRoute> {/* Requires ANY authenticated user */}
+               <ProtectedRoute>
                  <ChatPage />
                </ProtectedRoute>
              }
            />
-           {/* --- End of Chat Page Route --- */}
- {/* *** NEW: Route for BookingRequestsPage for owners *** */}
-          <Route
+           <Route
             path="/booking-requests"
             element={
               <ProtectedRoute allowedRoles={['owner']}>
@@ -106,37 +111,46 @@ function App() {
               </ProtectedRoute>
             }
           />
- {/* *** NEW: Route for MyChatsPage *** */}
           <Route
             path="/my-chats"
             element={
-              <ProtectedRoute> {/* Requires ANY authenticated user */}
+              <ProtectedRoute>
                 <MyChatsPage />
               </ProtectedRoute>
             }
           />
-          {/* Add other protected routes here */}
 
-          {/* Optional: Catch-all route for 404 Not Found */}
-          {/* <Route path="*" element={<NotFoundPage />} /> */}
          <Route
             path="/my-bookings"
             element={
-              <ProtectedRoute allowedRoles={['tenant', 'owner']}> {/* Or just <ProtectedRoute> if owners can also be tenants */}
+              <ProtectedRoute allowedRoles={['tenant', 'owner']}>
                 <MyBookingsPage />
               </ProtectedRoute>
             }
           />
-          <Route path="/profiles/:userId" element={<PublicProfilePage />} /> 
-            
-       
-       
+          <Route path="/profiles/:userId" element={<PublicProfilePage />} />
+
+        <Route
+            path="/favorites"
+           element={
+              <ProtectedRoute>
+                <FavoritesPage />
+              </ProtectedRoute>
+            }
+          />
+
         </Routes>
-        
+
       </main>
-      <Footer />
+      {/* Conditionally render the Footer based on the current path */}
+      {showFooter && <Footer />}
     </div>
   );
+}
+
+// App component now just renders the AppContent wrapper
+function App() {
+  return <AppContent />;
 }
 
 export default App;

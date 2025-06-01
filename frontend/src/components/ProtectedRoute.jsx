@@ -1,39 +1,37 @@
 // frontend/src/components/ProtectedRoute.jsx
-
 import React from 'react';
-import { Navigate } from 'react-router-dom'; // Import Navigate for redirection
-import { useAuth } from '../context/AuthContext'; // Import the useAuth hook
+import { Navigate, useLocation } from 'react-router-dom'; // Import useLocation
+import { useAuth } from '../context/AuthContext';
 
-// ProtectedRoute component definition
-// This component acts as a wrapper for routes that require authentication
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  // Get authentication state and user details from the Auth Context
   const { isAuthenticated, user, loading } = useAuth();
+  const location = useLocation(); // Get current location
 
-  // If authentication status is still loading, render nothing or a loading indicator
-  // This prevents showing unauthorized content briefly while the token is being checked
   if (loading) {
-      return <div>Loading authentication...</div>; // Or return null, or a spinner component
+      return <div>Loading authentication...</div>;
   }
 
-  // Check if the user is authenticated
   if (!isAuthenticated) {
-    // If not authenticated, redirect them to the login page
-    // The 'replace' prop replaces the current history entry
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />; // Pass current location
   }
 
-  // If the user is authenticated, check if allowedRoles are specified and if the user's role is included
-  // If allowedRoles is provided AND the user's role is NOT in the allowedRoles list
+  // Specific handling for /my-bookings to allow owners
+  if (location.pathname === '/my-bookings') {
+    if (user && (user.role === 'tenant' || user.role === 'owner')) {
+      return children; // Allow tenants AND owners
+    } else {
+      // If not tenant or owner, but authenticated, redirect (e.g., admin)
+      console.warn(`User with role "${user?.role}" attempted to access /my-bookings.`);
+      return <Navigate to="/" replace />;
+    }
+  }
+
+  // General role check for other routes
   if (allowedRoles && allowedRoles.length > 0 && user && !allowedRoles.includes(user.role)) {
-    // If the user's role is not allowed for this route, you might redirect to a different page
-    // like a 403 Forbidden page, or just the homepage. Let's redirect to homepage for simplicity.
-    console.warn(`User with role "${user.role}" attempted to access restricted route. Required roles: ${allowedRoles.join(', ')}`);
-    return <Navigate to="/" replace />; // Redirect to homepage
+    console.warn(`User with role "${user.role}" attempted to access restricted route at ${location.pathname}. Required roles: ${allowedRoles.join(', ')}`);
+    return <Navigate to="/" replace />;
   }
 
-
-  // If authenticated and role is allowed (or no specific roles are required), render the children (the protected route's component)
   return children;
 };
 
