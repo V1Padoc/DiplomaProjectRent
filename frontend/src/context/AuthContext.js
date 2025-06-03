@@ -1,11 +1,12 @@
 // frontend/src/context/AuthContext.js
 
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import axios from 'axios';
-import { io } from 'socket.io-client'; // Import socket.io-client
+// import axios from 'axios'; // We will now use the apiClient instance
+import apiClient, { setupInterceptors } from '../services/api'; // <--- MODIFIED: Import apiClient and setupInterceptors
+import { io } from 'socket.io-client';
 
-// API URL base
-const API_URL = 'http://localhost:5000/api';
+// API URL base is now handled by apiClient, so we don't need this constant here.
+// const API_URL = 'http://localhost:5000/api'; 
 const SOCKET_URL = 'http://localhost:5000';
 
 // Create the Auth Context
@@ -71,83 +72,80 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
-    setFavorites([]);
+    setFavorites([]); // Clear favorites on logout
     setUnreadMessagesCount(0);
     setUnreadBookingRequestsCount(0);
     setUnreadMyBookingsUpdatesCount(0);
     setUnreadAdminTasksCount(0);
     setSocket(null);
     setIsSocketEligible(false); // Reset eligibility on logout
-    console.log('User logged out.');
+    console.log('User logged out via AuthContext.logout.');
+    // No window.location.href here, let ProtectedRoute handle redirection based on isAuthenticated state
   }, [socket]); // socket is a dependency for socket.disconnect()
 
+  // --- Initialize Axios interceptors ONCE when AuthProvider mounts ---
+  useEffect(() => {
+    setupInterceptors(logout); // Pass the memoized logout function to setup interceptors
+  }, [logout]); // Re-run if logout function instance changes (it shouldn't if memoized correctly)
+
+
   const fetchUnreadMessagesCount = useCallback(async (currentTokenParam) => {
-    if (!currentTokenParam) return;
+    if (!currentTokenParam) return; // currentTokenParam is still used for initial call when token might not be in state yet
     try {
-      const response = await axios.get(`${API_URL}/chats/my-unread-count`, {
-        headers: { Authorization: `Bearer ${currentTokenParam}` },
-      });
+      // Use apiClient - it automatically includes the token from localStorage via request interceptor
+      const response = await apiClient.get(`/chats/my-unread-count`);
       setUnreadMessagesCount(response.data.unreadCount);
     } catch (error) {
       console.error('Failed to fetch unread messages count:', error.response?.data?.message || error.message);
+      // 401s are now handled by the global interceptor, so no local logout() needed here.
     }
-  }, []); // Removed token from deps, pass it as param
+  }, []); 
 
   const fetchFavoriteIds = useCallback(async (currentTokenParam) => {
-    if (currentTokenParam) {
-        try {
-            const response = await axios.get(`${API_URL}/users/me/favorites/ids`, {
-                headers: { Authorization: `Bearer ${currentTokenParam}` },
-            });
-            setFavorites(response.data.favorite_ids ? response.data.favorite_ids.map(String) : []);
-        } catch (error) {
-            console.error("Error fetching favorite IDs:", error.response?.data?.message || error.message);
-            if (error.response?.status === 401 && currentTokenParam) { // Check currentTokenParam to avoid loop if already logging out
-                // logout(); // Consider if auto-logout here is desired, or handled by refreshUser/login
-            } else {
-                setFavorites([]);
-            }
-        }
-    } else {
-        setFavorites([]);
+    if (!currentTokenParam) { // currentTokenParam for initial calls
+        setFavorites([]); 
+        return; 
     }
-  }, []); // Removed token from deps, pass it as param. `logout` not needed if handled elsewhere
+    try {
+        const response = await apiClient.get(`/users/me/favorites/ids`); // Use apiClient
+        setFavorites(response.data.favorite_ids && Array.isArray(response.data.favorite_ids) 
+                      ? response.data.favorite_ids.map(String) 
+                      : []);
+    } catch (error) {
+        console.error("Error fetching favorite IDs:", error.response?.data?.message || error.message);
+        if (error.response?.status !== 401) { // If not a 401 (which auto-logs out via interceptor)
+            setFavorites([]); // Default to empty on other errors
+        }
+    }
+  }, []);
 
   // Fetch count of unread booking updates for tenants
   const fetchUnreadBookingUpdatesCount = useCallback(async (currentTokenParam) => {
     if (!currentTokenParam || user?.role !== 'tenant') return;
     try {
-      const response = await axios.get(`${API_URL}/users/me/unread-booking-updates-count`, { // You'd need to create this endpoint on backend
-        headers: { Authorization: `Bearer ${currentTokenParam}` },
-      });
+      const response = await apiClient.get(`/users/me/unread-booking-updates-count`); // Use apiClient
       setUnreadMyBookingsUpdatesCount(response.data.unreadCount || 0);
     } catch (error) {
       console.error('Failed to fetch unread booking updates count:', error.response?.data?.message || error.message);
     }
-  }, [user?.role]); // Add user.role dependency
+  }, [user?.role]); 
 
   // Fetch count of admin tasks (e.g., pending listings)
   const fetchUnreadAdminTasksCount = useCallback(async (currentTokenParam) => {
     if (!currentTokenParam || user?.role !== 'admin') return;
     try {
-      // Assuming an endpoint like /api/admin/tasks-count that returns { pendingListingsCount: X }
-      const response = await axios.get(`${API_URL}/admin/tasks-count`, { // You'd need to create this endpoint
-        headers: { Authorization: `Bearer ${currentTokenParam}` },
-      });
+      const response = await apiClient.get(`/admin/tasks-count`); // Use apiClient
       setUnreadAdminTasksCount(response.data.pendingListingsCount || 0);
     } catch (error) {
       console.error('Failed to fetch unread admin tasks count:', error.response?.data?.message || error.message);
     }
-  }, [user?.role]); // Add user.role dependency
+  }, [user?.role]); 
   
-  // Fetch count of new booking requests for owners (placeholder if needed, similar to above)
+  // Fetch count of new booking requests for owners
   const fetchUnreadBookingRequestsCountForOwner = useCallback(async (currentTokenParam) => {
     if (!currentTokenParam || user?.role !== 'owner') return;
     try {
-      // Example: Endpoint to get count of 'pending' bookings for owner's listings
-      const response = await axios.get(`${API_URL}/bookings/owner/pending-count`, { // You'd need to create this endpoint
-        headers: { Authorization: `Bearer ${currentTokenParam}` },
-      });
+      const response = await apiClient.get(`/bookings/owner/pending-count`); // Use apiClient
       setUnreadBookingRequestsCount(response.data.pendingCount || 0);
     } catch (error) {
       console.error('Failed to fetch unread booking requests count for owner:', error.response?.data?.message || error.message);
@@ -161,17 +159,15 @@ export const AuthProvider = ({ children }) => {
       return false;
     }
     try {
-      const response = await axios.get(`${API_URL}/auth/socket-eligibility`, {
-        headers: { Authorization: `Bearer ${currentTokenParam}` },
-      });
+      const response = await apiClient.get(`/auth/socket-eligibility`); // Use apiClient
       setIsSocketEligible(response.data.eligible);
-      return response.data.eligible; // Return for immediate use if needed
+      return response.data.eligible; 
     } catch (error) {
       console.error('Failed to fetch socket eligibility:', error.response?.data?.message || error.message);
-      setIsSocketEligible(false); // Default to not eligible on error
+      setIsSocketEligible(false); 
       return false;
     }
-  }, []); // No dependencies needed here, token passed as param
+  }, []); 
 
   // Effect for initial authentication check and loading user data
   useEffect(() => {
@@ -179,22 +175,18 @@ export const AuthProvider = ({ children }) => {
       const storedToken = localStorage.getItem('token');
       console.log('Attempting auto-login and socket eligibility check...');
       if (storedToken) {
-        setToken(storedToken); // Set token state for other hooks/logic
+        setToken(storedToken); 
         try {
-          const res = await axios.get(`${API_URL}/auth/user`, {
-            headers: { 'Authorization': `Bearer ${storedToken}` }
-          });
+          // apiClient will automatically use the token from localStorage
+          const res = await apiClient.get(`/auth/user`); 
           const userData = res.data;
           setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData)); // Correctly store user object
+          localStorage.setItem('user', JSON.stringify(userData)); 
 
-          // Fetch eligibility
+          // Fetch eligibility and other dependent data using the stored token
           await fetchSocketEligibility(storedToken);
-
-          // Fetch other dependent data now that user is confirmed
           fetchUnreadMessagesCount(storedToken);
           fetchFavoriteIds(storedToken);
-          // Fetch role-specific counts
           if (userData.role === 'tenant') {
             fetchUnreadBookingUpdatesCount(storedToken);
           }
@@ -206,16 +198,20 @@ export const AuthProvider = ({ children }) => {
           }
 
         } catch (err) {
-          console.error('Auto-login failed (token invalid or server error):', err.response?.data?.message || err.message);
-          logout(); // Use the logout function to clear all state
+          // 401 error from apiClient.get('/auth/user') will be caught by the interceptor,
+          // which calls logout(). So, this catch block might primarily see other errors.
+          console.error('Auto-login failed (user fetch or subsequent calls):', err.response?.data?.message || err.message);
+          if (err.response?.status !== 401) { // If not a 401 (which auto-logs out via interceptor)
+            logout(); // Still logout for other critical failures during auto-login
+          }
         }
       }
       setLoading(false);
     };
 
     attemptAutoLogin();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logout, fetchUnreadMessagesCount, fetchFavoriteIds, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner, fetchSocketEligibility]); // Add stable callbacks including fetchSocketEligibility
+    // Dependencies include all callbacks to ensure stable references
+  }, [logout, fetchUnreadMessagesCount, fetchFavoriteIds, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner, fetchSocketEligibility]);
 
   // Socket connection management
   useEffect(() => {
@@ -223,26 +219,32 @@ export const AuthProvider = ({ children }) => {
     if (token && user?.id && isSocketEligible) {
       console.log(`User ${user.id} is eligible, attempting to connect socket.`);
       const newSocket = io(SOCKET_URL, {
-        // auth: { token } // More secure way to pass token if backend supports it
+        auth: { token: token } // Send token in auth object for server-side verification
       });
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
         console.log('Socket connected:', newSocket.id);
-       console.log(`Socket connected with ID: ${newSocket.id}. Emitting 'authenticate_socket' with User ID: ${user.id}, Role: ${user.role}`) // Pass user ID and role for backend mapping and admin room joining
-        newSocket.emit('authenticate_socket', { userId: user.id, role: user.role });
+      });
+
+      // Optional: Listen for a custom event from server confirming socket authentication
+      newSocket.on('socket_authenticated', (data) => {
+        console.log('Socket successfully authenticated by server:', data);
+      });
+
+      newSocket.on('socket_auth_error', (error) => {
+        console.error('Socket authentication failed:', error.message);
+        newSocket.disconnect();
       });
 
       newSocket.on('new_message_notification', (data) => {
         console.log('New message notification (AuthContext):', data);
-         console.log(`Dispatching 'chat-update' event.`)
         fetchUnreadMessagesCount(token); // Uses current token from state
         window.dispatchEvent(new CustomEvent('chat-update', { detail: data }));
       });
 
       newSocket.on('messages_read_update', (data) => {
         console.log('Messages read update received (AuthContext):', data);
-         console.log(`Dispatching 'chat-update' event for read status.`)
         fetchUnreadMessagesCount(token); // Uses current token from state
         window.dispatchEvent(new CustomEvent('chat-update', { detail: { type: 'read_update', ...data } }));
       });
@@ -280,39 +282,38 @@ export const AuthProvider = ({ children }) => {
 
       return () => {
         newSocket.off('connect');
+        newSocket.off('socket_authenticated'); 
+        newSocket.off('socket_auth_error');
         newSocket.off('new_message_notification');
         newSocket.off('messages_read_update');
-        newSocket.off('new_booking_request_owner'); // Specific event name
-        newSocket.off('booking_status_update_tenant'); // Specific event name
+        newSocket.off('new_booking_request_owner'); 
+        newSocket.off('booking_status_update_tenant'); 
         newSocket.off('admin_new_pending_listing');
         newSocket.off('admin_pending_count_changed');
         newSocket.close();
         setSocket(null);
         console.log('Socket disconnected and cleaned up.');
       };
-    } else if (socket) { // If token or user becomes null (e.g., logout) or eligibility changes
+    } else if (socket) { 
       console.log(`User ${user?.id} no longer eligible or logged out, disconnecting socket.`);
       socket.close();
       setSocket(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, user?.id, user?.role, fetchUnreadMessagesCount, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner, isSocketEligible]); // Added isSocketEligible
+  }, [token, user?.id, user?.role, fetchUnreadMessagesCount, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner, isSocketEligible]); 
 
   // *** MODIFIED LOGIN FUNCTION ***
-  const login = async (newToken) => { // Only takes newToken
+  const login = async (newToken) => { 
     if (!newToken) {
       console.error("Login called without a token.");
-      logout(); // Clear state if no token
+      logout(); 
       return;
     }
     localStorage.setItem('token', newToken);
-    setToken(newToken); // Set token in state first
+    setToken(newToken); 
 
     try {
-      // Fetch user data using the new token
-      const res = await axios.get(`${API_URL}/auth/user`, {
-        headers: { 'Authorization': `Bearer ${newToken}` }
-      });
+      // Fetch user data using apiClient - it will use the token just set in localStorage
+      const res = await apiClient.get(`/auth/user`); 
       const userData = res.data;
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
@@ -321,11 +322,9 @@ export const AuthProvider = ({ children }) => {
       const eligible = await fetchSocketEligibility(newToken); 
       console.log("Socket eligibility after login:", eligible);
 
-
       // Now that user, token, and eligibility are set, fetch other dependent data
-      await fetchUnreadMessagesCount(newToken); // Make sure these complete
+      await fetchUnreadMessagesCount(newToken); 
       await fetchFavoriteIds(newToken);
-      // Fetch role-specific counts after login
       if (userData.role === 'tenant') {
         await fetchUnreadBookingUpdatesCount(newToken);
       }
@@ -335,10 +334,11 @@ export const AuthProvider = ({ children }) => {
       if (userData.role === 'owner') {
         await fetchUnreadBookingRequestsCountForOwner(newToken);
       }
-      // Navigation will be handled by LoginPage's useEffect or App router based on isAuthenticated
     } catch (err) {
       console.error('Failed to fetch user data after login:', err.response?.data?.message || err.message);
-      logout(); // If fetching user fails, revert to logged-out state
+      if (err.response?.status !== 401) { // If not a 401 (which auto-logs out via interceptor)
+        logout(); // Logout for other critical failures during login
+      }
     }
   };
 
@@ -346,71 +346,68 @@ export const AuthProvider = ({ children }) => {
   const refreshUser = async () => {
     if (token) {
       try {
-        const config = { headers: { 'Authorization': `Bearer ${token}` } };
-        const res = await axios.get(`${API_URL}/auth/user`, config);
+        const res = await apiClient.get(`/auth/user`); // Use apiClient, no manual headers
         setUser(res.data);
         localStorage.setItem('user', JSON.stringify(res.data));
       } catch (err) {
         console.error('Error refreshing user data:', err);
-        if (err.response?.status === 401) logout();
+        // Interceptor should handle 401 for this call
       }
     }
   };
 
   const toggleFavorite = async (listingId) => {
-    if (!token) return favorites.includes(String(listingId)); // Should ideally not be called if no token
+    if (!token) {
+        console.warn('Attempted to toggle favorite without authentication token.');
+        return favorites.includes(String(listingId)); 
+    }
     const stringListingId = String(listingId);
     const isCurrentlyFavorited = favorites.includes(stringListingId);
     try {
       if (isCurrentlyFavorited) {
-        await axios.delete(`${API_URL}/users/me/favorites/${stringListingId}`, { headers: { Authorization: `Bearer ${token}` } });
+        await apiClient.delete(`/users/me/favorites/${stringListingId}`); // Use apiClient
         setFavorites(prev => prev.filter(id => id !== stringListingId));
         return false;
       } else {
-        await axios.post(`${API_URL}/users/me/favorites/${stringListingId}`, {}, { headers: { Authorization: `Bearer ${token}` } });
+        await apiClient.post(`/users/me/favorites/${stringListingId}`, {}); // Use apiClient
         setFavorites(prev => [...prev, stringListingId]);
         return true;
       }
     } catch (error) {
       console.error("Error toggling favorite:", error.response?.data?.message || error.message);
-      if (error.response?.status === 401) logout();
-      return isCurrentlyFavorited; // Return original state on error
+      // Interceptor should handle 401 for this call
+      return isCurrentlyFavorited; 
     }
   };
 
   const markChatAsRead = useCallback(async (listingId, chatPartnerId) => {
     if (!token || !listingId || !chatPartnerId) return 0;
     try {
-      const response = await axios.put(`${API_URL}/chats/mark-as-read`,
-        { listingId: String(listingId), chatPartnerId: String(chatPartnerId) },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await apiClient.put(`/chats/mark-as-read`, // Use apiClient
+        { listingId: String(listingId), chatPartnerId: String(chatPartnerId) }
       );
-      await fetchUnreadMessagesCount(token); // Refresh total count, pass token
+      await fetchUnreadMessagesCount(token); 
       return response.data.count || 0;
     } catch (error) {
       console.error('Failed to mark chat as read:', error.response?.data?.message || error.message);
-      if (error.response?.status === 401 && token) logout();
+      // Interceptor should handle 401 for this call
       return 0;
     }
-  }, [token, fetchUnreadMessagesCount, logout]);
+  }, [token, fetchUnreadMessagesCount]);
 
   // Function for tenant to acknowledge their booking updates (clears the count)
   const acknowledgeBookingUpdates = useCallback(async () => {
     if (!token || user?.role !== 'tenant') return;
     try {
-      await axios.put(`${API_URL}/users/me/acknowledge-booking-updates`, {}, { // You'd need to create this endpoint
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // After acknowledging, refresh the count (should be 0 or less)
+      await apiClient.put(`/users/me/acknowledge-booking-updates`, {}); // Use apiClient
       fetchUnreadBookingUpdatesCount(token);
     } catch (error) {
       console.error('Failed to acknowledge booking updates:', error.response?.data?.message || error.message);
-      if (error.response?.status === 401) logout();
+      // Interceptor should handle 401 for this call
     }
-  }, [token, user?.role, fetchUnreadBookingUpdatesCount, logout]);
+  }, [token, user?.role, fetchUnreadBookingUpdatesCount]);
 
   // Function for admin to "refresh" task count (e.g., after viewing pending items)
-  // This simply re-fetches. A more complex system might mark specific tasks as "seen".
   const refreshAdminTasksCount = useCallback(async () => {
     if (!token || user?.role !== 'admin') return;
     fetchUnreadAdminTasksCount(token);
@@ -427,26 +424,25 @@ export const AuthProvider = ({ children }) => {
     token, user, loading, favorites,
     isAuthenticated: !!token && !!user,
     unreadMessagesCount,
-    unreadBookingRequestsCount, // For Owner
-    unreadMyBookingsUpdatesCount, // For Tenant
-    unreadAdminTasksCount, // For Admin
+    unreadBookingRequestsCount, 
+    unreadMyBookingsUpdatesCount, 
+    unreadAdminTasksCount, 
     socket,
     login, logout, refreshUser,
     toggleFavorite, fetchFavoriteIds,
     markChatAsRead,
     fetchUnreadMessagesCount,
-    // Expose new functions and setters if needed by components
-    acknowledgeBookingUpdates, // For MyBookingsPage (tenant)
-    refreshAdminTasksCount, // For AdminPage
-    refreshBookingRequestsCountForOwner, // For BookingRequestsPage (owner)
-    fetchUnreadBookingUpdatesCount, // Expose if needed
-    fetchUnreadAdminTasksCount, // Expose if needed
-    fetchUnreadBookingRequestsCountForOwner, // Expose if needed for owner
-    setUnreadBookingRequestsCount, // Kept from original, potentially for direct updates if needed
-    setUnreadMyBookingsUpdatesCount, // Kept from original
-    setUnreadAdminTasksCount, // Kept from original
+    acknowledgeBookingUpdates, 
+    refreshAdminTasksCount, 
+    refreshBookingRequestsCountForOwner, 
+    fetchUnreadBookingUpdatesCount, 
+    fetchUnreadAdminTasksCount, 
+    fetchUnreadBookingRequestsCountForOwner, 
+    setUnreadBookingRequestsCount, 
+    setUnreadMyBookingsUpdatesCount, 
+    setUnreadAdminTasksCount, 
     isSocketEligible,
-    fetchSocketEligibility,  // Expose if needed by other components (though mainly for internal AuthContext use)
+    fetchSocketEligibility,  
   };
 
   return (

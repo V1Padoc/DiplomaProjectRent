@@ -1,6 +1,6 @@
 // frontend/src/pages/MyChatsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -47,17 +47,18 @@ function MyChatsPage() {
     const { token, user, fetchUnreadMessagesCount } = useAuth();
 
     const fetchMyChats = useCallback(async () => {
+        // While apiClient handles the token, this check provides an early exit if the token is not yet available in context,
+        // preventing unnecessary API calls or explicit error states during initial load when no token is present.
         if (!token) {
-            setError("Authentication required.");
+            setError("Authentication required to view your chats.");
             setLoading(false);
             return;
         }
         try {
             setLoading(true);
             setError(null);
-            const response = await axios.get('http://localhost:5000/api/chats/my-chats', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            // Replaced axios.get with apiClient.get. The Authorization header is now handled by the interceptor.
+            const response = await apiClient.get('/chats/my-chats');
             // CRITICAL DEBUG STEP (FOR YOU TO USE):
             // Uncomment the lines below temporarily to inspect the structure of response.data and convo.lastMessage
             // This helps confirm the exact field name for the timestamp (e.g., 'created_at', 'createdAt', 'timestamp', 'sentAt', etc.)
@@ -72,10 +73,11 @@ function MyChatsPage() {
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, [token]); // `token` is still a dependency for this useCallback, as it's used directly for the early exit logic.
 
     useEffect(() => {
         fetchMyChats();
+        // No need to pass token explicitly to fetchUnreadMessagesCount if it uses apiClient internally
         fetchUnreadMessagesCount();
     }, [fetchMyChats, fetchUnreadMessagesCount]);
 
@@ -133,13 +135,11 @@ function MyChatsPage() {
                             );
                         }
 
-                        // Determine the timestamp string from the lastMessage object.
-                        // The current code tries 'created_at', 'createdAt', then 'timestamp'.
-                        // If your backend uses a different field (e.g., 'sent_at', 'date_sent'),
-                        // you should prepend it to this list:
-                        // const timestampValueFromMessage = convo.lastMessage.YOUR_FIELD_NAME || convo.lastMessage.created_at || convo.lastMessage.createdAt || convo.lastMessage.timestamp;
-                        const timestampValueFromMessage = convo.lastMessage.created_at || convo.lastMessage.createdAt || convo.lastMessage.timestamp;
-                        
+                        // --- MODIFIED PART: Directly use convo.lastMessage.timestamp ---
+                        // The backend now ensures `convo.lastMessage.timestamp` is populated
+                        // with `message.created_at`.
+                        const timestampValueFromMessage = convo.lastMessage.timestamp;
+
                         const formattedTimestamp = formatLastMessageTimestamp(timestampValueFromMessage);
 
                         return (
@@ -172,7 +172,7 @@ function MyChatsPage() {
                                     With: <span className="font-medium">{convo.otherParticipant.name}</span>
                                 </p>
                                 <p className={`text-sm text-gray-600 truncate ${
-                                    convo.unreadCountForCurrentUser > 0 && convo.lastMessage.senderId !== user?.id ? 'font-bold' : '' 
+                                    convo.unreadCountForCurrentUser > 0 && convo.lastMessage.senderId !== user?.id ? 'font-bold' : ''
                                 }`}>
                                     {convo.lastMessage.senderId === user?.id ? "You: " : `${convo.otherParticipant.name.split(' ')[0]}: `}
                                     {convo.lastMessage.content}

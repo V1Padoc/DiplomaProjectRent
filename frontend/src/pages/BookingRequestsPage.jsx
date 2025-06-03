@@ -1,6 +1,7 @@
 // frontend/src/pages/BookingRequestsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom'; // For linking to listing details
 
@@ -12,17 +13,18 @@ function BookingRequestsPage() {
     const { token, user, refreshBookingRequestsCountForOwner, fetchUnreadBookingRequestsCountForOwner } = useAuth();
 
     const fetchBookingRequests = useCallback(async () => {
-        if (!token) {
+        // While apiClient handles the token, this check provides an early exit if the token is not yet available in context,
+        // preventing unnecessary API calls or explicit error states during initial load when no token is present.
+        if (!token) { 
             setLoading(false);
-            setError("Authentication required.");
+            setError("Authentication required to view booking requests.");
             return;
         }
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get('http://localhost:5000/api/bookings/owner', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            // Replaced axios.get with apiClient.get. The Authorization header is now handled by the interceptor.
+            const response = await apiClient.get('/bookings/owner');
             setBookings(response.data);
             // When owner views this page, refresh their booking request count in AuthContext
             if (user?.role === 'owner') {
@@ -51,10 +53,10 @@ function BookingRequestsPage() {
         setError(null); // Clear previous general errors
 
         try {
-            await axios.put(
-                `http://localhost:5000/api/bookings/${bookingId}/status`,
-                { status: newStatus },
-                { headers: { Authorization: `Bearer ${token}` } }
+            // Replaced axios.put with apiClient.put. The Authorization header is now handled by the interceptor.
+            await apiClient.put(
+                `/bookings/${bookingId}/status`,
+                { status: newStatus }
             );
             // Success: UI is already updated, just remove processing flag
             setBookings(prevBookings =>
@@ -65,7 +67,8 @@ function BookingRequestsPage() {
             // After a successful status update, refresh the unread booking requests count
             // to update any badges in the header/navigation.
             if (user?.role === 'owner') {
-                fetchUnreadBookingRequestsCountForOwner(token);
+                // No need to pass token explicitly to fetchUnreadBookingRequestsCountForOwner if it uses apiClient internally
+                fetchUnreadBookingRequestsCountForOwner(); 
             }
         } catch (err) {
             console.error(`Error updating booking ${bookingId} to ${newStatus}:`, err);

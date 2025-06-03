@@ -1,6 +1,7 @@
 // frontend/src/pages/MyBookingsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
@@ -12,17 +13,18 @@ function MyBookingsPage() {
     const { token, user, acknowledgeBookingUpdates } = useAuth(); // Add acknowledgeBookingUpdates
 
     const fetchMyBookings = useCallback(async () => {
-        if (!token) {
+        // While apiClient handles the token, this check provides an early exit if the token is not yet available in context,
+        // preventing unnecessary API calls or explicit error states during initial load when no token is present.
+        if (!token) { 
             setLoading(false);
-            setError("Authentication required.");
+            setError("Authentication required to view your bookings.");
             return;
         }
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get('http://localhost:5000/api/bookings/my-bookings', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            // Replaced axios.get with apiClient.get. The Authorization header is now handled by the interceptor.
+            const response = await apiClient.get('/bookings/my-bookings');
             setBookings(response.data);
         } catch (err) {
             console.error("Error fetching my bookings:", err);
@@ -30,14 +32,15 @@ function MyBookingsPage() {
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, [token]); // `token` is still a dependency for this useCallback, as it's used directly for the early exit logic.
 
     useEffect(() => {
         fetchMyBookings();
         // If the user is a tenant, acknowledge that they've seen their booking updates.
         // This will reset the unread count in the AuthContext and thus in the UI (e.g., header badge).
         if (user?.role === 'tenant') {
-            acknowledgeBookingUpdates();
+            // No need to pass token explicitly to acknowledgeBookingUpdates if it uses apiClient internally
+            acknowledgeBookingUpdates(); 
         }
     }, [fetchMyBookings, user?.role, acknowledgeBookingUpdates]); // Add acknowledgeBookingUpdates to dependencies
 

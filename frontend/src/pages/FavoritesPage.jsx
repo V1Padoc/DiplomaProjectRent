@@ -1,6 +1,7 @@
 // frontend/src/pages/FavoritesPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
@@ -12,7 +13,7 @@ function FavoritesPage() {
     const { token, user, favorites, toggleFavorite } = useAuth(); // Use favorites from context
 
     const fetchFavorites = useCallback(async () => {
-        if (!token) {
+        if (!token) { // Although apiClient handles token, a direct check here is good for early exit/error.
             setError("Authentication required to view favorites.");
             setLoading(false);
             return;
@@ -21,9 +22,8 @@ function FavoritesPage() {
         setError(null);
         try {
             // This endpoint needs to return an array of listing objects that are favorited by the user
-            const response = await axios.get('http://localhost:5000/api/users/me/favorites', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            // Replaced axios.get with apiClient.get. The Authorization header is now handled by the interceptor.
+            const response = await apiClient.get('/users/me/favorites');
             setFavoriteListings(response.data); // Expects an array of full listing objects
             console.log("Fetched favorite listings for page:", response.data); // Added/Updated line
         } catch (err) {
@@ -39,7 +39,7 @@ function FavoritesPage() {
     }, [fetchFavorites]);
 
     const handleRemoveFavorite = async (listingId) => {
-        await toggleFavorite(listingId); // This updates context and (ideally) backend
+        await toggleFavorite(listingId); // This updates context and (ideally) backend using apiClient internally
         setFavoriteListings(prev => prev.filter(l => l.id !== listingId)); // Optimistic UI update
     };
 

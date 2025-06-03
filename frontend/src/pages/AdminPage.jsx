@@ -1,6 +1,7 @@
 // frontend/src/pages/AdminPage.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { useAuth } from '../context/AuthContext';
 import {
     createColumnHelper,
@@ -36,7 +37,10 @@ function AdminPage() {
     const [pageCount, setPageCount] = useState(0); // Total pages from server
 
     const fetchData = useCallback(async () => {
-        if (!token) return;
+        if (!token) { // Although apiClient handles token, a direct check here is good for early exit/error.
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
@@ -45,9 +49,8 @@ function AdminPage() {
             params.append('page', pagination.pageIndex + 1); // API uses 1-based page
             params.append('limit', pagination.pageSize);
 
-            const response = await axios.get(`http://localhost:5000/api/admin/listings?${params.toString()}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            // Replaced axios.get with apiClient.get. The Authorization header is now handled by the interceptor.
+            const response = await apiClient.get(`/admin/listings?${params.toString()}`);
             setListings(response.data.listings);
             setPageCount(response.data.totalPages);
 
@@ -72,10 +75,10 @@ function AdminPage() {
         const originalListings = [...listings];
         setListings(prev => prev.map(l => l.id === listingId ? {...l, isUpdating: true} : l));
         try {
-            await axios.put(
-                `http://localhost:5000/api/admin/listings/${listingId}/status`,
-                { status: newStatus },
-                { headers: { Authorization: `Bearer ${token}` } }
+            // Replaced axios.put with apiClient.put. The Authorization header is now handled by the interceptor.
+            await apiClient.put(
+                `/admin/listings/${listingId}/status`,
+                { status: newStatus }
             );
             // Refetch data to get the updated list and pagination.
             // This will also trigger refreshAdminTasksCount via the fetchData useCallback.

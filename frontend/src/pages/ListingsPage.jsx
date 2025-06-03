@@ -1,7 +1,8 @@
 // frontend/src/pages/ListingsPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { Link, useSearchParams } from 'react-router-dom'; // useSearchParams for URL query management
 import Slider from 'react-slick'; // For carousel
 import "slick-carousel/slick/slick.css"; 
@@ -67,7 +68,9 @@ function ListingsPage() {
     setSearchParams(params);
 
     try {
-      const response = await axios.get(`http://localhost:5000/api/listings?${params.toString()}`);
+      // OLD: const response = await axios.get(`http://localhost:5000/api/listings?${params.toString()}`);
+      // NEW: Use apiClient.get, base URL is handled by apiClient.
+      const response = await apiClient.get(`/listings?${params.toString()}`);
       setListings(response.data.listings);
       setPagination(prev => ({
         ...prev,

@@ -1,8 +1,8 @@
 // frontend/src/pages/RegisterPage.jsx
 
 import React, { useState } from 'react';
-import axios from 'axios'; // Import axios to make HTTP requests
 import { useNavigate } from 'react-router-dom'; // Import useNavigate for redirection
+import apiClient from '../services/api'; // Import apiClient to make HTTP requests
 
 function RegisterPage() {
   // State variables to hold form input values
@@ -25,8 +25,8 @@ function RegisterPage() {
     setSuccess(''); // Clear previous success messages
 
     try {
-      // Send a POST request to the backend registration endpoint
-      const response = await axios.post('http://localhost:5000/api/auth/register', {
+      // Send a POST request to the backend registration endpoint using apiClient
+      const response = await apiClient.post('/auth/register', {
         email,
         password,
         name, // This is first name

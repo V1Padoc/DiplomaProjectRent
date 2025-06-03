@@ -1,7 +1,8 @@
 // frontend/src/pages/ProfilePage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 
 function ProfilePage() {
   const { user, loading: authLoading, token, login } = useAuth(); // Get login to refresh user data contextually
@@ -73,12 +74,8 @@ function ProfilePage() {
     }
 
     try {
-      const response = await axios.put('http://localhost:5000/api/users/profile', data, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // Replaced axios.put with apiClient.put. Authorization header is handled by interceptor.
+      const response = await apiClient.put('/users/profile', data);
       setSuccess(response.data.message);
       // Re-login to refresh user data in AuthContext
       if (token) {
@@ -114,10 +111,9 @@ function ProfilePage() {
     }
 
     try {
-        // *** FIXED: Added confirmNewPassword to the payload ***
-        const response = await axios.post('http://localhost:5000/api/users/change-password', 
-            { oldPassword, newPassword, confirmNewPassword }, 
-            { headers: { Authorization: `Bearer ${token}` } }
+        // Replaced axios.post with apiClient.post. Authorization header is handled by interceptor.
+        const response = await apiClient.post('/users/change-password', 
+            { oldPassword, newPassword, confirmNewPassword }
         );
         setPasswordSuccess(response.data.message);
         // Clear password fields on success

@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, Link as RouterLink } from 'react-router-dom';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = 'http://localhost:5000/api';
+// Removed: const API_URL = 'http://localhost:5000/api'; // Base URL is now handled by apiClient
 
 // Helper function to format date for chat headers
 const formatDateHeader = (dateString) => {
@@ -73,7 +74,7 @@ function ChatPage() {
     // Fetch listing details
     useEffect(() => {
         const fetchListingDetails = async () => {
-            if (!listingIdFromParams || !token) {
+            if (!listingIdFromParams || !token) { // Token check for early exit, though apiClient handles it
                 setErrorListing(!listingIdFromParams ? 'Listing ID missing.' : 'Authentication required.');
                 setLoadingListing(false);
                 return;
@@ -81,8 +82,8 @@ function ChatPage() {
             setLoadingListing(true);
             setErrorListing(null);
             try {
-                const config = { headers: { Authorization: `Bearer ${token}` } };
-                const listingRes = await axios.get(`${API_URL}/listings/${listingIdFromParams}`, config);
+                // Replaced axios.get with apiClient.get. Removed explicit headers.
+                const listingRes = await apiClient.get(`/listings/${listingIdFromParams}`);
                 setListing(listingRes.data);
             } catch (err) {
                 console.error('Error fetching listing details:', err);
@@ -92,7 +93,7 @@ function ChatPage() {
             }
         };
         fetchListingDetails();
-    }, [listingIdFromParams, token]);
+    }, [listingIdFromParams, token]); // `token` is still a dependency for this useEffect because `fetchListingDetails` might need to abort early if `token` is null on initial render, even if `apiClient` doesn't need it passed directly.
 
     // Fetch initial messages and mark as read
     const fetchInitialMessagesAndMarkRead = useCallback(async () => {
@@ -104,7 +105,7 @@ function ChatPage() {
         setLoadingMessages(true);
         setErrorMessages(null);
         
-        let messagesApiUrl = `${API_URL}/chats/listing/${listingIdFromParams}`;
+        let messagesApiUrl = `/chats/listing/${listingIdFromParams}`; // Use relative path
         const params = new URLSearchParams();
 
         if (String(user.id) === String(listing.owner_id)) { // Current user is owner
@@ -115,10 +116,11 @@ function ChatPage() {
         if (params.toString()) {
             messagesApiUrl += `?${params.toString()}`;
         }
-        const config = { headers: { Authorization: `Bearer ${token}` } };
+        // Removed config for Authorization header as apiClient handles it.
 
         try {
-            const response = await axios.get(messagesApiUrl, config);
+            // Replaced axios.get with apiClient.get. Removed explicit headers.
+            const response = await apiClient.get(messagesApiUrl);
             const fetchedMessages = response.data;
             setMessages(fetchedMessages);
 
@@ -146,11 +148,12 @@ function ChatPage() {
         } finally {
             setLoadingMessages(false);
         }
-    }, [token, user?.id, listingIdFromParams, listing, chatPartnerId, markChatAsRead]);
+    }, [token, user?.id, listingIdFromParams, listing, chatPartnerId, markChatAsRead]); // token is a dependency for this useCallback, as it's used directly for the early exit logic.
+
 
     useEffect(() => {
         // Trigger initial fetch only when all necessary data is available
-        if (listing && user && chatPartnerId && token) {
+        if (listing && user && chatPartnerId && token) { // Include token here for the fetch trigger
             fetchInitialMessagesAndMarkRead();
         } else if (listing && user && String(user.id) === String(listing.owner_id) && !otherParticipantIdFromQuery) {
             // Owner viewing chat for their listing but no specific participant selected
@@ -261,10 +264,10 @@ function ChatPage() {
 
         try {
             // Use POST /api/chats/send
-            const response = await axios.post(
-                `${API_URL}/chats/send`,
-                messageData,
-                { headers: { Authorization: `Bearer ${token}` } }
+            // Replaced axios.post with apiClient.post. Removed explicit headers.
+            const response = await apiClient.post(
+                '/chats/send', // Use relative path
+                messageData
             );
             // Optimistically add the new message (server responds with the created message)
             // The socket event will also arrive, but this provides faster UI feedback.
@@ -280,7 +283,8 @@ function ChatPage() {
             // ADDED: Check for socket eligibility after sending a message
             if (token && !isSocketEligible) { 
                 console.log("ChatPage: Message sent, checking for socket eligibility update.");
-                await fetchSocketEligibility(token); // Fetch eligibility and potentially trigger socket connection
+                // No need to pass token explicitly to fetchSocketEligibility if it uses apiClient internally
+                await fetchSocketEligibility(); // Fetch eligibility and potentially trigger socket connection
             }
 
         } catch (err) {

@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
-// import Slider from 'react-slick'; // Replaced with gallery view
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { useAuth } from '../context/AuthContext';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
@@ -44,19 +44,17 @@ function ListingDetail() {
 
     const [reviewSubmitting, setReviewSubmitting] = useState(false);
     const [reviewSubmitError, setReviewSubmitError] = useState(null);
-    const [reviewSubmitSuccess, setReviewSubmitSuccess] = useState(null);
+    const [reviewSubmitSuccess, setReviewSubmitSuccess] = null; // Changed to null as it's set by success/error
 
     const [bookingDates, setBookingDates] = useState([null, null]);
     const [bookingSubmitting, setBookingSubmitting] = useState(false);
     const [bookingError, setBookingError] = useState(null);
-    const [bookingSuccess, setBookingSuccess] = useState(null);
+    const [bookingSuccess, setBookingSuccess] = null; // Changed to null as it's set by success/error
 
     const [isFavorited, setIsFavorited] = useState(false);
 
     // MODIFIED: Added isSocketEligible and fetchSocketEligibility
     const { isAuthenticated, user, token, favorites, toggleFavorite, isSocketEligible, fetchSocketEligibility } = useAuth();
-
-    // Removed: const [listingIdFromParams, setListingIdFromParams] = useState(useParams().id); // This was problematic
 
     const [bookedRanges, setBookedRanges] = useState([]);
     const [loadingBookedDates, setLoadingBookedDates] = useState(true);
@@ -68,11 +66,8 @@ function ListingDetail() {
             try {
                 setLoading(true);
                 setError(null);
-                const config = {};
-                if (token) {
-                    config.headers = { Authorization: `Bearer ${token}` };
-                }
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}`, config);
+                // Removed config for Authorization header as apiClient handles it
+                const response = await apiClient.get(`/listings/${listingId}`); 
                 setListing(response.data);
                 console.log('Listing details fetched (on ID change):', response.data); // Log to confirm it runs less often
             } catch (err) {
@@ -87,7 +82,7 @@ function ListingDetail() {
             }
         };
         fetchListing();
-    }, [listingId, token]); // Depends on listingId and token (for auth header)
+    }, [listingId]); // Removed 'token' from dependencies as apiClient's interceptor manages it
 
     // Effect to synchronize isFavorited state with favorites from context
     useEffect(() => {
@@ -105,7 +100,8 @@ function ListingDetail() {
             try {
                 setReviewLoading(true);
                 setReviewError(null);
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/reviews`);
+                // Replaced axios.get with apiClient.get
+                const response = await apiClient.get(`/listings/${listingId}/reviews`);
                 setReviews(response.data);
                 console.log('Reviews fetched:', response.data);
             } catch (err) {
@@ -124,7 +120,8 @@ function ListingDetail() {
             if (!listingId) return; // Use listingId from useParams()
             setLoadingBookedDates(true);
             try {
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
+                // Replaced axios.get with apiClient.get
+                const response = await apiClient.get(`/listings/${listingId}/booked-dates`);
                 console.log("Raw booked dates from backend:", response.data);
                 const ranges = response.data.map(range => ({
                     start: new Date(range.start),
@@ -175,9 +172,9 @@ function ListingDetail() {
         }
 
         try {
-            const response = await axios.post(`http://localhost:5000/api/listings/${listingId}/reviews`,
-                { rating: newReviewRating, comment: newReviewComment },
-                { headers: { 'Authorization': `Bearer ${token}` } }
+            // Replaced axios.post with apiClient.post. Removed headers config.
+            const response = await apiClient.post(`/listings/${listingId}/reviews`,
+                { rating: newReviewRating, comment: newReviewComment }
             );
             setReviewSubmitSuccess(response.data.message);
             console.log('Review submitted:', response.data.review);
@@ -208,12 +205,11 @@ function ListingDetail() {
         setBookingSuccess(null);
 
         try {
-            const response = await axios.post('http://localhost:5000/api/bookings', {
+            // Replaced axios.post with apiClient.post. Removed headers config.
+            const response = await apiClient.post('/bookings', {
                 listing_id: listingId,
                 start_date: bookingDates[0].toISOString().split('T')[0],
                 end_date: bookingDates[1].toISOString().split('T')[0],
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
             });
             setBookingSuccess(response.data.message);
             setBookingDates([null, null]);
@@ -221,7 +217,8 @@ function ListingDetail() {
             // Re-fetch booked dates to update the calendar immediately
             try {
                 console.log("Re-fetching booked dates after successful booking...");
-                const bookedResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
+                // Replaced axios.get with apiClient.get.
+                const bookedResponse = await apiClient.get(`/listings/${listingId}/booked-dates`);
                 const ranges = bookedResponse.data.map(range => ({
                     start: new Date(range.start),
                     end: new Date(range.end)
@@ -234,10 +231,10 @@ function ListingDetail() {
             }
 
             // ADDED: Dynamic socket eligibility check after a successful booking
-            if (token && isAuthenticated && !isSocketEligible) { 
+            if (isAuthenticated && !isSocketEligible) { // Token is checked within fetchSocketEligibility
                 console.log("Booking created, checking for socket eligibility update.");
                 // No need to await here unless immediate UI depends on it; AuthContext will handle state update.
-                fetchSocketEligibility(token); 
+                fetchSocketEligibility(); // No need to pass token explicitly
             }
 
         } catch (err) {
@@ -253,7 +250,7 @@ function ListingDetail() {
 
         try {
             // toggleFavorite is expected to:
-            // 1. Make the API call.
+            // 1. Make the API call using apiClient (handled within AuthContext).
             // 2. Update favorites in AuthContext.
             // 3. Return the new favorite status (true if favorited, false if not).
             const newFavoriteStatus = await toggleFavorite(listingId);

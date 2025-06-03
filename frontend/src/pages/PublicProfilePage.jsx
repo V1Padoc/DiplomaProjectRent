@@ -1,7 +1,8 @@
 // frontend/src/pages/PublicProfilePage.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom'; // Added useNavigate
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { useAuth } from '../context/AuthContext'; // To know if current viewer is this profile's user
 
 function PublicProfilePage() {
@@ -18,7 +19,8 @@ function PublicProfilePage() {
             setLoading(true);
             setError(null);
             try {
-                const response = await axios.get(`http://localhost:5000/api/users/public-profile/${userId}`);
+                // Replaced axios.get with apiClient.get. Base URL is handled by apiClient.
+                const response = await apiClient.get(`/users/public-profile/${userId}`);
                 setProfileData(response.data);
             } catch (err) {
                 console.error("Error fetching public profile:", err);

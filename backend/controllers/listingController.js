@@ -5,11 +5,54 @@ const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Review = require('../models/Review');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs').promises; // Use promises version of fs
 const Booking = require('../models/Booking');
 const Analytics = require('../models/Analytics'); // Ensure Analytics is imported
+const sharp = require('sharp'); // Import sharp for image processing
+const logger = require('../config/logger'); // Import Winston logger
 
-exports.getListings = async (req, res) => {
+// Helper function for image processing
+async function processImage(filePath, outputFilename, isProfilePhoto = false) {
+  const tempFilePath = filePath; // Multer saves to uploadDir with a unique name
+  const processedFilePath = path.join(path.dirname(tempFilePath), outputFilename); // Save with new name
+
+  const MAX_WIDTH = isProfilePhoto ? 400 : 1200; // Different max widths
+  const MAX_HEIGHT = isProfilePhoto ? 400 : 1200;
+  const QUALITY = isProfilePhoto ? 80 : 75; // Slightly higher quality for profile
+
+  try {
+    await sharp(tempFilePath)
+      .resize(MAX_WIDTH, MAX_HEIGHT, {
+        fit: sharp.fit.inside, // Resize while maintaining aspect ratio, fitting within dimensions
+        withoutEnlargement: true, // Don't enlarge if image is smaller than MAX_WIDTH/MAX_HEIGHT
+      })
+      .jpeg({ quality: QUALITY, progressive: true }) // Convert to JPEG, set quality
+      .toFile(processedFilePath);
+
+    // Delete the original (unprocessed) file uploaded by Multer if processing was successful
+    // and the output filename is different (it should be, to avoid conflict if processing fails partway)
+    if (filePath !== processedFilePath) {
+        await fs.unlink(tempFilePath);
+    }
+    return path.basename(processedFilePath); // Return only the filename
+  } catch (error) {
+    logger.error(`Error processing image ${path.basename(tempFilePath)}:`, { error: error.message, stack: error.stack });
+    // If processing fails, we might want to delete the original (tempFilePath) if it still exists.
+    try {
+        // Attempt to delete the temporary file if it still exists
+        await fs.unlink(tempFilePath);
+        logger.warn(`Cleaned up temporary file ${path.basename(tempFilePath)} after processing error.`);
+    } catch (e) {
+        if (e.code !== 'ENOENT') { // Ignore if file simply didn't exist to begin with
+            logger.warn(`Could not clean up temporary file ${path.basename(tempFilePath)}:`, e.message);
+        }
+    }
+    throw new Error(`Failed to process image: ${path.basename(tempFilePath)}`);
+  }
+}
+
+
+exports.getListings = async (req, res, next) => { // <--- ADDED next
   try {
     const {
       page = 1, limit = 10, sortBy = 'created_at', sortOrder = 'DESC',
@@ -59,44 +102,62 @@ exports.getListings = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching listings:', error);
-    res.status(500).json({ message: 'Server error while fetching listings.' });
+    logger.error('Error fetching listings:', { error: error.message, stack: error.stack });
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.createListing = async (req, res) => {
+exports.createListing = async (req, res, next) => { // <--- ADDED next
   const owner_id = req.user.id;
   const { title, description, price, rooms, area, location, amenities, type, latitude, longitude } = req.body;
-  const photoFilenames = req.files ? req.files.map(file => file.filename) : [];
+  
+  let processedPhotoFilenames = [];
+  if (req.files && req.files.length > 0) {
+    try {
+      for (const file of req.files) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const originalExt = path.extname(file.originalname);
+        const extension = originalExt ? originalExt.toLowerCase() : '.jpg';
+        const processedFilename = `listing-${owner_id}-${uniqueSuffix}${extension}`;
+        
+        const finalFilename = await processImage(file.path, processedFilename);
+        processedPhotoFilenames.push(finalFilename);
+      }
+    } catch (processingError) {
+      logger.error("Error during image processing in createListing:", { error: processingError.message, stack: processingError.stack });
+      // If processing fails, this is a critical error for the request,
+      // but ensure cleanup of any partially processed files if necessary.
+      // processImage already handles deletion of original multer file.
+      next(processingError); // <--- Pass the processing error to the centralized handler
+      return; // Stop execution here
+    }
+  }
 
   try {
-    if (!title || !price || !location || !type) {
-      return res.status(400).json({ message: 'Please provide title, price, location, and type.' });
-    }
     const newListing = await Listing.create({
       owner_id: owner_id,
       title: title,
       description: description,
       price: parseFloat(price),
-      rooms: rooms ? parseInt(rooms, 10) : null,
-      area: area ? parseFloat(area) : null,
+      rooms: rooms !== undefined && rooms !== '' ? parseInt(rooms, 10) : null,
+      area: area !== undefined && area !== '' ? parseFloat(area) : null,
       location: location,
-      latitude: latitude ? parseFloat(latitude) : null,
-      longitude: longitude ? parseFloat(longitude) : null,
+      latitude: latitude !== undefined && latitude !== '' ? parseFloat(latitude) : null,
+      longitude: longitude !== undefined && longitude !== '' ? parseFloat(longitude) : null,
       amenities: amenities || null,
       type: type,
       status: 'pending',
-      photos: photoFilenames.length > 0 ? photoFilenames : null
+      photos: processedPhotoFilenames.length > 0 ? processedPhotoFilenames : null
     });
-    // Emit socket event if status is 'pending'
-  if (newListing.status === 'pending') { // This condition will always be true here given the above
+
+    if (newListing.status === 'pending') { 
       const io = req.app.get('socketio');
       if (io) {
-        io.to('admin_room').emit('admin_new_pending_listing', { // <-- THIS IS THE CORRECT EVENT NAME
+        io.to('admin_room').emit('admin_new_pending_listing', { 
           message: `New listing '${newListing.title}' needs approval.`,
           listingId: newListing.id,
         });
-        console.log(`Emitted 'admin_new_pending_listing' to admin_room for listing ${newListing.id}`);
+        logger.info(`Emitted 'admin_new_pending_listing' to admin_room for listing ${newListing.id}`);
       }
     }
 
@@ -113,28 +174,38 @@ exports.createListing = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error creating listing:', error);
-    res.status(500).json({ message: 'Server error during listing creation.' });
+    logger.error('Error creating listing:', { error: error.message, stack: error.stack });
+    // If listing creation fails (e.g., DB error) after images were processed, clean up.
+    if (processedPhotoFilenames.length > 0) {
+        const uploadDir = path.join(__dirname, '../uploads');
+        for (const filename of processedPhotoFilenames) {
+            try {
+                await fs.unlink(path.join(uploadDir, filename));
+                logger.warn(`Cleaned up processed image ${filename} due to listing creation DB error.`);
+            } catch (e) {
+                logger.warn(`Could not clean up processed image ${filename}:`, e.message);
+            }
+        }
+    }
+    next(error); // <--- Use next(error)
   }
 };
 
-// backend/controllers/listingController.js
-// TEMPORARY DEBUGGING VERSION of getListingById
-exports.getListingById = async (req, res) => {
+
+exports.getListingById = async (req, res, next) => { // <--- ADDED next
   const listingId = req.params.id;
 
-  console.log("\n--- getListingById Controller START ---");
-  console.log(`Timestamp: ${new Date().toISOString()}`);
-  console.log(`Requested Listing ID: ${listingId} (type: ${typeof listingId})`);
+  logger.debug("\n--- getListingById Controller START ---");
+  logger.debug(`Timestamp: ${new Date().toISOString()}`);
+  logger.debug(`Requested Listing ID: ${listingId} (type: ${typeof listingId})`);
 
-  // Robust check for req.user and admin role
   let isAdmin = false;
   if (req.user && typeof req.user === 'object' && req.user.role === 'admin') {
     isAdmin = true;
   }
   
-  console.log("req.user (from middleware):", req.user ? {id: req.user.id, role: req.user.role, name: req.user.name} : 'undefined'); // Log the whole req.user object or null
-  console.log(`Calculated 'isAdmin': ${isAdmin}`);
+  logger.debug("req.user (from middleware):", req.user ? {id: req.user.id, role: req.user.role, name: req.user.name} : 'undefined');
+  logger.debug(`Calculated 'isAdmin': ${isAdmin}`);
 
   try {
     let queryOptions = {
@@ -151,26 +222,20 @@ exports.getListingById = async (req, res) => {
     let listing;
 
     if (isAdmin) {
-      // Admin can see listings of any status.
-      console.log(`ADMIN Scoped Query: Fetching listing ID ${listingId} (owner ID: ${req.user.id})`);
-      // queryOptions.where should ONLY have { id: listingId }
-      // Use .unscoped() to bypass any defaultScope on Listing model
+      logger.debug(`ADMIN Scoped Query: Fetching listing ID ${listingId} (owner ID: ${req.user.id})`);
       listing = await Listing.unscoped().findOne(queryOptions); 
     } else {
-      // Non-admins (or unauthenticated users) can only see 'active' listings.
-      queryOptions.where.status = 'active'; // Add status constraint
-      console.log(`PUBLIC Scoped Query: Fetching listing ID ${listingId}. Query with status='active':`, JSON.stringify(queryOptions.where));
+      queryOptions.where.status = 'active'; 
+      logger.debug(`PUBLIC Scoped Query: Fetching listing ID ${listingId}. Query with status='active':`, JSON.stringify(queryOptions.where));
       listing = await Listing.findOne(queryOptions);
     }
 
-    // ... (rest of your function: if (!listing), analytics, res.status(200), etc.)
     if (!listing) {
       const message = isAdmin ? `Listing ID ${listingId} not found (admin view).` : `Listing ID ${listingId} not found or is not active.`;
-      console.log(message);
+      logger.info(message);
       return res.status(404).json({ message: message });
     }
 
-    // Increment views count only for active listings
     if (listing.status === 'active') {
         try {
             const [analyticsEntry, created] = await Analytics.findOrCreate({
@@ -181,25 +246,23 @@ exports.getListingById = async (req, res) => {
                 await analyticsEntry.increment('views_count');
             }
         } catch (analyticsError) {
-            console.error('Error updating views count:', analyticsError);
-            // Non-critical, so don't fail the main request
+            logger.error('Error updating views count:', { error: analyticsError.message, stack: analyticsError.stack });
         }
     }
-    console.log(`--- getListingById Controller END (Success) ---\n`);
+    logger.debug(`--- getListingById Controller END (Success) ---\n`);
     res.status(200).json(listing);
 
   } catch (error) {
-    console.error('Error in getListingById:', error);
+    logger.error('Error in getListingById:', { error: error.message, stack: error.stack });
     if (error.name === 'SequelizeDatabaseError' && error.original && error.original.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
-        console.log(`--- getListingById Controller END (Error: Invalid ID Format) ---\n`);
+        logger.warn(`--- getListingById Controller END (Error: Invalid ID Format) ---`);
         return res.status(400).json({ message: 'Invalid listing ID format.' });
     }
-    console.log(`--- getListingById Controller END (Error: Server Error) ---\n`);
-    res.status(500).json({ message: 'Server error while fetching listing.' });
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.getReviewsByListingId = async (req, res) => {
+exports.getReviewsByListingId = async (req, res, next) => { // <--- ADDED next
   const listingId = req.params.listingId;
   try {
     const reviews = await Review.findAll({
@@ -208,24 +271,21 @@ exports.getReviewsByListingId = async (req, res) => {
       include: [{
         model: User,
         as: 'User',
-        attributes: ['id', 'name', 'email', 'profile_photo_url'] // Added profile photo
+        attributes: ['id', 'name', 'email', 'profile_photo_url']
       }]
     });
     res.status(200).json(reviews);
   } catch (error) {
-    console.error('Error fetching reviews:', error);
-    res.status(500).json({ message: 'Server error while fetching reviews.' });
+    logger.error('Error fetching reviews:', { error: error.message, stack: error.stack });
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.createReview = async (req, res) => {
+exports.createReview = async (req, res, next) => { // <--- ADDED next
   const listingId = req.params.listingId;
   const userId = req.user.id;
-  const { rating, comment } = req.body;
+  const { rating, comment } = req.body; 
   try {
-    if (rating === undefined || rating === null || rating < 1 || rating > 5) {
-      return res.status(400).json({ message: 'Please provide a valid rating between 1 and 5.' });
-    }
     const newReview = await Review.create({
       listing_id: listingId,
       user_id: userId,
@@ -236,7 +296,7 @@ exports.createReview = async (req, res) => {
         include: [{
             model: User,
             as: 'User',
-            attributes: ['id', 'name', 'email', 'profile_photo_url'] // Added profile photo
+            attributes: ['id', 'name', 'email', 'profile_photo_url']
         }]
     });
     res.status(201).json({
@@ -244,12 +304,12 @@ exports.createReview = async (req, res) => {
       review: reviewWithUser
     });
   } catch (error) {
-    console.error('Error creating review:', error);
-    res.status(500).json({ message: 'Server error during review creation.' });
+    logger.error('Error creating review:', { error: error.message, stack: error.stack });
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.getOwnerListings = async (req, res) => {
+exports.getOwnerListings = async (req, res, next) => { // <--- ADDED next
   const ownerId = req.user.id;
   try {
     const listings = await Listing.findAll({
@@ -257,16 +317,16 @@ exports.getOwnerListings = async (req, res) => {
         owner_id: ownerId
       },
       order: [['created_at', 'DESC']],
-      include: [{ model: Analytics, attributes: ['views_count'] }] // Include Analytics
+      include: [{ model: Analytics, attributes: ['views_count'] }]
     });
     res.status(200).json(listings);
   } catch (error) {
-    console.error('Error fetching owner listings:', error);
-    res.status(500).json({ message: 'Server error while fetching owner listings.' });
+    logger.error('Error fetching owner listings:', { error: error.message, stack: error.stack });
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.deleteListing = async (req, res) => {
+exports.deleteListing = async (req, res, next) => { // <--- ADDED next
   const listingId = req.params.id;
   const userId = req.user.id;
   try {
@@ -286,25 +346,24 @@ exports.deleteListing = async (req, res) => {
             try {
                 await fs.unlink(filePath);
             } catch (fileError) {
-                console.error(`Error deleting file ${filePath}:`, fileError);
+                logger.error(`Error deleting file ${filePath}:`, { error: fileError.message, stack: fileError.stack });
             }
         }
     }
     await listing.destroy();
     res.status(200).json({ message: 'Listing deleted successfully.' });
   } catch (error) {
-    console.error('Error deleting listing:', error);
-    res.status(500).json({ message: 'Server error during listing deletion.' });
+    logger.error('Error deleting listing:', { error: error.message, stack: error.stack });
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.getListingForEdit = async (req, res) => {
+exports.getListingForEdit = async (req, res, next) => { // <--- ADDED next
   const listingId = req.params.id;
   const userId = req.user.id;
   const userRole = req.user.role;
   try {
-    // Admins should be able to fetch listings for edit regardless of status
-    const listing = await Listing.unscoped().findByPk(listingId, { // Added .unscoped() here
+    const listing = await Listing.unscoped().findByPk(listingId, { 
       include: [{
         model: User,
         as: 'Owner',
@@ -319,26 +378,54 @@ exports.getListingForEdit = async (req, res) => {
     }
     res.status(200).json(listing);
   } catch (error) {
-    console.error('Error fetching listing for edit:', error);
-    res.status(500).json({ message: 'Server error while fetching listing for edit.' });
+    logger.error('Error fetching listing for edit:', { error: error.message, stack: error.stack });
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.updateListing = async (req, res) => {
+exports.updateListing = async (req, res, next) => { // <--- ADDED next
   const listingId = req.params.id;
   const userId = req.user.id;
   const userRole = req.user.role;
-  // Destructure photoManifestRaw directly from req.body
   const { photoManifest: photoManifestRaw, ...restOfBody } = req.body;
-  const newlyUploadedServerFilenames = req.files ? req.files.map(file => file.filename) : [];
+  
+  let newlyProcessedServerFilenames = [];
+  if (req.files && req.files.length > 0) {
+    try {
+      for (const file of req.files) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const originalExt = path.extname(file.originalname);
+        const extension = originalExt ? originalExt.toLowerCase() : '.jpg';
+        const processedFilename = `listing-${userId}-${uniqueSuffix}${extension}`; 
+        
+        const finalFilename = await processImage(file.path, processedFilename);
+        newlyProcessedServerFilenames.push(finalFilename);
+      }
+    } catch (processingError) {
+      logger.error("Error during image processing in updateListing:", { error: processingError.message, stack: processingError.stack });
+      next(processingError); // <--- Pass the processing error to the centralized handler
+      return;
+    }
+  }
 
   try {
-    // Admins should be able to update listings regardless of status
     const listingToUpdate = await Listing.unscoped().findByPk(listingId);
     if (!listingToUpdate) {
+      if (newlyProcessedServerFilenames.length > 0) {
+        const uploadDir = path.join(__dirname, '../uploads');
+        for (const filename of newlyProcessedServerFilenames) {
+          try { await fs.unlink(path.join(uploadDir, filename)); } catch (e) { logger.warn(`Cleanup failed for ${filename}:`, e.message); }
+        }
+      }
       return res.status(404).json({ message: 'Listing not found.' });
     }
     if (listingToUpdate.owner_id !== userId && userRole !== 'admin') {
+      if (newlyProcessedServerFilenames.length > 0) {
+        const uploadDir = path.join(__dirname, '../uploads');
+        for (const filename of newlyProcessedServerFilenames) {
+          try { await fs.unlink(path.join(uploadDir, filename)); } catch (e) { logger.warn(`Cleanup failed for ${filename}:`, e.message); }
+        }
+      }
       return res.status(403).json({ message: 'You do not have permission to update this listing.' });
     }
 
@@ -346,14 +433,13 @@ exports.updateListing = async (req, res) => {
       title: restOfBody.title || listingToUpdate.title,
       description: restOfBody.description || listingToUpdate.description,
       price: restOfBody.price ? parseFloat(restOfBody.price) : listingToUpdate.price,
-      // Handle number fields to be null if empty string
-      rooms: restOfBody.rooms !== undefined ? (restOfBody.rooms === '' ? null : parseInt(restOfBody.rooms, 10)) : listingToUpdate.rooms,
-      area: restOfBody.area !== undefined ? (restOfBody.area === '' ? null : parseFloat(restOfBody.area)) : listingToUpdate.area,
+      rooms: restOfBody.rooms !== undefined && restOfBody.rooms !== '' ? parseInt(restOfBody.rooms, 10) : null,
+      area: restOfBody.area !== undefined && restOfBody.area !== '' ? parseFloat(restOfBody.area) : null,
       location: restOfBody.location || listingToUpdate.location,
       amenities: restOfBody.amenities || listingToUpdate.amenities,
       type: restOfBody.type || listingToUpdate.type,
-      latitude: restOfBody.latitude !== undefined ? (restOfBody.latitude === '' ? null : parseFloat(restOfBody.latitude)) : listingToUpdate.latitude,
-      longitude: restOfBody.longitude !== undefined ? (restOfBody.longitude === '' ? null : parseFloat(restOfBody.longitude)) : listingToUpdate.longitude,
+      latitude: restOfBody.latitude !== undefined && restOfBody.latitude !== '' ? parseFloat(restOfBody.latitude) : null,
+      longitude: restOfBody.longitude !== undefined && restOfBody.longitude !== '' ? parseFloat(restOfBody.longitude) : null,
     };
 
     let finalPhotoArrayForDb = [];
@@ -361,27 +447,21 @@ exports.updateListing = async (req, res) => {
 
     if (photoManifestRaw) {
         const parsedPhotoManifest = JSON.parse(photoManifestRaw);
-        let newFileIdx = 0; // Index for newlyUploadedServerFilenames
+        let newFileIdx = 0; 
 
         for (const manifestItem of parsedPhotoManifest) {
             if (manifestItem === '__NEW_PHOTO__') {
-                if (newFileIdx < newlyUploadedServerFilenames.length) {
-                    finalPhotoArrayForDb.push(newlyUploadedServerFilenames[newFileIdx]);
+                if (newFileIdx < newlyProcessedServerFilenames.length) {
+                    finalPhotoArrayForDb.push(newlyProcessedServerFilenames[newFileIdx]);
                     newFileIdx++;
                 } else {
-                    // This case means the manifest expected a new photo, but not enough files were uploaded.
-                    // This could happen if a file upload failed or was filtered by multer, but the manifest was still generated.
-                    console.warn(`[UpdateListing] Manifest inconsistency: Expected '__NEW_PHOTO__', but no more uploaded files available.`);
+                    logger.warn(`[UpdateListing] Manifest inconsistency: Expected '__NEW_PHOTO__', but no more uploaded files available.`);
                 }
             } else {
-                // This 'manifestItem' is a filename of an supposedly existing photo.
-                // We trust the manifest to tell us which existing photos to keep.
                 finalPhotoArrayForDb.push(manifestItem);
             }
         }
         
-        // Determine photos to delete from storage:
-        // These are photos that were in the DB but are NOT in the final desired array.
         const photosToDeleteFromStorage = oldPhotoFilenamesInDb.filter(
             oldFilename => !finalPhotoArrayForDb.includes(oldFilename)
         );
@@ -391,75 +471,80 @@ exports.updateListing = async (req, res) => {
             for (const filename of photosToDeleteFromStorage) {
                 const filePath = path.join(uploadDir, filename);
                 try {
-                    await fs.access(filePath); // Check if file exists
-                    await fs.unlink(filePath); // Delete the file
-                    console.log(`[UpdateListing] Deleted old photo from storage: ${filename}`);
+                    await fs.access(filePath); 
+                    await fs.unlink(filePath); 
+                    logger.info(`[UpdateListing] Deleted old photo from storage: ${filename}`);
                 } catch (fileError) {
                     if (fileError.code === 'ENOENT') {
-                        console.warn(`[UpdateListing] File not found for deletion, skipping: ${filePath}`);
+                        logger.warn(`[UpdateListing] File not found for deletion, skipping: ${filePath}`);
                     } else {
-                        console.error(`[UpdateListing] Error deleting old file ${filePath}:`, fileError);
+                        logger.error(`[UpdateListing] Error deleting old file ${filePath}:`, { error: fileError.message, stack: fileError.stack });
                     }
                 }
             }
         }
         updateData.photos = finalPhotoArrayForDb.length > 0 ? finalPhotoArrayForDb : null;
 
-    } else if (newlyUploadedServerFilenames.length > 0) {
-        // Fallback: No manifest, but new files uploaded. Append them to existing.
-        // This path should ideally not be hit if frontend always sends manifest for photo ops.
-        console.warn("[UpdateListing] No photoManifest received, but new files were uploaded. Appending new files to existing ones.");
-        updateData.photos = [...oldPhotoFilenamesInDb, ...newlyUploadedServerFilenames];
+    } else if (newlyProcessedServerFilenames.length > 0) {
+        logger.warn("[UpdateListing] No photoManifest received, but new files were uploaded. Appending new files to existing ones.");
+        updateData.photos = [...oldPhotoFilenamesInDb, ...newlyProcessedServerFilenames];
     } else {
-        // If no photoManifestRaw and no new files, assume user wants to keep existing photos as is.
         updateData.photos = oldPhotoFilenamesInDb.length > 0 ? oldPhotoFilenamesInDb : null;
     }
 
-    const updatedListing = await listingToUpdate.update(updateData);
-
     const updatedListingInstance = await listingToUpdate.update(updateData);
-     let finalStatus = updatedListingInstance.status;
-    // If owner edits, set status to 'pending' for re-approval, unless it's an admin.
-    // This logic can be more nuanced based on which fields are changed.
+    let finalStatus = updatedListingInstance.status;
+
     if (userRole !== 'admin' && updatedListingInstance.status !== 'pending') {
         await updatedListingInstance.update({ status: 'pending' });
-        finalStatus = 'pending'; // Update finalStatus if changed
+        finalStatus = 'pending'; 
     } else if (userRole === 'admin' && restOfBody.status && restOfBody.status !== updatedListingInstance.status) {
-        // If admin explicitly sets a new status
         await updatedListingInstance.update({status: restOfBody.status });
         finalStatus = restOfBody.status;
     }
- if (finalStatus === 'pending') {
+    
+    if (finalStatus === 'pending') {
         const io = req.app.get('socketio');
         if (io) {
-            io.to('admin_room').emit('admin_new_pending_listing', { // Or 'admin_pending_count_changed'
+            io.to('admin_room').emit('admin_new_pending_listing', { 
                 message: `Listing '${updatedListingInstance.title}' was updated and now requires approval.`,
                 listingId: updatedListingInstance.id,
             });
-            console.log(`Emitted 'admin_new_pending_listing' (or similar) to admin_room for listing ${updatedListingInstance.id} after edit by owner.`);
+            logger.info(`Emitted 'admin_new_pending_listing' (or similar) to admin_room for listing ${updatedListingInstance.id} after edit by owner.`);
         }
     }
 
     res.status(200).json({
       message: 'Listing updated successfully!',
       listing: {
-        id: updatedListing.id,
-        title: updatedListing.title,
-        owner_id: updatedListing.owner_id,
-        status: updatedListing.status,
-        photos: updatedListing.photos, // Ensure photos are part of the response
-        latitude: updatedListing.latitude,
-        longitude: updatedListing.longitude
+        id: updatedListingInstance.id,
+        title: updatedListingInstance.title,
+        owner_id: updatedListingInstance.owner_id,
+        status: updatedListingInstance.status,
+        photos: updatedListingInstance.photos, 
+        latitude: updatedListingInstance.latitude,
+        longitude: updatedListingInstance.longitude
       }
     });
 
   } catch (error) {
-    console.error('Error updating listing:', error);
-    res.status(500).json({ message: 'Server error during listing update.' });
+    logger.error('Error updating listing:', { error: error.message, stack: error.stack });
+    if (newlyProcessedServerFilenames.length > 0) {
+        const uploadDir = path.join(__dirname, '../uploads');
+        for (const filename of newlyProcessedServerFilenames) {
+            try {
+                await fs.unlink(path.join(uploadDir, filename));
+                logger.warn(`Cleaned up newly processed image ${filename} due to listing update error.`);
+            } catch (e) {
+                logger.warn(`Could not clean up newly processed image ${filename}:`, e.message);
+            }
+        }
+    }
+    next(error); // <--- Use next(error)
   }
 };
 
-exports.getListingBookedDates = async (req, res) => {
+exports.getListingBookedDates = async (req, res, next) => { // <--- ADDED next
     const { listingId } = req.params;
     try {
         const confirmedBookings = await Booking.findAll({
@@ -475,13 +560,12 @@ exports.getListingBookedDates = async (req, res) => {
         }));
         res.status(200).json(bookedDateRanges);
     } catch (error) {
-        console.error("Error fetching booked dates:", error);
-        res.status(500).json({ message: "Server error while fetching booked dates." });
+        logger.error("Error fetching booked dates:", { error: error.message, stack: error.stack });
+        next(error); // <--- Use next(error)
     }
 };
 
-// MODIFIED getMapData to accept filters
-exports.getMapData = async (req, res) => {
+exports.getMapData = async (req, res, next) => { // <--- ADDED next
   try {
     const { type, priceMin, priceMax, roomsMin, location, search } = req.query;
 
@@ -491,7 +575,6 @@ exports.getMapData = async (req, res) => {
       longitude: { [Op.ne]: null }
     };
 
-    // Apply filters similar to getListings
     if (type) whereClause.type = type;
     if (priceMin && priceMax) whereClause.price = { [Op.between]: [parseFloat(priceMin), parseFloat(priceMax)] };
     else if (priceMin) whereClause.price = { [Op.gte]: parseFloat(priceMin) };
@@ -500,13 +583,9 @@ exports.getMapData = async (req, res) => {
     
     if (location) whereClause.location = { [Op.like]: `%${location}%` }; 
     if (search) {
-      // Ensure search is applied to title and description for map data as well
-      // If you want search to affect other fields for map data, add them here.
       whereClause[Op.or] = [
         { title: { [Op.like]: `%${search}%` } },
         { description: { [Op.like]: `%${search}%` } },
-        // Potentially add location to search criteria here if distinct from location filter
-        // { location: { [Op.like]: `%${search}%` } }
       ];
     }
 
@@ -520,16 +599,15 @@ exports.getMapData = async (req, res) => {
         'price', 
         'type', 
         'photos',
-        'location', // For popup
-        'rooms' // Good to have for tooltip/popup
+        'location', 
+        'rooms' 
       ]
-      // No pagination for map data, we want all matching markers
     });
 
     res.status(200).json(listings);
 
   } catch (error) {
-    console.error('Error fetching map data listings:', error);
-    res.status(500).json({ message: 'Server error while fetching map data.' });
+    logger.error('Error fetching map data listings:', { error: error.message, stack: error.stack });
+    next(error); // <--- Use next(error)
   }
 };

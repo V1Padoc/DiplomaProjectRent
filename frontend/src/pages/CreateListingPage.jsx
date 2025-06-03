@@ -5,14 +5,8 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-// Leaflet Imports
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css'; // Core Leaflet CSS
-import L from 'leaflet'; // Leaflet library for icon fix
-
-// Leaflet Geosearch for address search
-import { GeoSearchControl, OpenStreetMapProvider } from 'leaflet-geosearch';
-import 'leaflet-geosearch/dist/geosearch.css'; // Geosearch CSS
+// Import the new map component
+import ListingFormMap from '../components/ListingFormMap'; // <--- NEW IMPORT
 
 // @dnd-kit imports for drag-and-drop photo reordering
 import {
@@ -35,81 +29,7 @@ import {
 import { SortablePhotoItem } from '../components/SortablePhotoItem'; // Adjust path if needed
 
 
-// Leaflet icon fix (important for markers to display correctly)
-// This is a common workaround for issues with Leaflet's default icon paths in Webpack environments.
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-    iconUrl: require('leaflet/dist/images/marker-icon.png'),
-    shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
-});
-
-
-// Component to handle map click events and display marker
-function LocationMarker({ onPositionChange, initialPosition }) {
-    const [position, setPosition] = useState(initialPosition);
-    const map = useMapEvents({
-        click(e) {
-            map.flyTo(e.latlng, map.getZoom()); // Fly to clicked location
-            setPosition(e.latlng); // Set marker position
-            onPositionChange(e.latlng); // Pass latlng back to parent component
-        },
-    });
-
-    // Effect to update marker position if initialPosition prop changes (e.g., from geocoding)
-    useEffect(() => {
-        if (initialPosition && (!position || initialPosition.lat !== position.lat || initialPosition.lng !== position.lng)) {
-            setPosition(initialPosition);
-            if (map) map.flyTo(initialPosition, map.getZoom()); // Check if map is loaded before flying
-        }
-    }, [initialPosition, map, position]); // Depend on initialPosition, map, and internal position
-
-    return position === null ? null : (
-        <Marker position={position}>
-            <Popup>
-                Property Location: <br/> Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)} <br/>
-                Click anywhere on the map to adjust.
-            </Popup>
-        </Marker>
-    );
-}
-
-// Component for Address Search Control using Leaflet-Geosearch
-const SearchField = ({ onLocationSelected }) => {
-    const map = useMap(); // Access the Leaflet map instance
-
-    useEffect(() => {
-        const provider = new OpenStreetMapProvider(); // Using OpenStreetMap for geocoding
-        const searchControl = new GeoSearchControl({
-            provider: provider,
-            style: 'bar', // Visual style of the search control ('bar' or 'button')
-            showMarker: false, // We'll handle the marker ourselves via LocationMarker
-            showPopup: false, // Don't show default popup
-            autoClose: true, // Close search results panel after selection
-            retainZoomLevel: false, // Do not keep current zoom level after search
-            animateZoom: true, // Animate map movement to result
-            keepResult: true, // Keep the search result text in the bar
-            searchLabel: 'Enter address to find on map...',
-        });
-
-        map.addControl(searchControl); // Add the search control to the map
-
-        // Listen to the geosearch result event
-        map.on('geosearch/showlocation', (result) => {
-            // result.location contains { x: longitude, y: latitude, label: address_string }
-            const { y: lat, x: lng, label } = result.location;
-            onLocationSelected({ lat, lng }, label); // Pass lat/lng and the full address label back
-        });
-
-        // Cleanup function: remove the control and event listener when component unmounts
-        return () => {
-            map.removeControl(searchControl);
-            map.off('geosearch/showlocation');
-        };
-    }, [map, onLocationSelected]); // Rerun effect if map instance or callback changes
-
-    return null; // This component doesn't render any visible JSX itself, it just adds a control to the map
-};
+// All Leaflet related imports and fixes were moved to ListingFormMap.jsx
 
 
 function CreateListingPage() {
@@ -134,11 +54,7 @@ function CreateListingPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // State for map and marker
-  const [markerPosition, setMarkerPosition] = useState(null); // { lat: number, lng: number }
-  // Default map center (e.g., a general location or a default city like London)
-  const [mapCenter, setMapCenter] = useState([51.505, -0.09]); // London coordinates
-  const mapRef = useRef(null); // Ref to access the Leaflet map instance directly if needed
+  // Removed markerPosition, mapCenter, mapRef as they are now internal to ListingFormMap
 
   const fileInputRef = useRef(null); // Ref to clear file input after submission
 
@@ -151,25 +67,17 @@ function CreateListingPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Callback for when the map's marker position changes (via click or geocoding)
-  const handleMapPositionChange = useCallback((latlng) => {
-    setMarkerPosition(latlng); // Update the state that controls the marker
-    setLatitude(latlng.lat.toFixed(7)); // Update latitude form field with high precision
-    setLongitude(latlng.lng.toFixed(7)); // Update longitude form field with high precision
+  // Callback to receive latitude and longitude updates from the map component
+  const handleMapLocationUpdate = useCallback((lat, lng) => {
+    setLatitude(lat.toFixed(7)); // Update latitude form field with high precision
+    setLongitude(lng.toFixed(7)); // Update longitude form field with high precision
   }, []);
 
-  // Callback for when an address is selected via the geosearch control
-  const handleGeocodeResult = useCallback((latlng, addressLabel) => {
-    handleMapPositionChange(latlng); // Update marker and lat/lng inputs
-    setLocation(addressLabel); // Update the address form field with the geocoded address
-    // If mapRef is available, fly to the new location and zoom in
-    if (mapRef.current) {
-        mapRef.current.flyTo(latlng, 15); // Zoom level 15 is a good street-level zoom
-    } else {
-        // Fallback for initial render if mapRef isn't ready yet, set mapCenter for the first render
-        setMapCenter([latlng.lat, latlng.lng]);
-    }
-  }, [handleMapPositionChange]);
+  // Callback to receive address string updates from the map component (e.g., from geocoding)
+  const handleMapAddressUpdate = useCallback((address) => {
+    setLocation(address); // Update the address form field
+  }, []);
+
 
   // Function to handle file input change
   const handleFileChange = (e) => {
@@ -279,7 +187,7 @@ function CreateListingPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = ""; // Clear the file input element visually
       }
-      setMarkerPosition(null); // Clear the map marker
+      // Removed setMarkerPosition(null); as it's now internal to ListingFormMap
 
       // Optional: Redirect to a different page after a delay
       setTimeout(() => {
@@ -374,28 +282,16 @@ function CreateListingPage() {
             />
           </div>
           
-          {/* Map Integration */}
+          {/* Map Integration using ListingFormMap */}
           <div className="mb-6">
             <label className="block text-gray-700 text-sm font-bold mb-2">
                 Set Property Location on Map (Click to place/move marker, use search bar)
             </label>
-            <MapContainer
-                center={mapCenter} // Initial center of the map
-                zoom={13} // Initial zoom level
-                scrollWheelZoom={true} // Allow zooming with mouse wheel
-                style={{ height: '400px', width: '100%' }} // Fixed size for the map container
-                className="rounded-sm border border-gray-300" // Add some styling
-                whenCreated={mapInstance => { mapRef.current = mapInstance; }} // Get reference to the map instance
-            >
-                <TileLayer
-                    attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" // OpenStreetMap tiles
-                />
-                {/* LocationMarker component handles clicks and displays the marker */}
-                <LocationMarker onPositionChange={handleMapPositionChange} initialPosition={markerPosition} />
-                {/* SearchField component adds the address search bar */}
-                <SearchField onLocationSelected={handleGeocodeResult} />
-            </MapContainer>
+            <ListingFormMap
+              // For create, we don't pass initialLat/Lng unless there's a default user setting or geo-location
+              onLocationUpdate={handleMapLocationUpdate} // Passes (lat, lng)
+              onAddressUpdate={handleMapAddressUpdate} // Passes (addressLabel)
+            />
             <p className="text-xs text-gray-600 mt-1">
                 Selected Coordinates: Lat: {latitude || "N/A"}, Lng: {longitude || "N/A"}
             </p>

@@ -1,7 +1,8 @@
 // frontend/src/pages/LoginPage.jsx
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Import the useAuth hook
 
@@ -30,7 +31,8 @@ function LoginPage() {
     setSuccess('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
+      // Replaced axios.post with apiClient.post. Base URL handled by apiClient.
+      const response = await apiClient.post('/auth/login', {
         email,
         password
       });

@@ -1,7 +1,8 @@
 // frontend/src/pages/ManageListingsPage.jsx
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios'; // Import axios for fetching data
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { Link } from 'react-router-dom'; // Import Link for navigation (e.g., to edit page)
 import { useAuth } from '../context/AuthContext'; // Import useAuth to get the token
 
@@ -29,13 +30,8 @@ function ManageListingsPage() {
         setError(null);
 
         // Make a GET request to the backend endpoint for owner's listings
-        // Include the Authorization header with the JWT
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        };
-        const response = await axios.get('http://localhost:5000/api/listings/owner', config);
+        // Replaced axios.get with apiClient.get. The Authorization header is now handled by the interceptor.
+        const response = await apiClient.get('/listings/owner');
 
         // Set the ownerListings state with the data from the response
         setOwnerListings(response.data);
@@ -75,15 +71,8 @@ function ManageListingsPage() {
     setDeleteError(null);
 
     try {
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      };
-      // --- CORRECT THE URL HERE ---
-      // Change from: `http://localhost://localhost:5000/api/listings/${listingId}`
-      // Change to: `http://localhost:5000/api/listings/${listingId}`
-      const response = await axios.delete(`http://localhost:5000/api/listings/${listingId}`, config); // <-- CORRECTED LINE
+      // Replaced axios.delete with apiClient.delete. The Authorization header is now handled by the interceptor.
+      const response = await apiClient.delete(`/listings/${listingId}`);
 
       console.log('Delete successful:', response.data);
 

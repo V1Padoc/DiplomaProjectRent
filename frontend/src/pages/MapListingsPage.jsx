@@ -1,6 +1,7 @@
 // frontend/src/pages/MapListingsPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
+// import axios from 'axios'; // Removed direct axios import
+import apiClient from '../services/api'; // <--- IMPORT apiClient
 import { Link, useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -126,7 +127,8 @@ function MapListingsPage() {
         setSearchParams(newSearchParams, { replace: true });
 
         try {
-            const response = await axios.get(`http://localhost:5000/api/listings?${commonParams.toString()}`);
+            // Replaced axios.get with apiClient.get.
+            const response = await apiClient.get(`/listings?${commonParams.toString()}`);
             setListData(response.data.listings);
             setPagination({
                 totalPages: response.data.totalPages,
@@ -148,7 +150,8 @@ function MapListingsPage() {
         const commonParams = buildCommonParams();
 
         try {
-            const response = await axios.get(`http://localhost:5000/api/listings/map-data?${commonParams.toString()}`);
+            // Replaced axios.get with apiClient.get.
+            const response = await apiClient.get(`/listings/map-data?${commonParams.toString()}`);
             setMapData(response.data);
             
             if (response.data.length > 0) {

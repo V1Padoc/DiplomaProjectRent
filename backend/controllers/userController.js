@@ -7,6 +7,48 @@ const path = require('path');
 const bcrypt = require('bcryptjs'); 
 const { Op } = require('sequelize');
 const Booking = require('../models/Booking');
+const sharp = require('sharp'); // <--- ADDED: Import sharp for image processing
+
+// Helper function for image processing for profile photos
+async function processProfileImage(filePath, outputFilename) {
+  const tempFilePath = filePath; // This is the file saved by Multer
+  // Profile photos are saved in 'uploads/profiles'
+  const profileUploadDir = path.join(__dirname, '../uploads/profiles');
+  const processedFilePath = path.join(profileUploadDir, outputFilename);
+
+  const MAX_WIDTH = 400; // Max width for profile photos
+  const MAX_HEIGHT = 400; // Max height for profile photos
+  const QUALITY = 80; // JPEG quality for profile photos
+
+  try {
+    await sharp(tempFilePath)
+      .resize(MAX_WIDTH, MAX_HEIGHT, { 
+        fit: sharp.fit.cover, // Crop to cover the dimensions while maintaining aspect ratio
+        position: sharp.strategy.entropy, // Focus on interesting parts for cropping
+        withoutEnlargement: true // Don't enlarge if image is smaller than dimensions
+      })
+      .jpeg({ quality: QUALITY, progressive: true }) // Convert to JPEG, set quality, enable progressive loading
+      .toFile(processedFilePath);
+
+    // Delete the original (temporary) file uploaded by Multer
+    if (filePath !== processedFilePath) { 
+        await fs.unlink(tempFilePath);
+    }
+    return path.basename(processedFilePath); // Return only the filename for database storage
+  } catch (error) {
+    console.error(`Error processing profile image ${path.basename(tempFilePath)}:`, error);
+    // Attempt to delete the temporary file if processing failed and it still exists
+    try {
+        await fs.unlink(tempFilePath);
+    } catch (e) { 
+        if (e.code !== 'ENOENT') { // Ignore if file already doesn't exist
+            console.warn(`Could not clean up temporary profile image ${path.basename(tempFilePath)}:`, e.message);
+        }
+    }
+    throw new Error(`Failed to process profile image: ${path.basename(tempFilePath)}`);
+  }
+}
+
 
 // PUT /api/users/profile - Update current user's profile
 exports.updateUserProfile = async (req, res) => {
@@ -26,26 +68,43 @@ exports.updateUserProfile = async (req, res) => {
         if (bio !== undefined) fieldsToUpdate.bio = bio;
         
         if (phone_number !== undefined) {
-            // *** MODIFIED: Validation if phone_number is being set/updated and is empty ***
+            // Validation if phone_number is being set/updated and is empty
             if (phone_number === '') { // If they try to clear a mandatory field
                  return res.status(400).json({ message: "Phone number cannot be empty." });
             }
             fieldsToUpdate.phone_number = phone_number;
         }
 
-        // Handle profile photo upload
-        if (req.file) { // 'profilePhoto' is the field name from multer
-            // Delete old photo if it exists and is different
-            if (user.profile_photo_url && user.profile_photo_url !== req.file.filename) {
-                const oldPhotoPath = path.join(__dirname, '../uploads/profiles', user.profile_photo_url);
-                try {
-                    await fs.unlink(oldPhotoPath);
-                    console.log(`Deleted old profile photo: ${oldPhotoPath}`);
-                } catch (unlinkError) {
-                    console.warn(`Could not delete old profile photo ${oldPhotoPath}:`, unlinkError.message);
+        // Handle profile photo upload with image processing
+        if (req.file) { // 'profilePhoto' is the field name from multerProfileConfig
+            try {
+                // Generate a new unique filename for the processed profile photo
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const originalExt = path.extname(req.file.originalname);
+                const extension = originalExt ? originalExt.toLowerCase() : '.jpg'; // Ensure valid extension for sharp
+                const processedFilename = `profile-${userId}-${uniqueSuffix}${extension}`; // new filename
+
+                // Process the image: resize, convert, save, and delete the temporary multer file
+                const finalFilename = await processProfileImage(req.file.path, processedFilename);
+
+                // Delete old photo if it exists and is different from the new one
+                if (user.profile_photo_url && user.profile_photo_url !== finalFilename) {
+                    const oldPhotoPath = path.join(__dirname, '../uploads/profiles', user.profile_photo_url);
+                    try {
+                        await fs.unlink(oldPhotoPath);
+                        console.log(`Deleted old profile photo: ${oldPhotoPath}`);
+                    } catch (unlinkError) {
+                        // Log if deletion fails, but don't fail the whole request for this
+                        console.warn(`Could not delete old profile photo ${oldPhotoPath}:`, unlinkError.message);
+                    }
                 }
+                fieldsToUpdate.profile_photo_url = finalFilename; // Save new PROCESSED photo filename
+            } catch (processingError) {
+                console.error("Error processing profile photo:", processingError);
+                // If profile photo processing fails, we don't update the photo URL.
+                // The main profile update can still proceed for other fields.
+                return res.status(500).json({ message: `Profile photo processing failed: ${processingError.message}` });
             }
-            fieldsToUpdate.profile_photo_url = req.file.filename; // Save new photo filename
         }
 
         if (Object.keys(fieldsToUpdate).length === 0 && !req.file) {
