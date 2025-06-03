@@ -8,7 +8,8 @@ function ProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    name: '', // This will be First Name
+    last_name: '', // Added Last Name
     bio: '',
     phone_number: '',
   });
@@ -34,6 +35,7 @@ function ProfilePage() {
     if (user) {
       setFormData({
         name: user.name || '',
+        last_name: user.last_name || '', // Initialize last_name
         bio: user.bio || '',
         phone_number: user.phone_number || '',
       });
@@ -62,7 +64,8 @@ function ProfilePage() {
     setPasswordSuccess(''); // Clear password successes
 
     const data = new FormData();
-    data.append('name', formData.name);
+    data.append('name', formData.name); // First Name
+    data.append('last_name', formData.last_name); // Last Name
     data.append('bio', formData.bio);
     data.append('phone_number', formData.phone_number);
     if (profilePhotoFile) {
@@ -137,6 +140,9 @@ function ProfilePage() {
     return <div className="container mx-auto px-4 py-8 text-center">User data not available. Please log in.</div>;
   }
 
+  // Define a display name for the profile title or avatar fallback
+  const displayName = user.name ? `${user.name}${user.last_name ? ' ' + user.last_name : ''}` : user.email || 'User';
+
   return (
     <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
       <div className="max-w-2xl mx-auto bg-white p-8 rounded-sm shadow-md">
@@ -147,7 +153,8 @@ function ProfilePage() {
 
         <div className="text-center mb-6">
           <img
-            src={previewPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'U')}&background=random&size=128`} // Fallback placeholder
+            // Updated fallback to use user.name or user.email for avatar generation
+            src={previewPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'U')}&background=random&size=128`} 
             alt="Profile"
             className="w-32 h-32 rounded-full mx-auto object-cover border-2 border-gray-300"
           />
@@ -165,8 +172,13 @@ function ProfilePage() {
         {!isEditing && !showPasswordForm ? ( // Only show profile details and buttons if neither form is active
           <>
             <div className="mb-4">
-              <strong className="block text-gray-700">Name:</strong>
+              <strong className="block text-gray-700">First Name:</strong>
               <p className="text-gray-800">{user.name || 'Not set'}</p>
+            </div>
+            {/* Added Last Name display field */}
+            <div className="mb-4">
+              <strong className="block text-gray-700">Last Name:</strong>
+              <p className="text-gray-800">{user.last_name || 'Not set'}</p>
             </div>
             <div className="mb-4">
               <strong className="block text-gray-700">Email:</strong>
@@ -216,10 +228,20 @@ function ProfilePage() {
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
             
             <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">Name</label>
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">First Name</label>
               <input
                 type="text" name="name" id="name" value={formData.name} onChange={handleInputChange}
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" required
+                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" 
+                placeholder="First Name" // Added placeholder
+              />
+            </div>
+            {/* Added Last Name input field */}
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="last_name">Last Name</label>
+              <input
+                type="text" name="last_name" id="last_name" value={formData.last_name} onChange={handleInputChange}
+                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
+                placeholder="Last Name" // Added placeholder
               />
             </div>
             <div className="mb-4">
@@ -251,7 +273,12 @@ function ProfilePage() {
                     setIsEditing(false);
                     // Reset form data and preview to original user data if canceling
                     if (user) {
-                        setFormData({ name: user.name || '', bio: user.bio || '', phone_number: user.phone_number || '' });
+                        setFormData({ 
+                            name: user.name || '', 
+                            last_name: user.last_name || '', // Reset last_name
+                            bio: user.bio || '', 
+                            phone_number: user.phone_number || '' 
+                        });
                         setPreviewPhoto(user.profile_photo_url ? `http://localhost:5000/uploads/profiles/${user.profile_photo_url}` : null);
                         setProfilePhotoFile(null);
                     }

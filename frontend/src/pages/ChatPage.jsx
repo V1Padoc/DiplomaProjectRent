@@ -21,6 +21,9 @@ const formatDateHeader = (dateString) => {
         return 'Today';
     } else if (today.getTime() - messageDateOnly.getTime() === 24 * 60 * 60 * 1000) { // Check for yesterday
         return 'Yesterday';
+        // Check for "tomorrow" case (unlikely for historical messages, but good practice for full comparison)
+    } else if (messageDateOnly.getTime() - today.getTime() === 24 * 60 * 60 * 1000) { 
+        return 'Tomorrow';
     } else if (now.getFullYear() === messageDateOnly.getFullYear()) {
         return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' }); // e.g., August 15
     } else {
@@ -48,7 +51,8 @@ function ChatPage() {
     const [sendingMessage, setSendingMessage] = useState(false);
     const [errorSendingMessage, setErrorSendingMessage] = useState(null);
 
-    const { isAuthenticated, user, token, markChatAsRead } = useAuth(); // Removed socket, using global event
+    // MODIFIED: Added isSocketEligible and fetchSocketEligibility from AuthContext
+    const { isAuthenticated, user, token, markChatAsRead, isSocketEligible, fetchSocketEligibility } = useAuth(); 
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null); // Ref for the scrollable chat container
 
@@ -164,42 +168,41 @@ function ChatPage() {
             console.log('ChatPage received chat-update event:', data);
 
             if (data.message && String(data.listingId) === String(listingIdFromParams) && user?.id && chatPartnerId) {
-    const incomingMessage = data.message;
+                const incomingMessage = data.message;
 
-    const isListingMatch = String(data.listingId) === String(listingIdFromParams);
-    const hasUserId = Boolean(user?.id);
-    const hasChatPartnerId = Boolean(chatPartnerId);
+                const isListingMatch = String(data.listingId) === String(listingIdFromParams);
+                const hasUserId = Boolean(user?.id);
+                const hasChatPartnerId = Boolean(chatPartnerId);
 
-    const isRelevant =
-        (String(incomingMessage.sender_id) === String(user.id) && String(incomingMessage.receiver_id) === String(chatPartnerId)) ||
-        (String(incomingMessage.sender_id) === String(chatPartnerId) && String(incomingMessage.receiver_id) === String(user.id));
+                const isRelevant =
+                    (String(incomingMessage.sender_id) === String(user.id) && String(incomingMessage.receiver_id) === String(chatPartnerId)) ||
+                    (String(incomingMessage.sender_id) === String(chatPartnerId) && String(incomingMessage.receiver_id) === String(user.id));
 
-    console.log('Checking conditions before setting messages:');
-    console.log(`- listingId match: ${isListingMatch}`);
-    console.log(`- has user ID: ${hasUserId}`);
-    console.log(`- has chat partner ID: ${hasChatPartnerId}`);
-    console.log(`- isRelevant: ${isRelevant}`);
+                console.log('Checking conditions before setting messages:');
+                console.log(`- listingId match: ${isListingMatch}`);
+                console.log(`- has user ID: ${hasUserId}`);
+                console.log(`- has chat partner ID: ${hasChatPartnerId}`);
+                console.log(`- isRelevant: ${isRelevant}`);
 
-    if (isRelevant) {
-        setMessages(prevMessages => {
-            const alreadyExists = prevMessages.find(m => m.id === incomingMessage.id);
-            if (alreadyExists) {
-                console.log('Updating messages for read status.');
-                return prevMessages;
-            }
-            console.log('Updating messages state in ChatPage with new message.');
-            return [...prevMessages, incomingMessage];
-        });
+                if (isRelevant) {
+                    setMessages(prevMessages => {
+                        const alreadyExists = prevMessages.find(m => m.id === incomingMessage.id);
+                        if (alreadyExists) {
+                            console.log('Message already exists, likely read status update.');
+                            return prevMessages; // If message already exists, do not add duplicate
+                        }
+                        console.log('Updating messages state in ChatPage with new message.');
+                        return [...prevMessages, incomingMessage];
+                    });
 
-        // If the new message is from the chat partner, mark it as read
-        const isFromPartner = String(incomingMessage.sender_id) === String(chatPartnerId);
-        const isToUser = String(incomingMessage.receiver_id) === String(user.id);
-        if (isFromPartner && isToUser) {
-            markChatAsRead(listingIdFromParams, chatPartnerId);
-        }
-    }
-}
- else if (data.type === 'read_update' && String(data.listingId) === String(listingIdFromParams)) {
+                    // If the new message is from the chat partner, mark it as read
+                    const isFromPartner = String(incomingMessage.sender_id) === String(chatPartnerId);
+                    const isToUser = String(incomingMessage.receiver_id) === String(user.id);
+                    if (isFromPartner && isToUser) {
+                        markChatAsRead(listingIdFromParams, chatPartnerId);
+                    }
+                }
+            } else if (data.type === 'read_update' && String(data.listingId) === String(listingIdFromParams)) {
                  // This means the other user read messages sent by me.
                  // If messages sent by current user to chatPartnerId were marked read.
                  if (String(data.chatPartnerId) === String(chatPartnerId)) { // Partner read MY messages
@@ -273,6 +276,13 @@ function ChatPage() {
                  });
             }
             setNewMessageContent('');
+
+            // ADDED: Check for socket eligibility after sending a message
+            if (token && !isSocketEligible) { 
+                console.log("ChatPage: Message sent, checking for socket eligibility update.");
+                await fetchSocketEligibility(token); // Fetch eligibility and potentially trigger socket connection
+            }
+
         } catch (err) {
             console.error('Error sending message:', err);
             setErrorSendingMessage(err.response?.data?.message || 'Failed to send message.');

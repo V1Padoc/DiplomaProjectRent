@@ -59,6 +59,9 @@ export const AuthProvider = ({ children }) => {
   const [unreadMyBookingsUpdatesCount, setUnreadMyBookingsUpdatesCount] = useState(0); // For Tenant: booking status changes
   const [unreadAdminTasksCount, setUnreadAdminTasksCount] = useState(0); // For Admin: new pending listings
 
+  // New state for socket eligibility
+  const [isSocketEligible, setIsSocketEligible] = useState(false);
+
   // logout function, memoized
   const logout = useCallback(() => {
     if (socket) {
@@ -74,6 +77,7 @@ export const AuthProvider = ({ children }) => {
     setUnreadMyBookingsUpdatesCount(0);
     setUnreadAdminTasksCount(0);
     setSocket(null);
+    setIsSocketEligible(false); // Reset eligibility on logout
     console.log('User logged out.');
   }, [socket]); // socket is a dependency for socket.disconnect()
 
@@ -150,12 +154,30 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user?.role]);
 
+  // New: fetchSocketEligibility
+  const fetchSocketEligibility = useCallback(async (currentTokenParam) => {
+    if (!currentTokenParam) {
+      setIsSocketEligible(false);
+      return false;
+    }
+    try {
+      const response = await axios.get(`${API_URL}/auth/socket-eligibility`, {
+        headers: { Authorization: `Bearer ${currentTokenParam}` },
+      });
+      setIsSocketEligible(response.data.eligible);
+      return response.data.eligible; // Return for immediate use if needed
+    } catch (error) {
+      console.error('Failed to fetch socket eligibility:', error.response?.data?.message || error.message);
+      setIsSocketEligible(false); // Default to not eligible on error
+      return false;
+    }
+  }, []); // No dependencies needed here, token passed as param
 
   // Effect for initial authentication check and loading user data
   useEffect(() => {
     const attemptAutoLogin = async () => {
       const storedToken = localStorage.getItem('token');
-      console.log('Attempting to connect socket...')
+      console.log('Attempting auto-login and socket eligibility check...');
       if (storedToken) {
         setToken(storedToken); // Set token state for other hooks/logic
         try {
@@ -165,6 +187,9 @@ export const AuthProvider = ({ children }) => {
           const userData = res.data;
           setUser(userData);
           localStorage.setItem('user', JSON.stringify(userData)); // Correctly store user object
+
+          // Fetch eligibility
+          await fetchSocketEligibility(storedToken);
 
           // Fetch other dependent data now that user is confirmed
           fetchUnreadMessagesCount(storedToken);
@@ -190,11 +215,13 @@ export const AuthProvider = ({ children }) => {
 
     attemptAutoLogin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logout, fetchUnreadMessagesCount, fetchFavoriteIds, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner]); // Add stable callbacks
+  }, [logout, fetchUnreadMessagesCount, fetchFavoriteIds, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner, fetchSocketEligibility]); // Add stable callbacks including fetchSocketEligibility
 
   // Socket connection management
   useEffect(() => {
-    if (token && user?.id) {
+    // Only connect if token, user.id, AND isSocketEligible are true
+    if (token && user?.id && isSocketEligible) {
+      console.log(`User ${user.id} is eligible, attempting to connect socket.`);
       const newSocket = io(SOCKET_URL, {
         // auth: { token } // More secure way to pass token if backend supports it
       });
@@ -220,57 +247,56 @@ export const AuthProvider = ({ children }) => {
         window.dispatchEvent(new CustomEvent('chat-update', { detail: { type: 'read_update', ...data } }));
       });
 
-      // Listener for booking updates (for tenants)
-newSocket.on('new_booking_request_owner', (data) => { // This event name is good
+      // Listener for new booking requests (for owners)
+      newSocket.on('new_booking_request_owner', (data) => { 
           console.log('AuthContext: Received new_booking_request_owner:', data);
-          if (user && user.role === 'owner' ) { // Check if user is still an owner
+          if (user && user.role === 'owner' ) { 
               fetchUnreadBookingRequestsCountForOwner(token);
           }
       });
 
-      // Listener for booking updates (for tenants)
-      newSocket.on('booking_status_update_tenant', (data) => { // THIS EVENT NAME IS GOOD and matches backend proposal
+      // Listener for booking status updates (for tenants)
+      newSocket.on('booking_status_update_tenant', (data) => { 
         console.log('AuthContext: Received booking_status_update_tenant:', data);
         if (user && user.role === 'tenant' && data.tenantId === user.id) {
           fetchUnreadBookingUpdatesCount(token);
         }
       });
 
-      // Listener for admin tasks (e.g., new pending listing OR change affecting pending count)
-      // Consolidate admin notifications for pending counts
-    newSocket.on('admin_new_pending_listing', (data) => {
-  console.log('AuthContext: Received admin_new_pending_listing:', data);
-  if (user && user.role === 'admin') {
-    fetchUnreadAdminTasksCount(token);
-  }
-});
+      // Listeners for admin tasks (e.g., new pending listing OR change affecting pending count)
+      newSocket.on('admin_new_pending_listing', (data) => {
+        console.log('AuthContext: Received admin_new_pending_listing:', data);
+        if (user && user.role === 'admin') {
+          fetchUnreadAdminTasksCount(token);
+        }
+      });
       newSocket.on('admin_pending_count_changed', (data) => {
-  console.log('AuthContext: Received admin_pending_count_changed:', data);
-  if (user && user.role === 'admin') {
-    fetchUnreadAdminTasksCount(token);
-  }
-});
+        console.log('AuthContext: Received admin_pending_count_changed:', data);
+        if (user && user.role === 'admin') {
+          fetchUnreadAdminTasksCount(token);
+        }
+      });
 
 
       return () => {
         newSocket.off('connect');
         newSocket.off('new_message_notification');
         newSocket.off('messages_read_update');
-        newSocket.off('booking_update_notification');
-        newSocket.off('admin_task_notification');
-        newSocket.off('new_booking_request_owner');
+        newSocket.off('new_booking_request_owner'); // Specific event name
+        newSocket.off('booking_status_update_tenant'); // Specific event name
+        newSocket.off('admin_new_pending_listing');
+        newSocket.off('admin_pending_count_changed');
         newSocket.close();
         setSocket(null);
         console.log('Socket disconnected and cleaned up.');
       };
-    } else if (socket) { // If token or user becomes null (e.g., logout)
+    } else if (socket) { // If token or user becomes null (e.g., logout) or eligibility changes
+      console.log(`User ${user?.id} no longer eligible or logged out, disconnecting socket.`);
       socket.close();
       setSocket(null);
-      console.log('Socket disconnected due to logout or user change.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, user?.id, user?.role, fetchUnreadMessagesCount, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner]);
-
+  }, [token, user?.id, user?.role, fetchUnreadMessagesCount, fetchUnreadBookingUpdatesCount, fetchUnreadAdminTasksCount, fetchUnreadBookingRequestsCountForOwner, isSocketEligible]); // Added isSocketEligible
 
   // *** MODIFIED LOGIN FUNCTION ***
   const login = async (newToken) => { // Only takes newToken
@@ -291,7 +317,12 @@ newSocket.on('new_booking_request_owner', (data) => { // This event name is good
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
 
-      // Now that user and token are set, fetch other dependent data
+      // Fetch eligibility and wait for it
+      const eligible = await fetchSocketEligibility(newToken); 
+      console.log("Socket eligibility after login:", eligible);
+
+
+      // Now that user, token, and eligibility are set, fetch other dependent data
       await fetchUnreadMessagesCount(newToken); // Make sure these complete
       await fetchFavoriteIds(newToken);
       // Fetch role-specific counts after login
@@ -414,6 +445,8 @@ newSocket.on('new_booking_request_owner', (data) => { // This event name is good
     setUnreadBookingRequestsCount, // Kept from original, potentially for direct updates if needed
     setUnreadMyBookingsUpdatesCount, // Kept from original
     setUnreadAdminTasksCount, // Kept from original
+    isSocketEligible,
+    fetchSocketEligibility,  // Expose if needed by other components (though mainly for internal AuthContext use)
   };
 
   return (

@@ -53,7 +53,8 @@ function ListingDetail() {
 
     const [isFavorited, setIsFavorited] = useState(false);
 
-    const { isAuthenticated, user, token, favorites, toggleFavorite } = useAuth();
+    // MODIFIED: Added isSocketEligible and fetchSocketEligibility
+    const { isAuthenticated, user, token, favorites, toggleFavorite, isSocketEligible, fetchSocketEligibility } = useAuth();
 
     // Removed: const [listingIdFromParams, setListingIdFromParams] = useState(useParams().id); // This was problematic
 
@@ -151,6 +152,7 @@ function ListingDetail() {
                 const normalizedRangeStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
                 const normalizedRangeEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
 
+                // Check if current date falls within a booked range (inclusive)
                 if (normalizedCurrentDate >= normalizedRangeStart && normalizedCurrentDate <= normalizedRangeEnd) {
                     return true;
                 }
@@ -229,6 +231,13 @@ function ListingDetail() {
             } catch (fetchErr) {
                 console.error("Error re-fetching booked dates after booking:", fetchErr);
                 // Optionally, set an error message for this part if critical
+            }
+
+            // ADDED: Dynamic socket eligibility check after a successful booking
+            if (token && isAuthenticated && !isSocketEligible) { 
+                console.log("Booking created, checking for socket eligibility update.");
+                // No need to await here unless immediate UI depends on it; AuthContext will handle state update.
+                fetchSocketEligibility(token); 
             }
 
         } catch (err) {

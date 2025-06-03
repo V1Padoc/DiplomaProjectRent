@@ -31,6 +31,10 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING, // String type
     allowNull: true         // Can be empty initially, users can add later
   },
+  last_name: { // New field for last name
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
    profile_photo_url: { // Store the path/filename of the profile photo
     type: DataTypes.STRING,
     allowNull: true,

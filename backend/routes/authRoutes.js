@@ -14,6 +14,6 @@ router.post('/register', authController.register);
 router.post('/login', authController.login); // <-- Add this line
 
 router.get('/user', authMiddleware, authController.getUser);
-
+router.get('/socket-eligibility', authMiddleware, authController.getSocketEligibility);
 
 module.exports = router;

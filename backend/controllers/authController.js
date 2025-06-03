@@ -3,11 +3,14 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Message = require('../models/Message'); // Assuming you need to check messages
+const Booking = require('../models/Booking'); // For booking requests
+const Listing = require('../models/Listing'); 
+const { Op } = require('sequelize');
 
 // Controller function for user registration
 exports.register = async (req, res) => {
-  // ... (keep your existing register function here)
-  const { email, password, name, role, phone_number } = req.body;
+  const { email, password, name, last_name, role, phone_number } = req.body; // Added last_name
   const allowedSelfRegisterRoles = ['tenant', 'owner']; // Define roles allowed for self-registration
   if (!allowedSelfRegisterRoles.includes(role)) {
     // If the provided role is NOT in the allowed list
@@ -15,8 +18,8 @@ exports.register = async (req, res) => {
     return res.status(400).json({ message: 'Invalid role specified during registration.' });
   }
   try {
-    if (!email || !password || !name|| !phone_number) { // 'role' is now validated against allowed roles
-      return res.status(400).json({ message: 'Please provide all required fields: email, password, name, number, and a role.' });
+    if (!email || !password || !name || !last_name || !phone_number) { // Added last_name to validation
+      return res.status(400).json({ message: 'Please provide all required fields: email, password, first name, last name, phone number, and a role.' }); // Updated message
     }
 
     const existingUser = await User.findOne({ where: { email: email } });
@@ -30,7 +33,8 @@ exports.register = async (req, res) => {
     const newUser = await User.create({
       email: email,
       password: hashedPassword,
-      name: name,
+      name: name, // This is the first name
+      last_name: last_name, // Added last_name
       role: role,
       phone_number: phone_number
     });
@@ -40,7 +44,8 @@ exports.register = async (req, res) => {
       user: {
         id: newUser.id,
         email: newUser.email,
-        name: newUser.name,
+        name: newUser.name, // First name
+        last_name: newUser.last_name, // Added last_name
         role: newUser.role,
         phone_number: newUser.phone_number
       }
@@ -117,7 +122,7 @@ exports.getUser = async (req, res) => {
     // req.user was set by the authMiddleware based on the token payload
     // We use req.user.id to find the user in the database
     const user = await User.findByPk(req.user.id, {
-        attributes: ['id', 'email', 'name', 'role', 'created_at',
+        attributes: ['id', 'email', 'name', 'last_name', 'role', 'created_at', // Added last_name
             'profile_photo_url', 'bio', 'phone_number'] // Select specific attributes to return (exclude password!)
     });
 
@@ -134,5 +139,55 @@ exports.getUser = async (req, res) => {
     res.status(500).json({ message: 'Server error while fetching user data.' });
   }
 };
-// We'll add the get user controller function here later
-// exports.getUser = async (req, res) => { ... };
+
+exports.getSocketEligibility = async (req, res) => {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    try {
+        let shouldConnect = false;
+
+        // 1. Is an admin?
+        if (userRole === 'admin') {
+            shouldConnect = true;
+        }
+
+        // 2. Is a listing owner?
+        if (!shouldConnect && userRole === 'owner') {
+            const ownedListing = await Listing.findOne({ where: { owner_id: userId }, attributes: ['id'] });
+            if (ownedListing) {
+                shouldConnect = true;
+            }
+        }
+
+        // 3. Sent a booking request? (Check for bookings where user is tenant_id)
+        if (!shouldConnect) {
+            const sentBooking = await Booking.findOne({ where: { tenant_id: userId }, attributes: ['id'] });
+            if (sentBooking) {
+                shouldConnect = true;
+            }
+        }
+
+        // 4. Contacted a listing owner (sent or received a message)?
+        if (!shouldConnect) {
+            const hasMessaged = await Message.findOne({
+                where: {
+                    [Op.or]: [
+                        { sender_id: userId },
+                        { receiver_id: userId }
+                    ]
+                },
+                attributes: ['id']
+            });
+            if (hasMessaged) {
+                shouldConnect = true;
+            }
+        }
+
+        res.status(200).json({ eligible: shouldConnect });
+
+    } catch (error) {
+        console.error('Error checking socket eligibility:', error);
+        res.status(500).json({ message: 'Server error checking socket eligibility.' });
+    }
+};

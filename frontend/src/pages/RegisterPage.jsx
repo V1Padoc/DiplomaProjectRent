@@ -8,8 +8,9 @@ function RegisterPage() {
   // State variables to hold form input values
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState(''); // *** ADDED: State for phone number ***
+  const [name, setName] = useState(''); // This will be for First Name
+  const [lastName, setLastName] = useState(''); // *** ADDED: State for last name ***
+  const [phoneNumber, setPhoneNumber] = useState(''); 
   const [role, setRole] = useState('tenant'); // Default role is 'tenant'
   const [error, setError] = useState(''); // State for displaying registration errors
   const [success, setSuccess] = useState(''); // State for displaying success message
@@ -28,8 +29,9 @@ function RegisterPage() {
       const response = await axios.post('http://localhost:5000/api/auth/register', {
         email,
         password,
-        name,
-        phone_number: phoneNumber, // *** ADDED: Include phone number in the request body ***
+        name, // This is first name
+        last_name: lastName, // *** ADDED: Include last name in the request body ***
+        phone_number: phoneNumber, 
         role
       });
 
@@ -93,19 +95,35 @@ function RegisterPage() {
 
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">
-              Name
+              First Name {/* *** CHANGED: Label updated *** */}
             </label>
             <input
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
               id="name"
               type="text"
-              placeholder="Name"
+              placeholder="First Name" // *** CHANGED: Placeholder updated ***
               value={name}
-              onChange={(e) => setName(e.target.value)} // Update state on input change
-              required // Make field required
+              onChange={(e) => setName(e.target.value)} 
+              required 
             />
           </div>
-          <div className="mb-4"> {/* Assuming you add a phone number field here */}
+          
+          <div className="mb-4"> {/* *** ADDED: Last Name field *** */}
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="last_name">
+              Last Name
+            </label>
+            <input
+              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+              id="last_name"
+              type="text"
+              placeholder="Last Name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required 
+            />
+          </div>
+
+          <div className="mb-4"> 
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">
                 Phone Number
             </label>
@@ -114,9 +132,9 @@ function RegisterPage() {
                 id="phone_number" 
                 type="tel" 
                 placeholder="Phone Number"
-                value={phoneNumber} // *** CHANGED: Use phoneNumber state ***
-                onChange={(e) => setPhoneNumber(e.target.value)} // *** CHANGED: Use setPhoneNumber handler ***
-                required // *** ADDED: Make required ***
+                value={phoneNumber} 
+                onChange={(e) => setPhoneNumber(e.target.value)} 
+                required 
             />
           </div>
           <div className="mb-6">
@@ -127,8 +145,8 @@ function RegisterPage() {
               className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
               id="role"
               value={role}
-              onChange={(e) => setRole(e.target.value)} // Update state on select change
-              required // Make field required
+              onChange={(e) => setRole(e.target.value)} 
+              required 
             >
               <option value="tenant">Tenant / Buyer</option>
               <option value="owner">Owner / Seller</option>

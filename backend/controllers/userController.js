@@ -7,10 +7,11 @@ const path = require('path');
 const bcrypt = require('bcryptjs'); 
 const { Op } = require('sequelize');
 const Booking = require('../models/Booking');
+
 // PUT /api/users/profile - Update current user's profile
 exports.updateUserProfile = async (req, res) => {
     const userId = req.user.id; // From authMiddleware
-    const { name, bio, phone_number } = req.body;
+    const { name, last_name, bio, phone_number } = req.body; // Added last_name
 
     try {
         const user = await User.findByPk(userId);
@@ -20,16 +21,18 @@ exports.updateUserProfile = async (req, res) => {
 
         // Prepare fields to update
         const fieldsToUpdate = {};
-        if (name !== undefined) fieldsToUpdate.name = name;
+        if (name !== undefined) fieldsToUpdate.name = name; // First Name
+        if (last_name !== undefined) fieldsToUpdate.last_name = last_name; // Last Name
         if (bio !== undefined) fieldsToUpdate.bio = bio;
-        if (phone_number !== undefined) fieldsToUpdate.phone_number = phone_number;
+        
         if (phone_number !== undefined) {
-        // *** ADDED: Validation if phone_number is being set/updated and is empty ***
-        if (phone_number === '') { // If they try to clear a mandatory field
-             return res.status(400).json({ message: "Phone number cannot be empty." });
+            // *** MODIFIED: Validation if phone_number is being set/updated and is empty ***
+            if (phone_number === '') { // If they try to clear a mandatory field
+                 return res.status(400).json({ message: "Phone number cannot be empty." });
+            }
+            fieldsToUpdate.phone_number = phone_number;
         }
-        fieldsToUpdate.phone_number = phone_number;
-        }
+
         // Handle profile photo upload
         if (req.file) { // 'profilePhoto' is the field name from multer
             // Delete old photo if it exists and is different
@@ -54,7 +57,7 @@ exports.updateUserProfile = async (req, res) => {
         // Fetch the updated user to return all fields, including new photo URL
         const updatedUser = await User.findByPk(userId, {
              attributes: [
-                'id', 'email', 'name', 'role', 'created_at',
+                'id', 'email', 'name', 'last_name', 'role', 'created_at', // Ensure last_name is included
                 'profile_photo_url', 'bio', 'phone_number'
             ]
         });
@@ -66,7 +69,6 @@ exports.updateUserProfile = async (req, res) => {
 
     } catch (error) {
         console.error("Error updating user profile:", error);
-        // If it's a file system error during multer or unlink, it might not be a 500 from DB
         if (error.code && error.code.startsWith('LIMIT_')) { // Multer error
             return res.status(400).json({ message: error.message });
         }
@@ -81,7 +83,7 @@ exports.getPublicUserProfile = async (req, res) => {
         const user = await User.findByPk(userId, {
             attributes: [ // Only select fields safe for public display
                 'id',
-                'name',
+                'name', // First Name
                 'profile_photo_url',
                 'bio',
                 'created_at', // e.g., "Joined on..."
@@ -165,16 +167,10 @@ exports.changePassword = async (req, res) => {
     }
 };
 
-// backend/controllers/userController.js
-// const Booking = require('../models/Booking'); // Ensure this is imported
-// const { Op } = require('sequelize');      // Ensure this is imported
-
 exports.getUnreadBookingUpdatesCountForTenant = async (req, res) => {
-    const tenantId = req.user.id; // 1. Is req.user defined? Is req.user.id present?
-                                  // (authMiddleware should ensure this, but worth checking if middleware is correctly applied to the route)
+    const tenantId = req.user.id; 
+                                  
     try {
-        // 2. Is 'Booking' model correctly imported and initialized?
-        // 3. Is 'Op' from sequelize correctly imported for query operators?
         const count = await Booking.count({
             where: {
                 tenant_id: tenantId,
@@ -184,16 +180,14 @@ exports.getUnreadBookingUpdatesCountForTenant = async (req, res) => {
         });
         res.status(200).json({ unreadCount: count });
     } catch (error) {
-        // THIS IS WHERE THE DETAILED ERROR WILL BE LOGGED ON THE BACKEND
-        console.error('Error fetching unread booking updates count for tenant:', error); // 4. What is this error object?
-        res.status(500).json({ message: 'Server error.' }); // This is the generic message the frontend receives
+        console.error('Error fetching unread booking updates count for tenant:', error); 
+        res.status(500).json({ message: 'Server error.' }); 
     }
 };
-// backend/controllers/userController.js
+
 exports.acknowledgeBookingUpdatesForTenant = async (req, res) => {
-    const tenantId = req.user.id; // 1. Is req.user.id present?
+    const tenantId = req.user.id; 
     try {
-        // 2. Is 'Booking' model okay?
         const [updatedCount] = await Booking.update(
             { is_update_seen_by_tenant: true },
             {
@@ -207,8 +201,7 @@ exports.acknowledgeBookingUpdatesForTenant = async (req, res) => {
         console.log(`${updatedCount} booking updates acknowledged for tenant ${tenantId}`);
         res.status(200).json({ message: 'Booking updates acknowledged.', count: updatedCount });
     } catch (error) {
-        // THIS IS WHERE THE DETAILED ERROR WILL BE LOGGED ON THE BACKEND
-        console.error('Error acknowledging booking updates for tenant:', error); // 3. What is this error object?
+        console.error('Error acknowledging booking updates for tenant:', error); 
         res.status(500).json({ message: 'Server error.' });
     }
 };
