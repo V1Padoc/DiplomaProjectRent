@@ -1,3 +1,4 @@
+// backend/config/database.js
 const { Sequelize } = require('sequelize');
 require('dotenv').config(); // Load environment variables from .env
 
@@ -10,7 +11,8 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST, // Database host
     dialect: process.env.DB_DIALECT, // Database dialect (mysql)
     port: process.env.DB_PORT, // Database port
-    logging: console.log, // Set to true to see SQL queries in the console (useful for debugging)
+    // MODIFIED: Conditional logging based on NODE_ENV
+    logging: process.env.NODE_ENV === 'development' ? console.log : false, // Log in dev, disable in prod
   }
 );
 
@@ -21,12 +23,10 @@ async function connectDB() {
     console.log('Database connection has been established successfully.');
   } catch (error) {
     console.error('Unable to connect to the database:', error);
-    // In a real app, you might want to exit the process here
-    // process.exit(1);
+    // process.exit(1); // Consider re-enabling for production if DB connection is critical at startup
   }
 }
 
-// Call the connection function immediately (optional, but good for testing)
-// connectDB();
+// connectDB(); // Call if you want to test connection immediately on module load
 
-module.exports = sequelize; // Export the configured sequelize instance
+module.exports = sequelize;

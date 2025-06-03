@@ -139,7 +139,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Failed to fetch unread admin tasks count:', error.response?.data?.message || error.message);
     }
   }, [user?.role]); // Add user.role dependency
-  
+
   // Fetch count of new booking requests for owners (placeholder if needed, similar to above)
   const fetchUnreadBookingRequestsCountForOwner = useCallback(async (currentTokenParam) => {
     if (!currentTokenParam || user?.role !== 'owner') return;
@@ -223,14 +223,29 @@ export const AuthProvider = ({ children }) => {
     if (token && user?.id && isSocketEligible) {
       console.log(`User ${user.id} is eligible, attempting to connect socket.`);
       const newSocket = io(SOCKET_URL, {
-        // auth: { token } // More secure way to pass token if backend supports it
+        // MODIFIED: Send token in auth object for server-side verification
+        auth: { token: token }
       });
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
         console.log('Socket connected:', newSocket.id);
-       console.log(`Socket connected with ID: ${newSocket.id}. Emitting 'authenticate_socket' with User ID: ${user.id}, Role: ${user.role}`) // Pass user ID and role for backend mapping and admin room joining
-        newSocket.emit('authenticate_socket', { userId: user.id, role: user.role });
+        // NO LONGER NEEDED: newSocket.emit('authenticate_socket', { userId: user.id, role: user.role });
+        // The server will now handle authentication and room joining based on the token.
+        // We might need a way for the server to confirm successful socket auth back to client if desired.
+      });
+
+      // Optional: Listen for a custom event from server confirming socket authentication
+      newSocket.on('socket_authenticated', (data) => {
+        console.log('Socket successfully authenticated by server:', data);
+        // You could use this for UI feedback or further client-side logic if needed
+      });
+
+      newSocket.on('socket_auth_error', (error) => {
+        console.error('Socket authentication failed:', error.message);
+        // Handle error, e.g., disconnect, show message to user, or attempt re-authentication.
+        // This might indicate an invalid/expired token for the socket.
+        newSocket.disconnect();
       });
 
       newSocket.on('new_message_notification', (data) => {
@@ -248,15 +263,15 @@ export const AuthProvider = ({ children }) => {
       });
 
       // Listener for new booking requests (for owners)
-      newSocket.on('new_booking_request_owner', (data) => { 
+      newSocket.on('new_booking_request_owner', (data) => {
           console.log('AuthContext: Received new_booking_request_owner:', data);
-          if (user && user.role === 'owner' ) { 
+          if (user && user.role === 'owner' ) {
               fetchUnreadBookingRequestsCountForOwner(token);
           }
       });
 
       // Listener for booking status updates (for tenants)
-      newSocket.on('booking_status_update_tenant', (data) => { 
+      newSocket.on('booking_status_update_tenant', (data) => {
         console.log('AuthContext: Received booking_status_update_tenant:', data);
         if (user && user.role === 'tenant' && data.tenantId === user.id) {
           fetchUnreadBookingUpdatesCount(token);
@@ -280,6 +295,8 @@ export const AuthProvider = ({ children }) => {
 
       return () => {
         newSocket.off('connect');
+        newSocket.off('socket_authenticated'); // <--- ADDED
+        newSocket.off('socket_auth_error');   // <--- ADDED
         newSocket.off('new_message_notification');
         newSocket.off('messages_read_update');
         newSocket.off('new_booking_request_owner'); // Specific event name
@@ -318,7 +335,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
 
       // Fetch eligibility and wait for it
-      const eligible = await fetchSocketEligibility(newToken); 
+      const eligible = await fetchSocketEligibility(newToken);
       console.log("Socket eligibility after login:", eligible);
 
 
@@ -415,7 +432,7 @@ export const AuthProvider = ({ children }) => {
     if (!token || user?.role !== 'admin') return;
     fetchUnreadAdminTasksCount(token);
   }, [token, user?.role, fetchUnreadAdminTasksCount]);
-  
+
   // Function for owner to "refresh" booking request count
   const refreshBookingRequestsCountForOwner = useCallback(async () => {
     if (!token || user?.role !== 'owner') return;

@@ -3,38 +3,34 @@ const { Op } = require('sequelize');
 const Booking = require('../models/Booking');
 const Listing = require('../models/Listing');
 const User = require('../models/User');
+const logger = require('../config/logger'); // Import Winston logger
 
-// POST /api/bookings - Tenant creates a new booking request (KEEP THIS)
-exports.createBooking = async (req, res) => {
-    // ... (your existing createBooking function remains unchanged)
+// POST /api/bookings - Tenant creates a new booking request
+exports.createBooking = async (req, res, next) => { // Added 'next'
     const tenantId = req.user.id;
+    // Fields are now validated by createBookingValidationRules middleware
     const { listing_id, start_date, end_date } = req.body;
 
     try {
-        if (!listing_id || !start_date || !end_date) {
-            return res.status(400).json({ message: 'Listing ID, start date, and end date are required.' });
-        }
-        const startDateObj = new Date(start_date);
-        const endDateObj = new Date(end_date);
-        if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
-            return res.status(400).json({ message: 'Invalid date format.' });
-        }
-        if (startDateObj >= endDateObj) {
-            return res.status(400).json({ message: 'End date must be after start date.' });
-        }
-        if (startDateObj < new Date().setHours(0,0,0,0)) {
-            return res.status(400).json({ message: 'Start date cannot be in the past.' });
-        }
+        // Removed: if (!listing_id || !start_date || !end_date)
+        // Removed: if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime()))
+        // Removed: if (startDateObj >= endDateObj)
+        // Removed: if (startDateObj < new Date().setHours(0,0,0,0))
+        const startDateObj = new Date(start_date); // Still need to convert from string to Date object
+        const endDateObj = new Date(end_date);     // Still need to convert
+
         const listing = await Listing.findOne({
             where: { id: listing_id, status: 'active' }
         });
         if (!listing) {
+            logger.warn(`Active listing ${listing_id} not found for booking creation.`);
             return res.status(404).json({ message: 'Active listing not found.' });
         }
-        if (listing.owner_id === tenantId) {
+        if (listing.owner_id === tenantId) { // Business logic check, keep this
+            logger.warn(`User ${tenantId} attempted to book their own listing ${listing_id}.`);
             return res.status(403).json({ message: "You cannot book your own listing." });
         }
-        const existingBooking = await Booking.findOne({
+        const existingBooking = await Booking.findOne({ // Business logic check, keep this
             where: {
                 listing_id: listing_id,
                 status: { [Op.in]: ['pending', 'confirmed'] },
@@ -44,6 +40,7 @@ exports.createBooking = async (req, res) => {
             }
         });
         if (existingBooking) {
+            logger.warn(`Booking conflict for listing ${listing_id} on dates ${start_date}-${end_date}. Existing booking ${existingBooking.id}.`);
             return res.status(409).json({ message: 'The selected dates are not available or overlap with an existing booking.' });
         }
         const newBooking = await Booking.create({
@@ -53,47 +50,44 @@ exports.createBooking = async (req, res) => {
             end_date: endDateObj,
             status: 'pending'
         });
-       // Inside createBooking, after newBooking is created
-  const io = req.app.get('socketio');
-        // Make sure 'listing' variable is populated from your DB query earlier in the function
-        if (io && listing && listing.owner_id) { 
+        const io = req.app.get('socketio');
+        if (io && listing && listing.owner_id) {
             io.to(listing.owner_id.toString()).emit('new_booking_request_owner', {
                 message: `New booking request for your listing '${listing.title}'.`,
                 bookingId: newBooking.id,
                 listingId: listing.id,
                 listingTitle: listing.title,
-                tenantId: tenantId // Good to include
+                tenantId: tenantId
             });
-            console.log(`Emitted 'new_booking_request_owner' to owner ${listing.owner_id} for booking ${newBooking.id}`);
+            logger.info(`Emitted 'new_booking_request_owner' to owner ${listing.owner_id} for booking ${newBooking.id}`);
         }
         res.status(201).json({
             message: 'Booking request submitted successfully. Awaiting owner confirmation.',
             booking: newBooking
         });
     } catch (error) {
-        console.error("Error creating booking:", error);
-        res.status(500).json({ message: "Server error while creating booking." });
+        logger.error("Error creating booking:", { tenantId, body: req.body, error: error.message, stack: error.stack });
+        next(error); // Pass to centralized error handler
     }
 };
 
 // *** NEW FUNCTION: getOwnerBookings ***
-exports.getOwnerBookings = async (req, res) => {
-    const ownerId = req.user.id; // Authenticated owner's ID
+exports.getOwnerBookings = async (req, res, next) => { // Added 'next'
+    const ownerId = req.user.id;
 
     try {
-        // Find all listings owned by the current user
         const ownerListings = await Listing.findAll({
             where: { owner_id: ownerId },
-            attributes: ['id'] // We only need the IDs of their listings
+            attributes: ['id']
         });
 
         if (!ownerListings.length) {
-            return res.status(200).json([]); // Owner has no listings, so no bookings
+            logger.info(`Owner ${ownerId} has no listings, returning empty bookings array.`);
+            return res.status(200).json([]);
         }
 
         const listingIds = ownerListings.map(l => l.id);
 
-        // Find all bookings associated with these listing IDs
         const bookings = await Booking.findAll({
             where: {
                 listing_id: { [Op.in]: listingIds }
@@ -101,65 +95,62 @@ exports.getOwnerBookings = async (req, res) => {
             include: [
                 {
                     model: Listing,
-                    attributes: ['id', 'title', 'location'] // Include some listing details
+                    attributes: ['id', 'title', 'location']
                 },
                 {
-                    model: User, // This is the Tenant User model (Booking.belongsTo(User, { foreignKey: 'tenant_id' }))
-                    attributes: ['id', 'name', 'email'] // Include tenant details
+                    model: User,
+                    attributes: ['id', 'name', 'email']
                 }
             ],
-            order: [['status', 'ASC'], ['created_at', 'DESC']] // Show pending first, then by date
+            order: [['status', 'ASC'], ['created_at', 'DESC']]
         });
 
         res.status(200).json(bookings);
 
     } catch (error) {
-        console.error("Error fetching owner bookings:", error);
-        res.status(500).json({ message: "Server error while fetching owner bookings." });
+        logger.error("Error fetching owner bookings:", { ownerId, error: error.message, stack: error.stack });
+        next(error); // Pass to centralized error handler
     }
 };
 
 // *** NEW FUNCTION: updateBookingStatus ***
-exports.updateBookingStatus = async (req, res) => {
+exports.updateBookingStatus = async (req, res, next) => { // Added 'next'
     const ownerId = req.user.id;
-    const { bookingId } = req.params; // Get bookingId from URL parameter
-    const { status } = req.body; // Expected new status: 'confirmed' or 'rejected'
+    const { bookingId } = req.params;
+    // `status` is validated by updateBookingStatusValidationRules middleware
+    const { status } = req.body;
 
     try {
-        // 1. Validate new status
-        if (!['confirmed', 'rejected'].includes(status)) {
-            return res.status(400).json({ message: "Invalid status. Must be 'confirmed' or 'rejected'." });
-        }
+        // Removed: if (!['confirmed', 'rejected'].includes(status)) is now handled by validators
 
-        // 2. Find the booking and ensure it belongs to a listing owned by the current user
         const booking = await Booking.findByPk(bookingId, {
             include: {
                 model: Listing,
-                attributes: ['owner_id'] // Need owner_id of the listing
+                attributes: ['owner_id', 'title'] // Added title for notification
             }
         });
 
         if (!booking) {
+            logger.warn(`Booking ${bookingId} not found for status update.`);
             return res.status(404).json({ message: "Booking not found." });
         }
 
-        // Check if the authenticated user owns the listing associated with this booking
-        if (!booking.Listing || booking.Listing.owner_id !== ownerId) {
+        if (!booking.Listing || booking.Listing.owner_id !== ownerId) { // Business logic check, keep this
+            logger.warn(`Owner ${ownerId} attempted to update booking ${bookingId} for a listing they don't own (listing owner: ${booking.Listing?.owner_id}).`);
             return res.status(403).json({ message: "Access denied. You do not own the listing for this booking." });
         }
 
-        // 3. Check if the booking is already 'confirmed' or 'rejected' (optional, depends on rules)
-        if (booking.status === 'confirmed' || booking.status === 'rejected') {
+        if (booking.status === 'confirmed' || booking.status === 'rejected') { // Business logic check, keep this
+            logger.warn(`Attempted to change status for booking ${bookingId} which is already ${booking.status}.`);
             return res.status(400).json({ message: `Booking is already ${booking.status}.` });
         }
-        
-        // 4. If confirming, check for conflicts with other *confirmed* bookings
-        if (status === 'confirmed') {
+
+        if (status === 'confirmed') { // Business logic check, keep this
             const conflictingBooking = await Booking.findOne({
                 where: {
-                    id: { [Op.ne]: bookingId }, // Exclude the current booking
+                    id: { [Op.ne]: bookingId },
                     listing_id: booking.listing_id,
-                    status: 'confirmed', // Only check against other *confirmed* bookings
+                    status: 'confirmed',
                     [Op.or]: [
                         { start_date: { [Op.lt]: booking.end_date }, end_date: { [Op.gt]: booking.start_date } },
                     ]
@@ -167,43 +158,45 @@ exports.updateBookingStatus = async (req, res) => {
             });
 
             if (conflictingBooking) {
+                logger.warn(`Cannot confirm booking ${bookingId} due to date conflict with confirmed booking ${conflictingBooking.id} for listing ${booking.listing_id}.`);
                 return res.status(409).json({
                     message: "Cannot confirm booking. Dates conflict with another confirmed booking for this listing."
                 });
             }
         }
 
-  if (status === 'confirmed' || status === 'rejected') {
+        // Set is_update_seen_by_tenant to false for new status changes
+        if (status === 'confirmed' || status === 'rejected') {
             booking.is_update_seen_by_tenant = false;
         }
-        // 5. Update the booking status
+
         booking.status = status;
         await booking.save();
-// Inside updateBookingStatus, after booking.save()
-const io = req.app.get('socketio');
-if (io && booking.tenant_id) {
-    io.to(booking.tenant_id.toString()).emit('booking_status_update_tenant', { // Event name matches AuthContext
-        message: `Booking for '${booking.Listing?.title}' is now ${status}.`, // Simplified
-        bookingId: booking.id,
-        newStatus: status,
-        listingId: booking.listing_id,
-        tenantId: booking.tenant_id // Good to include for client-side checks
-    });
-    console.log(`Emitted 'booking_status_update_tenant' to tenant ${booking.tenant_id} for booking ${booking.id}`);
-}
+
+        const io = req.app.get('socketio');
+        if (io && booking.tenant_id) {
+            io.to(booking.tenant_id.toString()).emit('booking_status_update_tenant', {
+                message: `Booking for '${booking.Listing?.title}' is now ${status}.`,
+                bookingId: booking.id,
+                newStatus: status,
+                listingId: booking.listing_id,
+                tenantId: booking.tenant_id
+            });
+            logger.info(`Emitted 'booking_status_update_tenant' to tenant ${booking.tenant_id} for booking ${booking.id} (status: ${status}).`);
+        }
         res.status(200).json({
             message: `Booking successfully ${status}.`,
             booking: booking
         });
 
     } catch (error) {
-        console.error("Error updating booking status:", error);
-        res.status(500).json({ message: "Server error while updating booking status." });
+        logger.error("Error updating booking status:", { ownerId, bookingId, status, error: error.message, stack: error.stack });
+        next(error); // Pass to centralized error handler
     }
 };
 
-exports.getMyBookings = async (req, res) => {
-    const tenantId = req.user.id; // Authenticated tenant's ID
+exports.getMyBookings = async (req, res, next) => { // Added 'next'
+    const tenantId = req.user.id;
 
     try {
         const bookings = await Booking.findAll({
@@ -211,27 +204,26 @@ exports.getMyBookings = async (req, res) => {
             include: [
                 {
                     model: Listing,
-                    attributes: ['id', 'title', 'location'], // Include some listing details
-                    include: [{ // Include the owner of the listing
+                    attributes: ['id', 'title', 'location'],
+                    include: [{
                         model: User,
-                        as: 'Owner', // Make sure this alias matches your Listing model definition
+                        as: 'Owner',
                         attributes: ['id', 'name', 'email']
                     }]
                 }
-                // No need to include User (tenant) model again as it's the current user
             ],
-            order: [['start_date', 'DESC']] // Show most recent start dates first
+            order: [['start_date', 'DESC']]
         });
 
         res.status(200).json(bookings);
 
     } catch (error) {
-        console.error("Error fetching tenant bookings:", error);
-        res.status(500).json({ message: "Server error while fetching tenant bookings." });
+        logger.error("Error fetching tenant bookings:", { tenantId, error: error.message, stack: error.stack });
+        next(error); // Pass to centralized error handler
     }
 };
 
-exports.getOwnerPendingBookingsCount = async (req, res) => {
+exports.getOwnerPendingBookingsCount = async (req, res, next) => { // Added 'next'
     const ownerId = req.user.id;
     try {
         const ownerListings = await Listing.findAll({
@@ -239,40 +231,11 @@ exports.getOwnerPendingBookingsCount = async (req, res) => {
             attributes: ['id']
         });
         if (!ownerListings.length) {
+            logger.info(`Owner ${ownerId} has no listings, pending booking count is 0.`);
             return res.status(200).json({ pendingCount: 0 });
         }
         const listingIds = ownerListings.map(l => l.id);
 
-        const count = await Booking.count({
-            where: {
-                listing_id: { [Op.in]: listingIds },
-                status: 'pending' // Only count pending ones
-            }
-        });
-        res.status(200).json({ pendingCount: count });
-    } catch (error) {
-        console.error('Error fetching owner pending bookings count:', error);
-        res.status(500).json({ message: 'Server error.' });
-    }
-};
-
-exports.getOwnerPendingBookingsCount = async (req, res) => {
-    const ownerId = req.user.id;
-    try {
-        // Find all listings owned by the current user
-        const ownerListings = await Listing.findAll({
-            where: { owner_id: ownerId },
-            attributes: ['id'] // We only need the IDs of their listings
-        });
-
-        if (!ownerListings.length) {
-            // Owner has no listings, so no pending bookings for them
-            return res.status(200).json({ pendingCount: 0 });
-        }
-
-        const listingIds = ownerListings.map(l => l.id);
-
-        // Count bookings for these listings that are 'pending'
         const count = await Booking.count({
             where: {
                 listing_id: { [Op.in]: listingIds },
@@ -281,7 +244,7 @@ exports.getOwnerPendingBookingsCount = async (req, res) => {
         });
         res.status(200).json({ pendingCount: count });
     } catch (error) {
-        console.error('Error fetching owner pending bookings count:', error);
-        res.status(500).json({ message: 'Server error while fetching pending count.' });
+        logger.error('Error fetching owner pending bookings count:', { ownerId, error: error.message, stack: error.stack });
+        next(error); // Pass to centralized error handler
     }
 };

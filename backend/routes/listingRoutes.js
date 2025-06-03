@@ -7,7 +7,15 @@ const optionalAuthMiddleware = require('../middleware/optionalAuthMiddleware');
 const authMiddleware = require('../middleware/authMiddleware'); // Import the auth middleware
 const upload = require('../config/multerConfig'); // Import the configured multer instance
 const messageController = require('../controllers/messageController');
-const favoriteController = require('../controllers/favoriteController'); 
+const favoriteController = require('../controllers/favoriteController');
+
+// --- IMPORT VALIDATORS ---
+const {
+  createListingValidationRules,
+  updateListingValidationRules,
+  validateListingId, // For routes with :id or :listingId param
+  validate
+} = require('../validators/listingValidators'); // <--- ADDED: Import validators
 
 // --- General GET routes ---
 // Most specific paths first, then paths with parameters.
@@ -30,32 +38,48 @@ router.get(
 router.get(
   '/:id/edit',
   authMiddleware,
+  validateListingId(), // <--- ADDED: Validate the :id param
+  validate,            // <--- ADDED: Apply validation
   listingController.getListingForEdit
 );
+
+// GET a specific listing by ID (public) - Generic route for a single listing
 router.get(
   '/:id',
   optionalAuthMiddleware, // <-- USE THE MIDDLEWARE HERE
+  validateListingId(), // <--- ADDED: Validate the :id param
+  validate,            // <--- ADDED: Apply validation
   listingController.getListingById
 );
-// GET a specific listing by ID (public) - Generic route for a single listing
+
 // --- Routes related to reviews for a specific listing ---
 
 // GET reviews for a specific listing (public)
-router.get('/:listingId/reviews', listingController.getReviewsByListingId);
+router.get(
+  '/:listingId/reviews',
+  validateListingId(), // <--- ADDED: Validate :listingId param
+  validate,            // <--- ADDED: Apply validation
+  listingController.getReviewsByListingId
+);
 
 // POST a new review for a specific listing (requires auth)
 router.post(
   '/:listingId/reviews',
   authMiddleware,
+  validateListingId(), // <--- ADDED: Validate :listingId param
+  validate,            // <--- ADDED: Apply validation (add specific review validation if needed)
   listingController.createReview
 );
 
 // --- Routes related to messages for a specific listing ---
+// Note: These paths are tied to a specific listing. MessageController also has /chats routes.
 
 // GET messages for a specific listing (requires auth)
 router.get(
   '/:listingId/messages',
   authMiddleware,
+  validateListingId(), // <--- ADDED: Validate :listingId param
+  validate,            // <--- ADDED: Apply validation
   messageController.getMessagesByListingId
 );
 
@@ -63,12 +87,16 @@ router.get(
 router.post(
   '/:listingId/messages',
   authMiddleware,
+  validateListingId(), // <--- ADDED: Validate :listingId param
+  validate,            // <--- ADDED: Apply validation (add message content validation if needed)
   messageController.createMessage
 );
 
 // --- Route to get booked dates for a listing ---
 router.get(
     '/:listingId/booked-dates',
+    validateListingId(), // <--- ADDED: Validate :listingId param
+    validate,            // <--- ADDED: Apply validation
     listingController.getListingBookedDates
 );
 
@@ -80,6 +108,8 @@ router.post(
   '/',
   authMiddleware,
   upload.array('photos', 10), // Expecting multiple files named 'photos'
+  createListingValidationRules(), // <--- ADDED: Apply validation rules for creation
+  validate,                       // <--- ADDED: Apply validation
   listingController.createListing
 );
 
@@ -88,6 +118,8 @@ router.put(
   '/:id',
   authMiddleware,
   upload.array('photos', 10), // Expecting *new* files named 'photos' for update
+  updateListingValidationRules(), // <--- ADDED: Apply validation rules for update
+  validate,                       // <--- ADDED: Apply validation
   listingController.updateListing
 );
 
@@ -95,9 +127,27 @@ router.put(
 router.delete(
   '/:id',
   authMiddleware,
+  validateListingId(), // <--- ADDED: Validate the :id param
+  validate,            // <--- ADDED: Apply validation
   listingController.deleteListing
 );
-router.post('/:listingId/favorite', authMiddleware, favoriteController.addFavorite);
+
+// Add/Remove favorite for a listing (requires auth)
+// Note: These paths are tied to a specific listing. FavoriteController also has /users/me/favorites routes.
+router.post(
+  '/:listingId/favorite',
+  authMiddleware,
+  validateListingId(), // <--- ADDED: Validate :listingId param
+  validate,            // <--- ADDED: Apply validation
+  favoriteController.addFavorite
+);
 // Remove a listing from favorites
-router.delete('/:listingId/favorite', authMiddleware, favoriteController.removeFavorite);
+router.delete(
+  '/:listingId/favorite',
+  authMiddleware,
+  validateListingId(), // <--- ADDED: Validate :listingId param
+  validate,            // <--- ADDED: Apply validation
+  favoriteController.removeFavorite
+);
+
 module.exports = router;

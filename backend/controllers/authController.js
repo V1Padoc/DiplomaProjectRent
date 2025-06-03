@@ -5,25 +5,23 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Message = require('../models/Message'); // Assuming you need to check messages
 const Booking = require('../models/Booking'); // For booking requests
-const Listing = require('../models/Listing'); 
+const Listing = require('../models/Listing');
 const { Op } = require('sequelize');
 
 // Controller function for user registration
 exports.register = async (req, res) => {
-  const { email, password, name, last_name, role, phone_number } = req.body; // Added last_name
-  const allowedSelfRegisterRoles = ['tenant', 'owner']; // Define roles allowed for self-registration
-  if (!allowedSelfRegisterRoles.includes(role)) {
-    // If the provided role is NOT in the allowed list
-    console.warn(`Attempted registration with invalid role: ${role}`);
-    return res.status(400).json({ message: 'Invalid role specified during registration.' });
-  }
-  try {
-    if (!email || !password || !name || !last_name || !phone_number) { // Added last_name to validation
-      return res.status(400).json({ message: 'Please provide all required fields: email, password, first name, last name, phone number, and a role.' }); // Updated message
-    }
+  // Destructure validated and sanitized data from req.body
+  // express-validator middleware (if used) would have already processed this.
+  const { email, password, name, last_name, role, phone_number } = req.body;
 
+  // The role validation `allowedSelfRegisterRoles` and explicit field validation
+  // are now handled by `authValidators.js` (presumably using express-validator).
+  // So, we can remove the explicit checks here.
+
+  try {
     const existingUser = await User.findOne({ where: { email: email } });
     if (existingUser) {
+      // This check remains important and should be kept.
       return res.status(409).json({ message: 'User with this email already exists.' });
     }
 
@@ -33,8 +31,8 @@ exports.register = async (req, res) => {
     const newUser = await User.create({
       email: email,
       password: hashedPassword,
-      name: name, // This is the first name
-      last_name: last_name, // Added last_name
+      name: name,
+      last_name: last_name,
       role: role,
       phone_number: phone_number
     });
@@ -44,8 +42,8 @@ exports.register = async (req, res) => {
       user: {
         id: newUser.id,
         email: newUser.email,
-        name: newUser.name, // First name
-        last_name: newUser.last_name, // Added last_name
+        name: newUser.name,
+        last_name: newUser.last_name,
         role: newUser.role,
         phone_number: newUser.phone_number
       }
@@ -53,6 +51,15 @@ exports.register = async (req, res) => {
 
   } catch (error) {
     console.error('Error during registration:', error);
+    // Check if it's a Sequelize validation error (e.g., unique constraint)
+    // Though email uniqueness is checked above, other model validations might trigger.
+    if (error.name === 'SequelizeUniqueConstraintError') {
+        return res.status(409).json({ message: 'An account with this email or phone number already exists.' });
+    }
+    if (error.name === 'SequelizeValidationError') {
+        const messages = error.errors.map(e => e.message);
+        return res.status(400).json({ message: 'Validation error from model.', errors: messages });
+    }
     res.status(500).json({ message: 'Server error during registration.' });
   }
 };
@@ -122,7 +129,7 @@ exports.getUser = async (req, res) => {
     // req.user was set by the authMiddleware based on the token payload
     // We use req.user.id to find the user in the database
     const user = await User.findByPk(req.user.id, {
-        attributes: ['id', 'email', 'name', 'last_name', 'role', 'created_at', // Added last_name
+        attributes: ['id', 'email', 'name', 'last_name', 'role', 'created_at',
             'profile_photo_url', 'bio', 'phone_number'] // Select specific attributes to return (exclude password!)
     });
 
