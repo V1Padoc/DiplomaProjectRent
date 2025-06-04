@@ -32,21 +32,21 @@ exports.getMessagesByListingId = async (req, res) => {
             { sender_id: otherUserId, receiver_id: currentUserId }
         ];
     } else if (currentUserId !== listing.owner_id) {
-        // Case 2: Current user is NOT the owner (i.e., a tenant/buyer).
-        // Fetch messages between this tenant (currentUserId) and the owner (listing.owner_id).
+        // Case 2: Current user is NOT the owner (i.e., a tenant/buyer/admin).
+        // Fetch messages between this user (currentUserId) and the owner (listing.owner_id),
+        // OR, if otherUserId is provided (e.g. admin chatting with owner), use that.
+        // The crucial part for admin-owner chat is that `otherUserId` in the query params
+        // should be the admin if the owner is viewing, or the owner if the admin is viewing.
+        // The current logic handles this correctly by ensuring the chat is between currentUserId and listing.owner_id
+        // OR currentUserId and a specific otherUserId if currentUserId is the owner.
+        // For admin (currentUserId) chatting with owner (otherUserId = listing.owner_id), this will be:
+        const partnerIdForChat = otherUserId || listing.owner_id; // Ensure we have a partner
         queryConditions[Op.or] = [
-            { sender_id: currentUserId, receiver_id: listing.owner_id },
-            { sender_id: listing.owner_id, receiver_id: currentUserId }
+            { sender_id: currentUserId, receiver_id: partnerIdForChat },
+            { sender_id: partnerIdForChat, receiver_id: currentUserId }
         ];
     } else {
         // Case 3: Current user IS the owner, but NO specific 'otherUserId' is provided.
-        // This scenario is ambiguous for a direct chat page.
-        // "My Chats" list handles discovery. If owner lands here without 'otherUserId',
-        // it implies they aren't in a specific conversation context from "My Chats".
-        // Option 1: Return empty (as no specific conversation is targeted by owner).
-        // Option 2: Return all messages for this listing where owner is involved (could be many conversations). This is too broad for a single chat page.
-        // Let's go with Option 1 for clarity on a 1-on-1 chat page.
-        // MyChatsPage will pass otherUserId. ListingDetail page will implicitly mean chat with owner.
         console.log(`Owner (ID: ${currentUserId}) accessing chat for listing ${listingId} without specifying other participant.`);
         return res.status(200).json([]); // No specific chat thread targeted by owner
     }
@@ -55,23 +55,24 @@ exports.getMessagesByListingId = async (req, res) => {
       where: queryConditions,
       order: [['created_at', 'ASC']],
       include: [
-         { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED profile_photo_url
-         { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED profile_photo_url
+         { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] },
+         { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] }
        ],
-       attributes: { include: ['is_read'] } // Ensure is_read is included
+       attributes: { include: ['is_read'] }
     });
     res.status(200).json(messages);
 
   } catch (error) {
-    console.error('Error fetching messages:', error);
+    console.log('Error fetching messages:', error);
     res.status(500).json({ message: 'Server error while fetching messages.' });
   }
 };
 
-// Keep createMessage as is. It already correctly uses receiver_id from the body if provided.
+// *** MODIFIED FUNCTION: createMessage ***
 exports.createMessage = async (req, res) => {
-  const senderId = req.user.id;
-  const { listing_id, content, receiver_id: bodyReceiverId } = req.body; // Renamed to avoid conflict
+  const senderId = req.user.id; // Authenticated user (could be admin, owner, or tenant)
+  // const senderRole = req.user.role; // Available if your authMiddleware adds role to req.user
+  const { listing_id, content, receiver_id: bodyReceiverId } = req.body;
 
   try {
     if (!listing_id || !content) {
@@ -89,17 +90,30 @@ exports.createMessage = async (req, res) => {
     let actualReceiverId;
 
     if (senderId === listing.owner_id) {
-         // Owner is sending. Frontend MUST provide the specific receiver_id (tenant ID).
+         // Case 1: Owner is sending. Frontend MUST provide the specific receiver_id (tenant ID).
          if (!bodyReceiverId) {
              return res.status(400).json({ message: 'Receiver ID is required when the owner sends a message.' });
          }
          actualReceiverId = bodyReceiverId;
     } else {
-        // Non-owner (tenant) is sending. Receiver is always the listing owner.
-        actualReceiverId = listing.owner_id;
+        // Case 2: Sender is NOT the owner (could be a tenant sending to owner, or an admin sending to owner).
+        if (bodyReceiverId) {
+            // If a specific receiver_id is provided in the request body (e.g., an admin explicitly sending to the listing owner), use it.
+            actualReceiverId = bodyReceiverId;
+        } else {
+            // If no specific receiver_id is provided by a non-owner,
+            // assume it's a tenant messaging the listing owner by default.
+            actualReceiverId = listing.owner_id;
+        }
     }
 
-     if (senderId === actualReceiverId) { // Ensure it's parsed as number if necessary
+     // Final check: Ensure the receiver is a valid user (exists)
+     const receiverUser = await User.findByPk(actualReceiverId);
+     if (!receiverUser) {
+         return res.status(404).json({ message: 'Receiver not found.' });
+     }
+
+     if (senderId === parseInt(actualReceiverId, 10)) { // Ensure actualReceiverId is number for comparison
          return res.status(400).json({ message: 'Cannot send message to yourself.' });
      }
 
@@ -107,21 +121,22 @@ exports.createMessage = async (req, res) => {
       listing_id: listing_id,
       sender_id: senderId,
       receiver_id: actualReceiverId, // Use the determined receiver ID
-      content: content
+      content: content,
+      // is_read will default to false, which is correct
     });
 
     const messageWithUsers = await Message.findByPk(newMessage.id, {
         include: [
-            { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED
-            { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED
+            { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url', 'role'] }, // Added role
+            { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url', 'role'] } // Added role
         ]
     });
 
     const io = req.app.get('socketio'); // Get io instance
     if (io) {
-        console.log(`Emitting 'new_message_notification' to room: ${actualReceiverId.toString()}`)
+        // Notify the actual receiver
         io.to(actualReceiverId.toString()).emit('new_message_notification', {
-            message: messageWithUsers, // Send the full message object
+            message: messageWithUsers,
             listingId: listing_id,
             senderId: senderId,
         });
@@ -131,14 +146,13 @@ exports.createMessage = async (req, res) => {
             listingId: listing_id,
             receiverId: actualReceiverId,
         });
-         console.log(`Emitting 'message_sent_confirmation' to room: ${senderId.toString()}`)
     } else {
       console.warn("Socket.IO instance not available. Real-time events not emitted for new message.");
     }
 
     res.status(201).json({
       message: 'Message sent successfully!',
-      newMessage: messageWithUsers // Use 'newMessage' key for clarity
+      newMessage: messageWithUsers
     });
   } catch (error) {
     console.error('Error creating message:', error);
@@ -164,10 +178,10 @@ exports.getMyChats = async (req, res) => {
                     model: Listing, 
                     attributes: ['id', 'title', 'owner_id'],
                 },
-               { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url'] }, // ADDED
-                { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url'] } // ADDED
+               { model: User, as: 'Sender', attributes: ['id', 'name', 'email', 'profile_photo_url', 'role'] }, // Added role
+                { model: User, as: 'Receiver', attributes: ['id', 'name', 'email', 'profile_photo_url', 'role'] } // Added role
             ],
-            order: [['created_at', 'DESC']] // Changed to 'created_at' and descending order
+            order: [['created_at', 'DESC']]
         });
 
         if (!allUserMessages || allUserMessages.length === 0) {
@@ -176,25 +190,23 @@ exports.getMyChats = async (req, res) => {
 
         const conversationsMap = new Map();
 
-        // Use for...of loop to correctly await inside the loop
         for (const message of allUserMessages) {
             const otherUser = message.sender_id === userId ? message.Receiver : message.Sender;
             const listing = message.Listing;
 
             if (!otherUser || !listing) {
                 console.warn(`Message ID ${message.id} is missing related User or Listing data. Skipping.`);
-                continue; // Use continue for for...of loop
+                continue; 
             }
             const conversationKey = `${listing.id}-${otherUser.id}`;
 
             if (!conversationsMap.has(conversationKey)) {
-                // Calculate unread count for current user for this specific conversation
                 const unreadCountForCurrentUser = await Message.count({
                     where: {
                         listing_id: listing.id,
-                        sender_id: otherUser.id, // Messages sent by the other participant
-                        receiver_id: userId,     // And received by the current user
-                        is_read: false           // And are unread
+                        sender_id: otherUser.id, 
+                        receiver_id: userId,     
+                        is_read: false          
                     }
                 });
 
@@ -206,32 +218,33 @@ exports.getMyChats = async (req, res) => {
                         id: otherUser.id,
                         name: otherUser.name,
                         email: otherUser.email,
-                        profile_photo_url: otherUser.profile_photo_url // ADDED
+                        profile_photo_url: otherUser.profile_photo_url,
+                        role: otherUser.role // Added role
                     },
                     lastMessage: {
-                        id: message.id, // Good to have message ID
+                        id: message.id,
                         content: message.content,
-                        timestamp: message.created_at, // Use created_at from model
+                        timestamp: message.created_at,
                         senderId: message.sender_id, 
-                        isReadByReceiver: message.receiver_id === userId ? message.is_read : (message.sender_id === userId ? true : null) // is_read relevant if current user is receiver
+                        isReadByReceiver: message.receiver_id === userId ? message.is_read : (message.sender_id === userId ? true : null)
                     },
-                    unreadCountForCurrentUser // <-- ADDED
+                    unreadCountForCurrentUser
                 });
             }
         }
 
         const conversations = Array.from(conversationsMap.values());
-        // Sort by last message timestamp (already handled by initial query order, but re-sort for safety)
         conversations.sort((a, b) => new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp));
 
         res.status(200).json(conversations);
 
     } catch (error) {
-        console.error('Error fetching user chats:', error);
+        console.log('Error fetching user chats:', error);
         res.status(500).json({ message: 'Server error while fetching chats.' });
     }
 };
 
+// Keep getTotalUnreadCount as is.
 exports.getTotalUnreadCount = async (req, res) => {
     const userId = req.user.id;
     try {
@@ -243,14 +256,14 @@ exports.getTotalUnreadCount = async (req, res) => {
         });
         res.status(200).json({ unreadCount: count });
     } catch (error) {
-        console.error('Error fetching total unread message count:', error);
+        console.log('Error fetching total unread message count:', error);
         res.status(500).json({ message: 'Server error while fetching unread count.' });
     }
 };
 
+// Keep markMessagesAsRead as is.
 exports.markMessagesAsRead = async (req, res) => {
     const currentUserId = req.user.id;
-    // chatPartnerId is the ID of the user who sent the messages to the current user
     const { listingId, chatPartnerId } = req.body;
 
     if (!listingId || !chatPartnerId) {
@@ -265,19 +278,17 @@ exports.markMessagesAsRead = async (req, res) => {
                     listing_id: listingId,
                     receiver_id: currentUserId,
                     sender_id: chatPartnerId,
-                    is_read: false // Only mark unread messages as read
+                    is_read: false 
                 }
             }
         );
-        // Optionally, emit an event if other clients of the same user need to know
          const io = req.app.get('socketio');
          if (io) {
              io.to(currentUserId.toString()).emit('messages_read_update', {
                  listingId,
                  chatPartnerId,
-                 updatedCount // Number of messages actually marked as read
+                 updatedCount
              });
-             // Also notify the chat partner that their messages have been read
              io.to(chatPartnerId.toString()).emit('partner_messages_read', {
                  listingId,
                  readerId: currentUserId
@@ -286,7 +297,7 @@ exports.markMessagesAsRead = async (req, res) => {
 
         res.status(200).json({ message: `${updatedCount} messages marked as read.`, count: updatedCount });
     } catch (error) {
-        console.error('Error marking messages as read:', error);
+        console.log('Error marking messages as read:', error);
         res.status(500).json({ message: 'Server error while marking messages as read.' });
     }
 };

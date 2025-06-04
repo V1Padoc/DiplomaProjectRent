@@ -4,23 +4,22 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
 function ProfilePage() {
-  const { user, loading: authLoading, token, login } = useAuth(); // Get login to refresh user data contextually
+  const { user, loading: authLoading, token, login } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: '', // This will be First Name
-    last_name: '', // Added Last Name
+    name: '',
+    last_name: '',
     bio: '',
     phone_number: '',
   });
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const [previewPhoto, setPreviewPhoto] = useState(null);
   
-  const [submitting, setSubmitting] = useState(false); // For general profile update
-  const [error, setError] = useState(''); // For general profile update
-  const [success, setSuccess] = useState(''); // For general profile update
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // State for password change form
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -35,11 +34,17 @@ function ProfilePage() {
     if (user) {
       setFormData({
         name: user.name || '',
-        last_name: user.last_name || '', // Initialize last_name
+        last_name: user.last_name || '',
         bio: user.bio || '',
         phone_number: user.phone_number || '',
       });
-      setPreviewPhoto(user.profile_photo_url ? `http://localhost:5000/uploads/profiles/${user.profile_photo_url}` : null);
+      if (user.profile_photo_url) {
+        // Ensure the URL is constructed correctly if profile_photo_url is just a filename
+        const filename = user.profile_photo_url.split('/').pop();
+        setPreviewPhoto(`http://localhost:5000/uploads/profiles/${filename}`);
+      } else {
+        setPreviewPhoto(null);
+      }
     }
   }, [user]);
 
@@ -51,21 +56,18 @@ function ProfilePage() {
     const file = e.target.files[0];
     if (file) {
       setProfilePhotoFile(file);
-      setPreviewPhoto(URL.createObjectURL(file)); // Show preview of new image
+      setPreviewPhoto(URL.createObjectURL(file));
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    setError('');
-    setSuccess('');
-    setPasswordError(''); // Clear password errors
-    setPasswordSuccess(''); // Clear password successes
+    setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess('');
 
     const data = new FormData();
-    data.append('name', formData.name); // First Name
-    data.append('last_name', formData.last_name); // Last Name
+    data.append('name', formData.name);
+    data.append('last_name', formData.last_name);
     data.append('bio', formData.bio);
     data.append('phone_number', formData.phone_number);
     if (profilePhotoFile) {
@@ -79,16 +81,15 @@ function ProfilePage() {
           'Content-Type': 'multipart/form-data',
         },
       });
-      setSuccess(response.data.message);
-      // Re-login to refresh user data in AuthContext
-      if (token) {
-          login(token); 
-      }
+      setSuccess(response.data.message || "Profile updated successfully!");
+      if (token) { login(token); }
       setIsEditing(false);
-      setProfilePhotoFile(null); // Clear selected file after upload
+      setProfilePhotoFile(null);
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update profile.');
       console.error("Profile update error:", err);
+      setTimeout(() => setError(''), 3000);
     } finally {
       setSubmitting(false);
     }
@@ -97,256 +98,218 @@ function ProfilePage() {
   const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
     setPasswordSubmitting(true);
-    setPasswordError('');
-    setPasswordSuccess('');
-    setError(''); // Clear general errors
-    setSuccess(''); // Clear general successes
+    setPasswordError(''); setPasswordSuccess(''); setError(''); setSuccess('');
 
     if (newPassword !== confirmNewPassword) {
         setPasswordError('New password and confirmation do not match.');
-        setPasswordSubmitting(false);
-        return;
+        setPasswordSubmitting(false); return;
     }
-    if (newPassword.length < 6) { // Example: minimum password length
+    if (newPassword.length < 6) {
         setPasswordError('New password must be at least 6 characters long.');
-        setPasswordSubmitting(false);
-        return;
+        setPasswordSubmitting(false); return;
     }
 
     try {
-        // *** FIXED: Added confirmNewPassword to the payload ***
         const response = await axios.post('http://localhost:5000/api/users/change-password', 
             { oldPassword, newPassword, confirmNewPassword }, 
             { headers: { Authorization: `Bearer ${token}` } }
         );
-        setPasswordSuccess(response.data.message);
-        // Clear password fields on success
-        setOldPassword('');
-        setNewPassword('');
-        setConfirmNewPassword('');
-        // setShowPasswordForm(false); // Optionally hide form on success, but success message is good
+        setPasswordSuccess(response.data.message || "Password changed successfully!");
+        setOldPassword(''); setNewPassword(''); setConfirmNewPassword('');
+        setTimeout(() => {
+            setPasswordSuccess('');
+            // setShowPasswordForm(false); // Optionally hide after success
+        }, 3000);
     } catch (err) {
         console.error("Password change error:", err);
         setPasswordError(err.response?.data?.message || 'Failed to change password.');
+        setTimeout(() => setPasswordError(''), 3000);
     } finally {
         setPasswordSubmitting(false);
     }
-};
+  };
+
+  const getUiAvatarUrl = (name, lastName) => {
+    const initials = `${name ? name.charAt(0) : ''}${lastName ? lastName.charAt(0) : ''}` || (user?.email ? user.email.charAt(0) : 'U');
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=128&font-size=0.5&bold=true`;
+  };
+
 
   if (authLoading) {
-    return <div className="container mx-auto px-4 py-8 text-center">Loading profile...</div>;
+    return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading...</div>;
   }
   if (!user) {
-    return <div className="container mx-auto px-4 py-8 text-center">User data not available. Please log in.</div>;
+    return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Please log in to view your profile.</div>;
   }
 
-  // Define a display name for the profile title or avatar fallback
-  const displayName = user.name ? `${user.name}${user.last_name ? ' ' + user.last_name : ''}` : user.email || 'User';
+  const displayName = `${user.name || ''}${user.last_name ? ' ' + user.last_name : ''}`.trim() || user.email;
+  const joinedDate = user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+
 
   return (
-    <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
-      <div className="max-w-2xl mx-auto bg-white p-8 rounded-sm shadow-md">
-        <h1 className="text-3xl font-bold mb-6 text-gray-800 text-center">User Profile</h1>
-
-        {error && <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">{error}</div>}
-        {success && <div className="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded" role="alert">{success}</div>}
-
-        <div className="text-center mb-6">
-          <img
-            // Updated fallback to use user.name or user.email for avatar generation
-            src={previewPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'U')}&background=random&size=128`} 
-            alt="Profile"
-            className="w-32 h-32 rounded-full mx-auto object-cover border-2 border-gray-300"
-          />
-          {isEditing && (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current && fileInputRef.current.click()}
-              className="mt-2 text-sm text-blue-600 hover:underline"
-            >
-              Change Photo
-            </button>
-          )}
-        </div>
-
-        {!isEditing && !showPasswordForm ? ( // Only show profile details and buttons if neither form is active
-          <>
-            <div className="mb-4">
-              <strong className="block text-gray-700">First Name:</strong>
-              <p className="text-gray-800">{user.name || 'Not set'}</p>
-            </div>
-            {/* Added Last Name display field */}
-            <div className="mb-4">
-              <strong className="block text-gray-700">Last Name:</strong>
-              <p className="text-gray-800">{user.last_name || 'Not set'}</p>
-            </div>
-            <div className="mb-4">
-              <strong className="block text-gray-700">Email:</strong>
-              <p className="text-gray-800">{user.email}</p>
-            </div>
-            <div className="mb-4">
-              <strong className="block text-gray-700">Role:</strong>
-              <p className="text-gray-800 capitalize">{user.role}</p>
-            </div>
-            <div className="mb-4">
-              <strong className="block text-gray-700">Bio:</strong>
-              <p className="text-gray-800 whitespace-pre-wrap">{user.bio || 'Not set'}</p>
-            </div>
-            <div className="mb-4">
-              <strong className="block text-gray-700">Phone:</strong>
-              <p className="text-gray-800">{user.phone_number || 'Not set'}</p>
-            </div>
-            <button
-              onClick={() => {
-                setIsEditing(true);
-                setShowPasswordForm(false); // Hide password form if it was showing
-                setError(''); 
-                setSuccess('');
-                setPasswordError(''); 
-                setPasswordSuccess('');
-              }}
-              className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline"
-            >
-              Edit Profile
-            </button>
-            <button
-                onClick={() => {
-                    setShowPasswordForm(true);
-                    setIsEditing(false); // Hide general edit form
-                    setError(''); 
-                    setSuccess('');
-                    setPasswordError(''); 
-                    setPasswordSuccess('');
-                }}
-                className="mt-4 w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline"
-            >
-                Change Password
-            </button>
-          </>
-        ) : isEditing ? ( // Show general edit form if isEditing
-          <form onSubmit={handleSubmit}>
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">First Name</label>
-              <input
-                type="text" name="name" id="name" value={formData.name} onChange={handleInputChange}
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" 
-                placeholder="First Name" // Added placeholder
+    <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
+      <div className="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
+        <div className="layout-content-container flex flex-col max-w-3xl w-full flex-1 bg-white shadow-xl rounded-lg p-6 md:p-8">
+          
+          {/* Profile Header Section */}
+          <div className="flex flex-col items-center gap-4 mb-8">
+            <div className="relative">
+              <img
+                src={previewPhoto || getUiAvatarUrl(user.name, user.last_name)}
+                alt="Profile"
+                className="bg-center bg-no-repeat aspect-square bg-cover rounded-full min-h-32 w-32 border-4 border-slate-200"
               />
+              {isEditing && (
+                 <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute -bottom-2 -right-2 bg-slate-600 hover:bg-slate-700 text-white p-2 rounded-full shadow-md transition-colors"
+                    aria-label="Change profile photo"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                      <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+              )}
             </div>
-            {/* Added Last Name input field */}
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="last_name">Last Name</label>
-              <input
-                type="text" name="last_name" id="last_name" value={formData.last_name} onChange={handleInputChange}
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
-                placeholder="Last Name" // Added placeholder
-              />
+            <div className="flex flex-col items-center justify-center text-center">
+              <p className="text-[#0d151c] text-2xl font-bold leading-tight tracking-tight">{displayName}</p>
+              <p className="text-[#49749c] text-base font-normal leading-normal capitalize">{user.role}</p>
+              <p className="text-[#49749c] text-sm font-normal leading-normal">Joined on {joinedDate}</p>
             </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="bio">Bio</label>
-              <textarea
-                name="bio" id="bio" value={formData.bio} onChange={handleInputChange} rows="4"
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
-              ></textarea>
-            </div>
-           <div className="mb-6">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">Phone Number</label>
-              <input
-                type="tel" name="phone_number" id="phone_number" value={formData.phone_number} onChange={handleInputChange}
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
-                required // *** ADDED: Make required ***
-              />
-            </div>
-            <div className="flex items-center justify-between">
+            {!isEditing && !showPasswordForm && (
               <button
-                type="submit"
-                disabled={submitting}
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline disabled:opacity-50"
+                onClick={() => { setIsEditing(true); setShowPasswordForm(false); setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess('');}}
+                className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-[#e7edf4] text-[#0d151c] text-sm font-bold leading-normal tracking-[0.015em] w-full max-w-xs sm:w-auto hover:bg-slate-200 transition-colors"
               >
-                {submitting ? 'Saving...' : 'Save Changes'}
+                <span className="truncate">Edit Profile</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                    setIsEditing(false);
-                    // Reset form data and preview to original user data if canceling
-                    if (user) {
-                        setFormData({ 
-                            name: user.name || '', 
-                            last_name: user.last_name || '', // Reset last_name
-                            bio: user.bio || '', 
-                            phone_number: user.phone_number || '' 
-                        });
-                        setPreviewPhoto(user.profile_photo_url ? `http://localhost:5000/uploads/profiles/${user.profile_photo_url}` : null);
-                        setProfilePhotoFile(null);
-                    }
-                    setError(''); 
-                    setSuccess('');
-                }}
-                className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : ( // Show password change form if showPasswordForm
-            <form onSubmit={handleChangePasswordSubmit} className="mt-6 pt-6 border-t border-gray-200">
-                <h2 className="text-xl font-semibold mb-4 text-gray-800">Change Password</h2>
-                {passwordError && <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">{passwordError}</div>}
-                {passwordSuccess && <div className="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded" role="alert">{passwordSuccess}</div>}
-                
-                <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="oldPassword">Old Password</label>
-                    <input
-                        type="password" name="oldPassword" id="oldPassword" value={oldPassword}
-                        onChange={(e) => setOldPassword(e.target.value)}
-                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" required
-                    />
+            )}
+          </div>
+
+          {/* Messages Area */}
+          {error && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Error</p><p>{error}</p></div>}
+          {success && <div className="mb-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Success</p><p>{success}</p></div>}
+          {passwordError && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Password Error</p><p>{passwordError}</p></div>}
+          {passwordSuccess && <div className="mb-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Success</p><p>{passwordSuccess}</p></div>}
+
+
+          {/* View Profile Information or Edit Form */}
+          {!isEditing && !showPasswordForm ? (
+            <>
+              <h2 className="text-[#0d151c] text-xl font-bold leading-tight tracking-tight mb-4">Profile Information</h2>
+              <div className="space-y-5">
+                <div className="grid grid-cols-[_minmax(80px,25%)_1fr] items-center py-3 border-t border-t-[#cedce8]">
+                  <p className="text-[#49749c] text-sm font-normal">Email</p>
+                  <p className="text-[#0d151c] text-sm font-normal break-words">{user.email}</p>
                 </div>
-                <div className="mb-4">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPassword">New Password</label>
-                    <input
-                        type="password" name="newPassword" id="newPassword" value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" required
-                    />
+                <div className="grid grid-cols-[_minmax(80px,25%)_1fr] items-center py-3 border-t border-t-[#cedce8]">
+                  <p className="text-[#49749c] text-sm font-normal">Phone</p>
+                  <p className="text-[#0d151c] text-sm font-normal">{user.phone_number || 'Not set'}</p>
                 </div>
-                <div className="mb-6">
-                    <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="confirmNewPassword">Confirm New Password</label>
-                    <input
-                        type="password" name="confirmNewPassword" id="confirmNewPassword" value={confirmNewPassword}
-                        onChange={(e) => setConfirmNewPassword(e.target.value)}
-                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700" required
-                    />
+                <div className="grid grid-cols-[_minmax(80px,25%)_1fr] items-start py-3 border-t border-t-[#cedce8]">
+                  <p className="text-[#49749c] text-sm font-normal mt-0.5">Bio</p>
+                  <p className="text-[#0d151c] text-sm font-normal whitespace-pre-wrap break-words">{user.bio || 'Not set'}</p>
                 </div>
-                <div className="flex items-center justify-between">
-                    <button
-                        type="submit"
-                        disabled={passwordSubmitting}
-                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline disabled:opacity-50"
-                    >
-                        {passwordSubmitting ? 'Changing...' : 'Update Password'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setShowPasswordForm(false);
-                            setOldPassword('');
-                            setNewPassword('');
-                            setConfirmNewPassword('');
-                            setPasswordError('');
-                            setPasswordSuccess('');
-                        }}
-                        className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline"
-                    >
-                        Cancel
-                    </button>
+              </div>
+              <div className="mt-8">
+                <button
+                  onClick={() => { setShowPasswordForm(true); setIsEditing(false); setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess('');}}
+                  className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-[#e7edf4] text-[#0d151c] text-sm font-bold leading-normal tracking-[0.015em] w-full max-w-xs sm:w-auto hover:bg-slate-200 transition-colors"
+                >
+                  <span className="truncate">Change Password</span>
+                </button>
+              </div>
+            </>
+          ) : isEditing ? (
+            <form onSubmit={handleSubmit}>
+              <h2 className="text-[#0d151c] text-xl font-bold leading-tight tracking-tight mb-6">Edit Profile Information</h2>
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+              
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="name">First Name</label>
+                  <input type="text" name="name" id="name" value={formData.name} onChange={handleInputChange}
+                    className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-blue-500 text-sm text-[#0d151c]" placeholder="Enter first name"/>
+                </div>
+                <div>
+                  <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="last_name">Last Name</label>
+                  <input type="text" name="last_name" id="last_name" value={formData.last_name} onChange={handleInputChange}
+                    className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-blue-500 text-sm text-[#0d151c]" placeholder="Enter last name"/>
+                </div>
+                <div>
+                  <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="bio">Bio</label>
+                  <textarea name="bio" id="bio" value={formData.bio} onChange={handleInputChange} rows="4"
+                    className="form-textarea w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-blue-500 text-sm text-[#0d151c]" placeholder="Tell us about yourself..."></textarea>
+                </div>
+                <div>
+                  <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="phone_number">Phone Number</label>
+                  <input type="tel" name="phone_number" id="phone_number" value={formData.phone_number} onChange={handleInputChange}
+                    className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-blue-500 text-sm text-[#0d151c]" placeholder="e.g., +1-555-123-4567" required/>
+                </div>
+              </div>
+              <div className="mt-8 flex flex-col sm:flex-row sm:justify-end gap-3">
+                <button type="button"
+                  onClick={() => {
+                      setIsEditing(false);
+                      if (user) {
+                          setFormData({ name: user.name || '', last_name: user.last_name || '', bio: user.bio || '', phone_number: user.phone_number || '' });
+                          setPreviewPhoto(user.profile_photo_url ? `http://localhost:5000/uploads/profiles/${user.profile_photo_url.split('/').pop()}` : null);
+                          setProfilePhotoFile(null);
+                      }
+                      setError(''); setSuccess('');
+                  }}
+                  className="order-2 sm:order-1 flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-slate-200 hover:bg-slate-300 text-[#0d151c] text-sm font-bold transition-colors"
+                > Cancel </button>
+                <button type="submit" disabled={submitting}
+                  className="order-1 sm:order-2 flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors disabled:opacity-70"
+                > {submitting ? 'Saving...' : 'Save Changes'} </button>
+              </div>
+            </form>
+          ) : ( // showPasswordForm is true
+            <form onSubmit={handleChangePasswordSubmit}>
+                <h2 className="text-[#0d151c] text-xl font-bold leading-tight tracking-tight mb-6">Change Password</h2>
+                <div className="space-y-5">
+                    <div>
+                        <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="oldPassword">Old Password</label>
+                        <input type="password" name="oldPassword" id="oldPassword" value={oldPassword}
+                            onChange={(e) => setOldPassword(e.target.value)}
+                            className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-blue-500 text-sm text-[#0d151c]" required />
+                    </div>
+                    <div>
+                        <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="newPassword">New Password</label>
+                        <input type="password" name="newPassword" id="newPassword" value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-blue-500 text-sm text-[#0d151c]" required />
+                    </div>
+                    <div>
+                        <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="confirmNewPassword">Confirm New Password</label>
+                        <input type="password" name="confirmNewPassword" id="confirmNewPassword" value={confirmNewPassword}
+                            onChange={(e) => setConfirmNewPassword(e.target.value)}
+                            className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-blue-500 text-sm text-[#0d151c]" required />
+                    </div>
+                </div>
+                <div className="mt-8 flex flex-col sm:flex-row sm:justify-end gap-3">
+                    <button type="button"
+                        onClick={() => { setShowPasswordForm(false); setOldPassword(''); setNewPassword(''); setConfirmNewPassword(''); setPasswordError(''); setPasswordSuccess('');}}
+                        className="order-2 sm:order-1 flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-slate-200 hover:bg-slate-300 text-[#0d151c] text-sm font-bold transition-colors"
+                    > Cancel </button>
+                    <button type="submit" disabled={passwordSubmitting}
+                        className="order-1 sm:order-2 flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors disabled:opacity-70"
+                    > {passwordSubmitting ? 'Changing...' : 'Update Password'} </button>
                 </div>
             </form>
         )}
+        </div>
       </div>
+      <style jsx global>{`
+        /* Ensure Tailwind forms plugin is active for form-input, form-textarea */
+        .form-input, .form-textarea {
+          @apply shadow-sm; 
+        }
+        .tracking-tight { letter-spacing: -0.025em; }
+      `}</style>
     </div>
   );
 }

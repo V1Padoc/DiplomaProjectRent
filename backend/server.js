@@ -67,7 +67,7 @@ app.use('/uploads/profiles', express.static(path.join(__dirname, 'uploads/profil
 
 // --- Rate Limiting for Auth Routes ---  // <--- ADDED THIS SECTION
 const authLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 15 minutes
+  windowMs: 1 * 60 * 1000, // 
   max: 30, // Limit each IP to 10 login/register requests per windowMs
   message: 'Too many requests from this IP, please try again after 15 minutes',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
@@ -181,9 +181,10 @@ io.on('connection', (socket) => {
 // Function to connect to the database and start the server
 async function startServer() {
   try {
+    console.log("🚀 server.js is executing");
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
-    await sequelize.sync({ alter: true }); // Sync database schema if needed
+    //await sequelize.sync({ alter: true }); // Sync database schema if needed
     //console.log('Database synchronized with alter:true. Tables updated.');
 
     const PORT = process.env.PORT || 5000;

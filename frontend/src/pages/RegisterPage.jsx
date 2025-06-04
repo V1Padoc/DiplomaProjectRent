@@ -1,173 +1,154 @@
 // frontend/src/pages/RegisterPage.jsx
 
 import React, { useState } from 'react';
-import axios from 'axios'; // Import axios to make HTTP requests
-import { useNavigate } from 'react-router-dom'; // Import useNavigate for redirection
+import axios from 'axios';
+import { useNavigate, Link } from 'react-router-dom'; // Added Link
 
 function RegisterPage() {
-  // State variables to hold form input values
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState(''); // This will be for First Name
-  const [lastName, setLastName] = useState(''); // *** ADDED: State for last name ***
+  const [name, setName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(''); 
-  const [role, setRole] = useState('tenant'); // Default role is 'tenant'
-  const [error, setError] = useState(''); // State for displaying registration errors
-  const [success, setSuccess] = useState(''); // State for displaying success message
+  const [role, setRole] = useState('tenant');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  const navigate = useNavigate(); // Hook for programmatically navigating
+  const navigate = useNavigate();
 
-  // Function to handle form submission
   const handleSubmit = async (e) => {
-    e.preventDefault(); // Prevent the default browser form submission
-
-    setError(''); // Clear previous errors
-    setSuccess(''); // Clear previous success messages
+    e.preventDefault();
+    setError('');
+    setSuccess('');
 
     try {
-      // Send a POST request to the backend registration endpoint
       const response = await axios.post('http://localhost:5000/api/auth/register', {
         email,
         password,
-        name, // This is first name
-        last_name: lastName, // *** ADDED: Include last name in the request body ***
+        name,
+        last_name: lastName,
         phone_number: phoneNumber, 
         role
       });
-
-      // If registration is successful
-      setSuccess(response.data.message); // Display success message from backend
-      console.log('Registration successful:', response.data);
-
-      // Optional: Automatically redirect to login page after a delay
+      setSuccess(response.data.message);
       setTimeout(() => {
-        navigate('/login'); // Redirect to the login page
-      }, 2000); // Redirect after 2 seconds
-
+        navigate('/login');
+      }, 2000); 
     } catch (err) {
-      // If registration fails (backend returns an error status code like 400, 409, 500)
       console.error('Registration failed:', err);
-      // Display the error message from the backend response, or a generic message
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 flex justify-center items-center min-h-screen bg-gray-50"> {/* Added background and centering */}
-      <div className="w-full max-w-md bg-white p-8 rounded-sm shadow-sm"> {/* Added minimalistic card styling */}
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">Create an Account</h1> {/* Styled heading */}
+    <div className="relative flex size-full min-h-screen flex-col items-center justify-center bg-slate-50 p-4 sm:p-6" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
+      <div className="w-full max-w-lg bg-white p-6 sm:p-8 rounded-xl shadow-xl">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center text-[#0c151d] tracking-tight">
+          Create an Account
+        </h1>
 
-        {/* Display success or error messages */}
-        {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">{success}</div>}
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">{error}</div>}
+        {success && (
+          <div className="mb-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert">
+            <p className="font-bold">Success</p>
+            <p>{success}</p>
+          </div>
+        )}
+        {error && (
+          <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+            <p className="font-bold">Error</p>
+            <p>{error}</p>
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-              Email
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="name">
+                First Name
+              </label>
+              <input
+                className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
+                id="name" type="text" placeholder="John" value={name}
+                onChange={(e) => setName(e.target.value)} required 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="last_name">
+                Last Name
+              </label>
+              <input
+                className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
+                id="last_name" type="text" placeholder="Doe" value={lastName}
+                onChange={(e) => setLastName(e.target.value)} required 
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="email">
+              Email Address
             </label>
             <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-              id="email"
-              type="email" // Use type="email" for basic browser validation
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)} // Update state on input change
-              required // Make field required
+              className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
+              id="email" type="email" placeholder="you@example.com" value={email}
+              onChange={(e) => setEmail(e.target.value)} required
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
+          <div>
+            <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="password">
               Password
             </label>
             <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-              id="password"
-              type="password" // Use type="password" for hiding input
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)} // Update state on input change
-              required // Make field required
-              minLength="6" // Optional: Add minimum length for password
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">
-              First Name {/* *** CHANGED: Label updated *** */}
-            </label>
-            <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-              id="name"
-              type="text"
-              placeholder="First Name" // *** CHANGED: Placeholder updated ***
-              value={name}
-              onChange={(e) => setName(e.target.value)} 
-              required 
+              className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
+              id="password" type="password" placeholder="Create a strong password" value={password}
+              onChange={(e) => setPassword(e.target.value)} required minLength="6"
             />
           </div>
           
-          <div className="mb-4"> {/* *** ADDED: Last Name field *** */}
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="last_name">
-              Last Name
-            </label>
-            <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-              id="last_name"
-              type="text"
-              placeholder="Last Name"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required 
-            />
-          </div>
-
-          <div className="mb-4"> 
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="phone_number">
+          <div> 
+            <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="phone_number">
                 Phone Number
             </label>
             <input
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700"
-                id="phone_number" 
-                type="tel" 
-                placeholder="Phone Number"
-                value={phoneNumber} 
-                onChange={(e) => setPhoneNumber(e.target.value)} 
-                required 
+                className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]"
+                id="phone_number" type="tel" placeholder="+1-555-123-4567" value={phoneNumber} 
+                onChange={(e) => setPhoneNumber(e.target.value)} required 
             />
           </div>
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="role">
+
+          <div>
+            <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="role">
               Register as:
             </label>
             <select
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)} 
-              required 
+              className="form-select w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d]" 
+              id="role" value={role} onChange={(e) => setRole(e.target.value)} required 
             >
               <option value="tenant">Tenant / Buyer</option>
               <option value="owner">Owner / Seller</option>
-              {/* Admin role will likely be assigned manually or through a separate process */}
             </select>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="pt-2">
             <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out" 
+              className="w-full bg-[#359dff] hover:bg-blue-700 text-white text-sm sm:text-base font-bold py-3 px-4 rounded-lg h-12 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" 
               type="submit"
             >
               Register
             </button>
-            {/* Optional: Link to login page */}
-            <a className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800" href="/login">
+          </div>
+          <div className="text-center pt-2">
+            <Link className="font-medium text-sm text-blue-600 hover:text-blue-700 transition-colors" to="/login">
               Already have an account? Login
-            </a>
+            </Link>
           </div>
         </form>
       </div>
+       <style jsx global>{`
+        .form-input, .form-select { @apply shadow-sm; }
+        .tracking-tight { letter-spacing: -0.025em; }
+      `}</style>
     </div>
   );
 }

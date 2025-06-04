@@ -22,6 +22,7 @@ const logger = winston.createLogger({
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     json() // Default format for files or other transports
   ),
+  exitOnError: false,
   transports: [
     // For production, you might want to write to files or a logging service
     // new winston.transports.File({ filename: 'error.log', level: 'error' }),

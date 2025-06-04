@@ -4,39 +4,35 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-// Helper function to format timestamp for conversation list
 const formatLastMessageTimestamp = (timestampStr) => {
-    // If timestampStr is undefined, null, or an empty string
-    if (!timestampStr) {
-        // console.warn('formatLastMessageTimestamp: Received falsy timestampStr. This might mean the timestamp field is missing from lastMessage.');
-        return 'No time'; // Or use 'No date' if you prefer that for missing timestamps
-    }
-
+    if (!timestampStr) return 'No time';
     const date = new Date(timestampStr);
-
-    // If new Date(timestampStr) results in an "Invalid Date" object
-    if (isNaN(date.getTime())) {
-        // console.warn('formatLastMessageTimestamp: Could not parse date. Input was:', timestampStr);
-        return 'Invalid date format'; // This string will appear if parsing fails
-    }
+    if (isNaN(date.getTime())) return 'Invalid date';
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const messageDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
     if (messageDateOnly.getTime() === today.getTime()) {
-        // Today: show time
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (today.getTime() - messageDateOnly.getTime() === 24 * 60 * 60 * 1000) {
-        // Yesterday
         return 'Yesterday';
     } else if (now.getFullYear() === messageDateOnly.getFullYear()) {
-        // This year, but not today or yesterday: show Month Day
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); // e.g., Aug 15
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     } else {
-        // Older than this year: show Month Day, Year
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); // e.g., Aug 15, 2023
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     }
+};
+
+// Helper to get avatar URL, similar to ProfilePage
+const getAvatarUrl = (profileImageUrl, nameOrEmail) => {
+    if (profileImageUrl) {
+        const filename = profileImageUrl.split('/').pop();
+        return `http://localhost:5000/uploads/profiles/${filename}`; // Adjust path if your backend serves from a subfolder
+    }
+    // Fallback to ui-avatars if no profile image
+    const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2) : 'U';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=96&font-size=0.4&bold=true`;
 };
 
 
@@ -52,19 +48,11 @@ function MyChatsPage() {
             setLoading(false);
             return;
         }
+        setLoading(true); setError(null);
         try {
-            setLoading(true);
-            setError(null);
             const response = await axios.get('http://localhost:5000/api/chats/my-chats', {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            // CRITICAL DEBUG STEP (FOR YOU TO USE):
-            // Uncomment the lines below temporarily to inspect the structure of response.data and convo.lastMessage
-            // This helps confirm the exact field name for the timestamp (e.g., 'created_at', 'createdAt', 'timestamp', 'sentAt', etc.)
-            // console.log("MyChatsPage - Raw conversations data from API:", response.data);
-            // if (response.data.length > 0 && response.data[0].lastMessage) {
-            //     console.log("MyChatsPage - Example lastMessage object for inspection:", response.data[0].lastMessage);
-            // }
             setConversations(response.data);
         } catch (err) {
             console.error("Error fetching my chats:", err);
@@ -76,112 +64,113 @@ function MyChatsPage() {
 
     useEffect(() => {
         fetchMyChats();
-        fetchUnreadMessagesCount();
+        fetchUnreadMessagesCount(); // Fetch unread count on initial load and when chats are fetched
     }, [fetchMyChats, fetchUnreadMessagesCount]);
 
     useEffect(() => {
-        const handleChatUpdate = (event) => {
-            // console.log('MyChatsPage received chat-update event:', event.detail);
+        const handleChatUpdate = () => {
             fetchMyChats();
+            fetchUnreadMessagesCount(); // Also update unread count on chat-update
         };
         window.addEventListener('chat-update', handleChatUpdate);
-        return () => {
-            window.removeEventListener('chat-update', handleChatUpdate);
-        };
-    }, [fetchMyChats]);
+        return () => window.removeEventListener('chat-update', handleChatUpdate);
+    }, [fetchMyChats, fetchUnreadMessagesCount]);
 
     if (loading) {
-        return <div className="container mx-auto px-4 py-8 text-center">Loading your chats...</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading your chats...</div>;
     }
 
     if (error) {
-        return <div className="container mx-auto px-4 py-8 text-center text-red-500">Error: {error}</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Error: {error}</div>;
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
-            <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">My Chats</h1>
+        <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
+            <div className="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
+                <div className="layout-content-container flex flex-col max-w-3xl w-full flex-1 bg-white shadow-xl rounded-lg">
+                    <div className="p-6 md:p-8">
+                        <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight mb-8 text-center">
+                            My Chats
+                        </h1>
 
-            {conversations.length === 0 ? (
-                <p className="text-center text-gray-600">You have no active chats.</p>
-            ) : (
-                <div className="space-y-4 max-w-2xl mx-auto">
-                    {conversations.map((convo) => {
-                        // Guard against missing lastMessage object to prevent crashes
-                        if (!convo.lastMessage) {
-                            // This can happen if a conversation has no messages yet.
-                            // console.warn("MyChatsPage - Conversation has no lastMessage object:", convo);
-                            return (
-                                <Link
-                                    to={`/listings/${convo.listingId}/chat${convo.isCurrentUserListingOwner ? `?with=${convo.otherParticipant.id}` : ''}`}
-                                    key={`${convo.listingId}-${convo.otherParticipant.id}-no-msg`}
-                                    className="block p-4 bg-white rounded-sm shadow-sm hover:shadow-md transition-shadow"
-                                >
-                                    <div className="flex justify-between items-center mb-1">
-                                        <h2 className="text-lg font-semibold text-blue-600">
-                                            Chat for: {convo.listingTitle}
-                                        </h2>
-                                        <span className="text-xs text-gray-500">No messages</span>
-                                    </div>
-                                    <p className="text-sm text-gray-700 mb-2">
-                                        With: <span className="font-medium">{convo.otherParticipant.name}</span>
-                                    </p>
-                                    <p className="text-sm text-gray-600 truncate italic">
-                                        Start the conversation!
-                                    </p>
-                                </Link>
-                            );
-                        }
+                        {conversations.length === 0 ? (
+                            <p className="text-center text-slate-600 py-10">You have no active chats yet.</p>
+                        ) : (
+                            <div className="space-y-1"> {/* Reduced space for tighter list */}
+                                {conversations.map((convo) => {
+                                    const otherParticipantName = convo.otherParticipant?.name || 'Unknown User';
+                                    const otherParticipantAvatar = getAvatarUrl(convo.otherParticipant?.profile_image_url, otherParticipantName);
+                                    
+                                    let lastMessageContent = "No messages yet. Start the conversation!";
+                                    let formattedTimestamp = "No time";
+                                    let lastMessagePrefix = "";
+                                    let isLastMessageUnreadByCurrentUser = false;
 
-                        // Determine the timestamp string from the lastMessage object.
-                        // The current code tries 'created_at', 'createdAt', then 'timestamp'.
-                        // If your backend uses a different field (e.g., 'sent_at', 'date_sent'),
-                        // you should prepend it to this list:
-                        // const timestampValueFromMessage = convo.lastMessage.YOUR_FIELD_NAME || convo.lastMessage.created_at || convo.lastMessage.createdAt || convo.lastMessage.timestamp;
-                        const timestampValueFromMessage = convo.lastMessage.created_at || convo.lastMessage.createdAt || convo.lastMessage.timestamp;
-                        
-                        const formattedTimestamp = formatLastMessageTimestamp(timestampValueFromMessage);
+                                    if (convo.lastMessage) {
+                                        const timestampValueFromMessage = convo.lastMessage.created_at || convo.lastMessage.createdAt || convo.lastMessage.timestamp;
+                                        formattedTimestamp = formatLastMessageTimestamp(timestampValueFromMessage);
+                                        lastMessageContent = convo.lastMessage.content;
+                                        if (convo.lastMessage.senderId === user?.id) {
+                                            lastMessagePrefix = "You: ";
+                                        } else {
+                                            // Use first name of other participant if available
+                                            const otherFirstName = otherParticipantName.split(' ')[0];
+                                            lastMessagePrefix = `${otherFirstName}: `;
+                                        }
+                                        isLastMessageUnreadByCurrentUser = convo.unreadCountForCurrentUser > 0 && convo.lastMessage.senderId !== user?.id;
+                                    }
 
-                        return (
-                            <Link
-                                to={
-                                    `/listings/${convo.listingId}/chat` +
-                                    (convo.isCurrentUserListingOwner ? `?with=${convo.otherParticipant.id}` : '')
-                                }
-                                key={`${convo.listingId}-${convo.otherParticipant.id}`}
-                                className={`block p-4 bg-white rounded-sm shadow-sm hover:shadow-md transition-shadow ${
-                                    convo.unreadCountForCurrentUser > 0 ? 'border-l-4 border-red-500' : ''
-                                }`}
-                            >
-                                <div className="flex justify-between items-center mb-1">
-                                    <div className="flex items-center">
-                                        <h2 className="text-lg font-semibold text-blue-600">
-                                            Chat for: {convo.listingTitle}
-                                        </h2>
-                                        {convo.unreadCountForCurrentUser > 0 && (
-                                            <span className="ml-2 bg-red-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
-                                                {convo.unreadCountForCurrentUser > 9 ? '9+' : convo.unreadCountForCurrentUser}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <span className="text-xs text-gray-500">
-                                        {formattedTimestamp}
-                                    </span>
-                                </div>
-                                <p className="text-sm text-gray-700 mb-2">
-                                    With: <span className="font-medium">{convo.otherParticipant.name}</span>
-                                </p>
-                                <p className={`text-sm text-gray-600 truncate ${
-                                    convo.unreadCountForCurrentUser > 0 && convo.lastMessage.senderId !== user?.id ? 'font-bold' : '' 
-                                }`}>
-                                    {convo.lastMessage.senderId === user?.id ? "You: " : `${convo.otherParticipant.name.split(' ')[0]}: `}
-                                    {convo.lastMessage.content}
-                                </p>
-                            </Link>
-                        );
-                    })}
+
+                                    return (
+                                        <Link
+                                            to={`/listings/${convo.listingId}/chat${convo.isCurrentUserListingOwner ? `?with=${convo.otherParticipant.id}` : ''}`}
+                                            key={`${convo.listingId}-${convo.otherParticipant.id}`}
+                                            className={`flex items-center p-4 hover:bg-slate-50 transition-colors duration-150 border-b border-slate-200 last:border-b-0 ${
+                                                convo.unreadCountForCurrentUser > 0 ? 'bg-blue-50 border-l-4 border-blue-500' : '' // Subtle unread background
+                                            }`}
+                                        >
+                                            <img
+                                                src={otherParticipantAvatar}
+                                                alt={otherParticipantName}
+                                                className="w-12 h-12 rounded-full object-cover mr-4 shrink-0 border border-slate-200"
+                                            />
+                                            <div className="flex-grow overflow-hidden">
+                                                <div className="flex justify-between items-start mb-0.5">
+                                                    <h2 className="text-[#0d151c] text-base sm:text-lg font-semibold truncate" title={`Chat for: ${convo.listingTitle}`}>
+                                                        {convo.listingTitle}
+                                                    </h2>
+                                                    <span className="text-xs text-slate-500 whitespace-nowrap ml-2">
+                                                        {formattedTimestamp}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-slate-700 mb-1 truncate" title={`With: ${otherParticipantName}`}>
+                                                    With: <span className="font-medium">{otherParticipantName}</span>
+                                                </p>
+                                                <div className="flex items-center">
+                                                    <p className={`text-sm text-slate-600 truncate flex-grow ${
+                                                        isLastMessageUnreadByCurrentUser ? 'font-semibold text-slate-800' : '' 
+                                                    }`}>
+                                                        {lastMessagePrefix}
+                                                        {lastMessageContent}
+                                                    </p>
+                                                    {convo.unreadCountForCurrentUser > 0 && (
+                                                        <span className="ml-2 shrink-0 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                                            {convo.unreadCountForCurrentUser > 9 ? '9+' : convo.unreadCountForCurrentUser}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            )}
+            </div>
+            <style jsx global>{`
+                .tracking-tight { letter-spacing: -0.025em; }
+            `}</style>
         </div>
     );
 }

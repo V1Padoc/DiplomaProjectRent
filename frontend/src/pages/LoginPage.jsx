@@ -3,114 +3,111 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Import the useAuth hook
+import { useAuth } from '../context/AuthContext';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  // Success state is not typically used on login as it redirects
 
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth(); // Use the useAuth hook to get the login function and isAuthenticated state
+  const { login, isAuthenticated } = useAuth();
 
-  // Optional: If the user is already authenticated, redirect them away from the login page
-  // This prevents logged-in users from seeing the login form
   useEffect(() => {
       if (isAuthenticated) {
-          navigate('/'); // Redirect to homepage if already authenticated
+          navigate('/'); 
       }
-  }, [isAuthenticated, navigate]); // Run this effect when isAuthenticated or navigate changes
+  }, [isAuthenticated, navigate]);
 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setError('');
-    setSuccess('');
 
     try {
       const response = await axios.post('http://localhost:5000/api/auth/login', {
         email,
         password
       });
-
       const token = response.data.token;
-
-      // *** Instead of setting localStorage directly and navigating ***
-      // *** Call the login function from the Auth Context ***
-      login(token); // This will set the token in state, localStorage, and fetch user data
-
-      // The login function in AuthContext handles the user state and fetching user data.
-      // The useEffect in AuthProvider will handle loading the user on app mount.
-      // We can navigate *after* calling login, but the useEffect above might also handle initial redirection.
-      // For simplicity, let's rely on the AuthProvider to manage the state and redirect.
-      // navigate('/'); // You can still keep this here if you want immediate navigation after successful API call
-
+      login(token); 
+      // Navigation is handled by useEffect or can be explicitly done here if preferred
+      // navigate('/'); 
     } catch (err) {
       console.error('Login failed:', err);
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     }
   };
 
-  // If isAuthenticated is true, the useEffect above will redirect, so we don't render the form
    if (isAuthenticated) {
-       return null; // Or return a message like "You are already logged in."
+       return null; 
    }
 
-
   return (
-    <div className="container mx-auto px-4 py-8 flex justify-center items-center min-h-screen bg-gray-50">
-      <div className="w-full max-w-md bg-white p-8 rounded-sm shadow-sm">
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">Login to Your Account</h1>
+    <div className="relative flex size-full min-h-screen flex-col items-center justify-center bg-slate-50 p-4 sm:p-6" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
+      <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-xl shadow-xl">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center text-[#0c151d] tracking-tight">
+          Login to Your Account
+        </h1>
 
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">{error}</div>}
-        {/* Success message usually not needed here as we redirect */}
+        {error && (
+          <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+            <p className="font-bold">Error</p>
+            <p>{error}</p>
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-              Email
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="email">
+              Email Address
             </label>
             <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]"
               id="email"
               type="email"
-              placeholder="Email"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
 
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
+          <div>
+            <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="password">
               Password
             </label>
             <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]"
               id="password"
               type="password"
-              placeholder="Password"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="pt-2">
             <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out"
+              className="w-full bg-[#359dff] hover:bg-blue-700 text-white text-sm sm:text-base font-bold py-3 px-4 rounded-lg h-12 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               type="submit"
             >
               Login
             </button>
-            <Link className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800" to="/register">
+          </div>
+           <div className="text-center pt-2">
+            <Link className="font-medium text-sm text-blue-600 hover:text-blue-700 transition-colors" to="/register">
               Don't have an account? Register
             </Link>
           </div>
         </form>
       </div>
+      <style jsx global>{`
+        .form-input { @apply shadow-sm; }
+        .tracking-tight { letter-spacing: -0.025em; }
+      `}</style>
     </div>
   );
 }

@@ -70,7 +70,10 @@ function LocationMarker({ onPositionChange, initialPosition }) {
 
     return position === null ? null : (
         <Marker position={position}>
-            <Popup>Property Location</Popup>
+            <Popup>
+                Property Location: <br/> Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)} <br/>
+                Click to adjust.
+            </Popup>
         </Marker>
     );
 }
@@ -114,73 +117,42 @@ const SearchField = ({ onLocationSelected }) => {
 
 
 function EditListingPage() {
-  // Get the 'id' parameter from the URL (the listing ID)
-  const { id: listingId } = useParams(); // Renamed 'id' to 'listingId' for clarity
-
-  // State for the original listing data fetched from the backend
+  const { id: listingId } = useParams();
   const [originalListing, setOriginalListing] = useState(null);
-
-  // State for the form fields (initialized with original data after fetch)
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    price: '',
-    rooms: '',
-    area: '',
-    location: '', // This will now hold the address string
-    latitude: '', // Managed by map interaction
-    longitude: '', // Managed by map interaction
-    amenities: '',
-    type: 'monthly-rental', // Default to new type
-    status: '', // For admin to change status
+    title: '', description: '', price: '', rooms: '', area: '',
+    location: '', latitude: '', longitude: '', amenities: '',
+    type: 'monthly-rental', status: '',
   });
-
-  // `displayPhotos` manages all photos (existing from server + newly added files)
-  // Each item: { id: string, type: 'existing' | 'new', originalFilename?: string, file?: File, previewUrl: string }
   const [displayPhotos, setDisplayPhotos] = useState([]);
-  const [activePhotoId, setActivePhotoId] = useState(null); // For DragOverlay
-
-  // State for messages (loading, error, submission feedback)
-  const [loading, setLoading] = useState(true); // For initial data fetch loading
-  const [error, setError] = useState(null); // For initial data fetch errors
-  const [submitting, setSubmitting] = useState(false); // For form submission loading
-  const [submitError, setSubmitError] = useState(null); // For form submission errors
-  const [submitSuccess, setSubmitSuccess] = useState(null); // For form submission success
-
-  // Map related state
-  const [markerPosition, setMarkerPosition] = useState(null); // { lat: number, lng: number }
-  const [mapCenter, setMapCenter] = useState([51.505, -0.09]); // London coordinates
-  const mapRef = useRef(null); // Ref to access the Leaflet map instance directly if needed
-  const newPhotoInputRef = useRef(null); // Ref to clear the file input
+  const [activePhotoId, setActivePhotoId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [submitSuccess, setSubmitSuccess] = useState(null);
+  const [markerPosition, setMarkerPosition] = useState(null);
+  const [mapCenter, setMapCenter] = useState([51.505, -0.09]);
+  const mapRef = useRef(null);
+  const newPhotoInputRef = useRef(null);
+  const photoDropZoneRef = useRef(null); // Ref for the styled drop zone
 
   const navigate = useNavigate();
-  const { token, user } = useAuth(); // Get token and user info for auth/authz
+  const { token, user } = useAuth();
 
-  // Dnd-kit Sensors
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // --- Effect to fetch the listing data for editing ---
   useEffect(() => {
     const fetchListingForEdit = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        setOriginalListing(null); // Clear previous listing data
-
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        };
+        setLoading(true); setError(null); setOriginalListing(null);
+        const config = { headers: { 'Authorization': `Bearer ${token}` } };
         const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/edit`, config);
-
         const fetchedListing = response.data;
         setOriginalListing(fetchedListing);
-
-        // --- Initialize form state with fetched data ---
         setFormData({
           title: fetchedListing.title || '',
           description: fetchedListing.description || '',
@@ -192,46 +164,26 @@ function EditListingPage() {
           longitude: fetchedListing.longitude !== null ? fetchedListing.longitude.toString() : '',
           amenities: fetchedListing.amenities || '',
           type: fetchedListing.type || 'monthly-rental',
-          status: fetchedListing.status || '', // Initialize status for admin
+          status: fetchedListing.status || '',
         });
-
-        // Initialize displayPhotos with existing photos from the fetched listing
         const existingPhotos = Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [];
         setDisplayPhotos(existingPhotos.map((filename, index) => ({
-          id: `existing-${Date.now()}-${index}-${filename}`, // Create a unique ID for DND
-          type: 'existing',
-          originalFilename: filename, // Store original filename for server-side processing
-          previewUrl: `http://localhost:5000/uploads/${filename}` // URL for displaying
+          id: `existing-${Date.now()}-${index}-${filename}`, type: 'existing',
+          originalFilename: filename, previewUrl: `http://localhost:5000/uploads/${filename}`
         })));
-
-        // Initialize map center and marker from fetched listing data
         if (fetchedListing.latitude && fetchedListing.longitude) {
             const initialPos = { lat: parseFloat(fetchedListing.latitude), lng: parseFloat(fetchedListing.longitude) };
-            setMarkerPosition(initialPos); // Set marker position
-            setMapCenter([initialPos.lat, initialPos.lng]); // Set map center
-        } else {
-            setMarkerPosition(null); // No marker if no coordinates
-        }
+            setMarkerPosition(initialPos); setMapCenter([initialPos.lat, initialPos.lng]);
+        } else { setMarkerPosition(null); }
       } catch (err) {
         console.error('Error fetching listing for edit:', err);
         setError(err.response?.data?.message || 'Failed to fetch listing data.');
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
-
-    if (listingId && token) {
-       fetchListingForEdit();
-    } else if (!token) {
-        setLoading(false);
-        setError('Authentication token missing.');
-    }
+    if (listingId && token) { fetchListingForEdit(); }
+    else if (!token) { setLoading(false); setError('Authentication token missing.'); }
   }, [listingId, token]);
 
-  // Effect to revoke object URLs for new photos when the component unmounts
-  // This is intentionally run only on unmount because re-running on `displayPhotos` change
-  // can be tricky with DND-kit, as `displayPhotos` updates frequently during drag operations.
-  // Removal of individual `blob:` URLs is handled by `handleRemovePhoto` and `handleSubmit`.
   useEffect(() => {
     return () => {
       displayPhotos.forEach(photo => {
@@ -240,166 +192,135 @@ function EditListingPage() {
         }
       });
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
-  // Callback for map position change
   const handleMapPositionChange = useCallback((latlng) => {
-    setMarkerPosition(latlng); // Update the state that controls the marker
-    setFormData(prevFormData => ({
-        ...prevFormData,
-        latitude: latlng.lat.toFixed(7), // Update latitude form field with high precision
-        longitude: latlng.lng.toFixed(7) // Update longitude form field with high precision
-    }));
+    setMarkerPosition(latlng);
+    setFormData(prev => ({ ...prev, latitude: latlng.lat.toFixed(7), longitude: latlng.lng.toFixed(7) }));
   }, []);
 
-  // Callback for geocode result (address search)
   const handleGeocodeResult = useCallback((latlng, addressLabel) => {
-    handleMapPositionChange(latlng); // Update marker and lat/lng inputs
-    setFormData(prevFormData => ({
-        ...prevFormData,
-        location: addressLabel // Update the address form field with the geocoded address
-    }));
-    // If mapRef is available, fly to the new location and zoom in
-    if (mapRef.current) {
-        mapRef.current.flyTo(latlng, 15); // Zoom level 15 is a good street-level zoom
-    } else {
-        // Fallback for initial render if mapRef isn't ready yet, set mapCenter for the first render
-        setMapCenter([latlng.lat, latlng.lng]);
-    }
+    handleMapPositionChange(latlng);
+    setFormData(prev => ({ ...prev, location: addressLabel }));
+    if (mapRef.current) { mapRef.current.flyTo(latlng, 15); }
+    else { setMapCenter([latlng.lat, latlng.lng]); }
   }, [handleMapPositionChange]);
 
-
-  // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handle adding new file(s)
-  const handleNewPhotosChange = (e) => {
+  const handleNewPhotosChange = (e) => { // For click-to-upload
     const files = Array.from(e.target.files);
     const newPhotoItems = files.map((file, index) => ({
-      id: `new-${Date.now()}-${index}-${file.name}`, // Unique ID for DND
-      type: 'new',
-      file: file, // Store the actual File object
-      previewUrl: URL.createObjectURL(file) // Create temporary URL for preview
+      id: `new-${Date.now()}-${index}-${file.name}`, type: 'new',
+      file: file, previewUrl: URL.createObjectURL(file)
     }));
     setDisplayPhotos(prevPhotos => [...prevPhotos, ...newPhotoItems]);
-    if (newPhotoInputRef.current) newPhotoInputRef.current.value = ""; // Clear file input
+    if (newPhotoInputRef.current) newPhotoInputRef.current.value = "";
   };
 
-  // Handle removing a photo (existing or new)
+  const handleDrop = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (photoDropZoneRef.current) {
+      photoDropZoneRef.current.classList.remove('border-blue-500', 'bg-blue-50');
+    }
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const files = Array.from(event.dataTransfer.files);
+      const newPhotoItems = files.map((file, index) => ({
+        id: `new-drop-${Date.now()}-${index}-${file.name}`, // Ensure unique ID
+        type: 'new',
+        file: file,
+        previewUrl: URL.createObjectURL(file)
+      }));
+      setDisplayPhotos(prevPhotos => [...prevPhotos, ...newPhotoItems]);
+      event.dataTransfer.clearData();
+    }
+  }, []); 
+
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (photoDropZoneRef.current) {
+      photoDropZoneRef.current.classList.add('border-blue-500', 'bg-blue-50');
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (photoDropZoneRef.current) {
+      photoDropZoneRef.current.classList.remove('border-blue-500', 'bg-blue-50');
+    }
+  }, []);
+
   const handleRemovePhoto = (idToRemove) => {
     setDisplayPhotos(prevPhotos => {
       const photoToRemove = prevPhotos.find(p => p.id === idToRemove);
-      if (photoToRemove && photoToRemove.type === 'new' && photoToRemove.previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(photoToRemove.previewUrl); // Revoke URL for new photos
+      if (photoToRemove?.type === 'new' && photoToRemove.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoToRemove.previewUrl);
       }
       return prevPhotos.filter(photo => photo.id !== idToRemove);
     });
   };
 
-  // DND Handlers
-  function handleDragStart(event) {
-    setActivePhotoId(event.active.id); // Set the ID of the photo being dragged
-  }
-
+  function handleDragStart(event) { setActivePhotoId(event.active.id); }
   function handleDragEnd(event) {
     const { active, over } = event;
-    setActivePhotoId(null); // Clear active item after drag ends
-
+    setActivePhotoId(null);
     if (over && active.id !== over.id) {
-      setDisplayPhotos((items) => {
+      setDisplayPhotos(items => {
         const oldIndex = items.findIndex(item => item.id === active.id);
         const newIndex = items.findIndex(item => item.id === over.id);
-        return arrayMove(items, oldIndex, newIndex); // Reorder photos array
+        return arrayMove(items, oldIndex, newIndex);
       });
     }
   }
-  function handleDragCancel() {
-    setActivePhotoId(null); // Clear active item if drag is cancelled
-  }
+  function handleDragCancel() { setActivePhotoId(null); }
 
-
-  // Handle form submission (Update Listing)
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setSubmitting(true);
-
+    setSubmitError(null); setSubmitSuccess(null); setSubmitting(true);
     const updateFormData = new FormData();
     Object.keys(formData).forEach(key => {
-        // Only append status if it's explicitly set AND different from original for admin
         if (key === 'status' && user?.role === 'admin' && formData.status !== originalListing?.status) {
              updateFormData.append(key, formData[key]);
-        } else if (key !== 'status') { // Always append other fields
+        } else if (key !== 'status') {
             updateFormData.append(key, formData[key]);
         }
     });
-
-    // Create a manifest of photo filenames/placeholders in their current order
-    const photoManifest = displayPhotos.map(photo => {
-      return photo.type === 'existing' ? photo.originalFilename : '__NEW_PHOTO__';
-    });
+    const photoManifest = displayPhotos.map(p => p.type === 'existing' ? p.originalFilename : '__NEW_PHOTO__');
     updateFormData.append('photoManifest', JSON.stringify(photoManifest));
-
-    // Append actual new photo files
-    displayPhotos.forEach(photo => {
-      if (photo.type === 'new' && photo.file) {
-        updateFormData.append('photos', photo.file); // 'photos' field for new files
-      }
-    });
+    displayPhotos.forEach(p => { if (p.type === 'new' && p.file) updateFormData.append('photos', p.file); });
 
     try {
       const response = await axios.put(`http://localhost:5000/api/listings/${listingId}`, updateFormData, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      setSubmitSuccess(response.data.message);
+      setSubmitSuccess(response.data.message || "Listing updated successfully!");
       console.log('Listing updated:', response.data.listing);
-
-      // Clean up blob URLs for any new photos that were just uploaded
-      displayPhotos.forEach(p => {
-          if (p.type === 'new' && p.previewUrl.startsWith('blob:')) URL.revokeObjectURL(p.previewUrl);
-      });
-
-      // Update `displayPhotos` state with the new list of existing photos from the server
+      displayPhotos.forEach(p => { if (p.type === 'new' && p.previewUrl.startsWith('blob:')) URL.revokeObjectURL(p.previewUrl); });
       const updatedListingFromServer = response.data.listing;
-      setOriginalListing(prev => ({...prev, ...updatedListingFromServer })); // Update original listing with fresh data
-      
+      setOriginalListing(prev => ({...prev, ...updatedListingFromServer }));
       const serverPhotos = updatedListingFromServer.photos || [];
       setDisplayPhotos(serverPhotos.map((filename, index) => ({
-        id: `updated-${Date.now()}-${index}-${filename}`, // Generate new IDs
-        type: 'existing',
-        originalFilename: filename,
-        previewUrl: `http://localhost:5000/uploads/${filename}`
+        id: `updated-${Date.now()}-${index}-${filename}`, type: 'existing',
+        originalFilename: filename, previewUrl: `http://localhost:5000/uploads/${filename}`
       })));
-
-      setTimeout(() => {
-       navigate('/manage-listings'); // Redirect after successful update
-      }, 2000);
-
+      setTimeout(() => { navigate('/manage-listings'); }, 2500);
     } catch (err) {
       console.error('Error updating listing:', err);
       setSubmitError(err.response?.data?.message || 'Failed to update listing. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+      setTimeout(() => setSubmitError(null), 3000);
+    } finally { setSubmitting(false); }
   };
 
-
-  // Conditional Rendering for initial fetch states
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8 text-center text-gray-700 min-h-screen">
+      <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-gray-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
         Loading listing data...
       </div>
     );
@@ -407,7 +328,7 @@ function EditListingPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8 text-center text-red-600 min-h-screen">
+      <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
         Error: {error}
       </div>
     );
@@ -415,233 +336,204 @@ function EditListingPage() {
 
   if (!originalListing) {
       return (
-          <div className="container mx-auto px-4 py-8 text-center text-gray-700 min-h-screen">
+          <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-gray-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
               Listing data not available.
           </div>
       );
   }
 
-  // Find the photo currently being dragged for the DragOverlay
   const activePhotoForOverlay = activePhotoId ? displayPhotos.find(p => p.id === activePhotoId) : null;
 
-  // Render the edit form once data is loaded and user is authorized (handled by ProtectedRoute)
   return (
-    <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
-      <div className="w-full max-w-3xl mx-auto bg-white p-8 rounded-sm shadow-sm"> {/* Increased max-width for map */}
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">Edit Listing</h1>
+    <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
+      <div className="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
+        <div className="layout-content-container flex flex-col max-w-3xl w-full flex-1 bg-white shadow-xl rounded-lg p-6 md:p-8">
+          <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight mb-8 text-center">Edit Listing</h1>
 
-        {/* Display messages */}
-        {submitting && <div className="text-center text-blue-600 mb-4">Saving changes...</div>}
-        {submitSuccess && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">{submitSuccess}</div>}
-        {submitError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">{submitError}</div>}
-
-        <form onSubmit={handleSubmit}>
-          {/* Title */}
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="title">Title</label>
-            <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="title" type="text" placeholder="Listing Title" name="title" value={formData.title} onChange={handleInputChange} required
-            />
-          </div>
-
-          {/* Description */}
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="description">Description</label>
-            <textarea
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="description" placeholder="Detailed description of the property" name="description" value={formData.description} onChange={handleInputChange} rows="4"
-            ></textarea>
-          </div>
-
-          {/* Price */}
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="price">Price</label>
-            <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="price" type="number" step="0.01" placeholder="e.g. 1200.50 or 250000" name="price" value={formData.price} onChange={handleInputChange} required
-            />
-          </div>
-
-          {/* Rooms, Area - Layout in a row */}
-          <div className="mb-4 flex space-x-4">
-            <div className="w-1/2">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="rooms">Rooms</label>
-              <input
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="rooms" type="number" step="1" placeholder="e.g. 3" name="rooms" value={formData.rooms} onChange={handleInputChange}
-              />
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="title">Title</label>
+              <input id="title" type="text" placeholder="Listing Title" name="title" value={formData.title} onChange={handleInputChange} required
+                className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
             </div>
-            <div className="w-1/2">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="area">Area (sq ft / sq m)</label>
-              <input
-                className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="area" type="number" step="0.01" placeholder="e.g. 150.75" name="area" value={formData.area} onChange={handleInputChange}
-              />
+
+            <div>
+              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="description">Description</label>
+              <textarea id="description" placeholder="Detailed description of the property" name="description" value={formData.description} onChange={handleInputChange} rows="4"
+                className="form-textarea w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"></textarea>
             </div>
-          </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
+              <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="price">Price</label>
+                <input id="price" type="number" step="0.01" placeholder="e.g. 1200.50" name="price" value={formData.price} onChange={handleInputChange} required
+                  className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
+              </div>
+              <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="type">Listing Type</label>
+                <select id="type" name="type" value={formData.type} onChange={handleInputChange} required
+                  className="form-select w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]">
+                  <option value="monthly-rental">Monthly Rental</option>
+                  <option value="daily-rental">Daily Rental</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="rooms">Rooms (Bedrooms)</label>
+                <input id="rooms" type="number" step="1" placeholder="e.g. 3" name="rooms" value={formData.rooms} onChange={handleInputChange}
+                  className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
+              </div>
+              <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="area">Area (sq ft / sq m)</label>
+                <input id="area" type="number" step="0.01" placeholder="e.g. 150.75" name="area" value={formData.area} onChange={handleInputChange}
+                  className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
+              </div>
+            </div>
 
-          {/* Location / Address Input */}
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="location">
-                Address / Location Description
-            </label>
-            <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="location" type="text" placeholder="e.g., 123 Main St, City or use map search"
-              name="location" value={formData.location} onChange={handleInputChange} required
-            />
-          </div>
+            <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="location">Address / Location Description</label>
+                <input id="location" type="text" placeholder="e.g., 123 Main St, City or use map search" name="location" value={formData.location} onChange={handleInputChange} required
+                    className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
+            </div>
           
-          {/* Map Integration */}
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-                Update Property Location on Map (Click to place/move marker, use search bar)
-            </label>
-            <MapContainer
-                center={mapCenter} // Initial center, set from fetched data or default
-                zoom={markerPosition ? 15 : 13} // Zoom in if marker exists, otherwise default
-                scrollWheelZoom={true} // Allow zooming with mouse wheel
-                style={{ height: '400px', width: '100%' }} // Fixed size for the map container
-                className="rounded-sm border border-gray-300" // Add some styling
-                whenCreated={mapInstance => { mapRef.current = mapInstance; }} // Get reference to the map instance
-            >
-                <TileLayer
-                    attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" // OpenStreetMap tiles
-                />
-                {/* LocationMarker component handles clicks and displays the marker */}
-                <LocationMarker onPositionChange={handleMapPositionChange} initialPosition={markerPosition} />
-                {/* SearchField component adds the address search bar */}
-                <SearchField onLocationSelected={handleGeocodeResult} />
-            </MapContainer>
-            <p className="text-xs text-gray-600 mt-1">
-                Selected Coordinates: Lat: {formData.latitude || "N/A"}, Lng: {formData.longitude || "N/A"}
-            </p>
-          </div>
+            <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-2">Update Property Location on Map</label>
+                <MapContainer center={mapCenter} zoom={markerPosition ? 15 : 13} scrollWheelZoom={true} style={{ height: '400px', width: '100%' }} className="rounded-lg border border-slate-300" whenCreated={mapInstance => { mapRef.current = mapInstance; }}>
+                    <TileLayer attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+                    <LocationMarker onPositionChange={handleMapPositionChange} initialPosition={markerPosition} />
+                    <SearchField onLocationSelected={handleGeocodeResult} />
+                </MapContainer>
+                <p className="text-xs text-slate-500 mt-1">Selected: Lat: {formData.latitude || "N/A"}, Lng: {formData.longitude || "N/A"}</p>
+            </div>
 
-          {/* Latitude and Longitude Inputs (now read-only, populated by map) */}
-          <div className="mb-4 flex space-x-4">
-             <div className="w-1/2">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="latitude">Latitude (from map)</label>
-                <input
-                   className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 bg-gray-100 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                   id="latitude" type="text" name="latitude" value={formData.latitude} readOnly // Make read-only
-                   placeholder="Click on map or search"
-                />
-             </div>
-             <div className="w-1/2">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="longitude">Longitude (from map)</label>
-                 <input
-                   className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 bg-gray-100 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                   id="longitude" type="text" name="longitude" value={formData.longitude} readOnly // Make read-only
-                   placeholder="Click on map or search"
-                />
-             </div>
-          </div>
-          
-           {/* Amenities */}
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="amenities">Amenities (comma-separated)</label>
-            <input
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="amenities" type="text" placeholder="e.g. Parking, Gym, Pool" name="amenities" value={formData.amenities} onChange={handleInputChange}
-            />
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
+                <div>
+                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="latitude">Latitude (from map)</label>
+                    <input id="latitude" type="text" name="latitude" value={formData.latitude} readOnly placeholder="Set via map"
+                    className="form-input w-full rounded-lg border-[#cedce8] bg-slate-100 text-sm text-slate-700"/>
+                </div>
+                <div>
+                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="longitude">Longitude (from map)</label>
+                    <input id="longitude" type="text" name="longitude" value={formData.longitude} readOnly placeholder="Set via map"
+                    className="form-input w-full rounded-lg border-[#cedce8] bg-slate-100 text-sm text-slate-700"/>
+                </div>
+            </div>
+            
+            <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="amenities">Amenities (comma-separated)</label>
+                <input id="amenities" type="text" placeholder="e.g. Parking, Gym, Pool" name="amenities" value={formData.amenities} onChange={handleInputChange}
+                className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
+            </div>
 
-          {/* Type */}
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="type">Listing Type</label>
-            <select
-              className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="type" name="type" value={formData.type} onChange={handleInputChange} required
-            >
-              <option value="monthly-rental">Monthly Rental</option>
-              <option value="daily-rental">Daily Rental</option>
-            </select>
-          </div>
-
-          {/* Admin: Status update */}
-          {user && user.role === 'admin' && originalListing && (
-             <div className="mb-4 p-4 border border-orange-300 rounded-md bg-orange-50">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="status">
+            {user && user.role === 'admin' && originalListing && (
+             <div className="p-4 border border-orange-300 rounded-lg bg-orange-50">
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="status">
                     Listing Status (Admin Control)
                 </label>
                 <select
-                    id="status"
-                    name="status"
-                    value={formData.status} // Controlled by formData.status
-                    onChange={handleInputChange}
-                    className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    id="status" name="status" value={formData.status} onChange={handleInputChange}
+                    className="form-select w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"
                 >
                     <option value="pending">Pending</option>
                     <option value="active">Active</option>
                     <option value="rejected">Rejected</option>
                     <option value="archived">Archived</option>
                 </select>
-                <p className="text-xs text-gray-600 mt-1">Current status: {originalListing.status}. Change will apply on save.</p>
+                <p className="text-xs text-slate-500 mt-1">Original status: {originalListing.status}. Change will apply on save.</p>
             </div>
-          )}
-
-
-          {/* Photos Section with @dnd-kit */}
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="new-photos-input">
-              Photos (Drag to reorder, add new below)
-            </label>
-            <input
-              ref={newPhotoInputRef} // Assign ref to clear input
-              id="new-photos-input"
-              type="file" multiple accept="image/*" onChange={handleNewPhotosChange}
-              className="block w-full text-sm text-gray-900 border border-gray-300 rounded-sm cursor-pointer bg-gray-50 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4"
-            />
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragCancel={handleDragCancel}
-            >
-              <SortableContext items={displayPhotos.map(p => p.id)} strategy={rectSortingStrategy}>
-                <div className="flex flex-wrap gap-2 p-2 border border-gray-300 rounded-sm min-h-[120px] bg-gray-50">
-                  {displayPhotos.map((photo) => (
-                    <SortablePhotoItem
-                      key={photo.id}
-                      id={photo.id}
-                      photo={photo}
-                      onRemove={handleRemovePhoto}
-                      isExisting={photo.type === 'existing'} // Pass prop to differentiate existing vs. new
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-              <DragOverlay dropAnimation={null}>
-                {activePhotoForOverlay ? (
-                  <div className="relative w-32 h-32 border rounded-sm overflow-hidden shadow-xl bg-white">
-                     <img src={activePhotoForOverlay.previewUrl} alt="Dragging preview" className="w-full h-full object-cover"/>
-                     {/* Optional labels for drag overlay */}
-                     {activePhotoForOverlay.type === 'existing' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-gray-700 opacity-75">Saved</span>}
-                     {activePhotoForOverlay.type === 'new' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-blue-600 opacity-75">New</span>}
-                  </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
-             {displayPhotos.length === 0 && (
-                <p className="text-sm text-gray-500 mt-2">No photos for this listing. Add some new photos.</p>
             )}
-          </div>
-          {/* End of Photos Section */}
 
-          <div className="flex items-center justify-center mt-6">
-            <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out"
-              type="submit" disabled={submitting || loading}
-            >
-              {submitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
+            <div>
+                <label className="block text-[#49749c] text-sm font-medium mb-2">Photos (Drag to reorder)</label>
+                <div
+                    ref={photoDropZoneRef}
+                    onClick={() => newPhotoInputRef.current?.click()} 
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[#dbe0e6] px-6 py-10 sm:py-14 mb-4 cursor-pointer hover:border-blue-400 transition-colors duration-150"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-[#111418] text-base sm:text-lg font-bold leading-tight tracking-tight max-w-[480px] text-center">Drag and drop photos here</p>
+                    <p className="text-slate-600 text-sm font-normal leading-normal max-w-[480px] text-center">Or click to upload (Max 10MB per photo)</p>
+                </div>
+                <input
+                    ref={newPhotoInputRef}
+                    id="new-photos-input-hidden" 
+                    type="file" multiple accept="image/*" onChange={handleNewPhotosChange}
+                    className="hidden"
+                />
+            
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+                    <SortableContext items={displayPhotos.map(p => p.id)} strategy={rectSortingStrategy}>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-2 border border-slate-200 rounded-lg min-h-[100px] bg-slate-50">
+                        {displayPhotos.map((photo) => (
+                            <SortablePhotoItem
+                                key={photo.id} id={photo.id} photo={photo} onRemove={handleRemovePhoto}
+                                isExisting={photo.type === 'existing'}
+                            />
+                        ))}
+                        </div>
+                    </SortableContext>
+                    <DragOverlay dropAnimation={null}>
+                        {activePhotoForOverlay ? (
+                        <div className="relative w-28 h-28 sm:w-32 sm:h-32 border rounded-md overflow-hidden shadow-2xl bg-white z-50">
+                            <img src={activePhotoForOverlay.previewUrl} alt="Dragging preview" className="w-full h-full object-cover"/>
+                            {activePhotoForOverlay.type === 'existing' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-gray-700 opacity-75">Saved</span>}
+                            {activePhotoForOverlay.type === 'new' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-blue-600 opacity-75">New</span>}
+                        </div>
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
+                {displayPhotos.length === 0 && <p className="text-sm text-slate-500 mt-2">No photos for this listing. Add some new photos.</p>}
+            </div>
+
+            <div className="mt-10 flex items-center justify-center">
+                <button type="submit" disabled={submitting || loading}
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-md text-base transition duration-150 ease-in-out disabled:opacity-70">
+                {submitting ? 'Saving...' : 'Save Changes'}
+                </button>
+            </div>
+          </form>
+
+          {/* Moved Messages to the bottom of the form area */}
+          {submitting && !submitSuccess && !submitError && <div className="mt-6 text-center text-blue-600 p-3 bg-blue-50 rounded-md">Saving changes, please wait...</div>}
+          {submitSuccess && <div className="mt-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Success!</p><p>{submitSuccess}</p></div>}
+          {submitError && <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Error</p><p>{submitError}</p></div>}
+          
+        </div>
       </div>
+      <style jsx global>{`
+        .form-input, .form-textarea, .form-select { @apply shadow-sm; }
+        .tracking-tight { letter-spacing: -0.025em; }
+        /* Custom class for leaflet-geosearch bar to better fit the theme */
+        .leaflet-control-geosearch.bar {
+            border: 1px solid #cedce8 !important; /* Match form input border */
+            border-radius: 0.5rem !important; /* rounded-lg */
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        }
+        .leaflet-control-geosearch.bar form input {
+            height: 2.375rem !important; /* Match form input height (py-2 equivalent for text-sm) */
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+            font-size: 0.875rem !important; /* text-sm */
+            color: #0d151c !important; /* text-[#0d151c] */
+        }
+        .leaflet-control-geosearch.bar form input:focus {
+            border-color: #3b82f6 !important; /* focus:border-blue-500 */
+            box-shadow: 0 0 0 1px #3b82f6 !important; /* focus:ring-1 focus:ring-blue-500 */
+        }
+        .leaflet-control-geosearch .results > * {
+            font-size: 0.875rem !important;
+            color: #0d151c !important;
+        }
+        .leaflet-control-geosearch .results > .active,
+        .leaflet-control-geosearch .results > *:hover {
+            background-color: #eff6ff !important; /* blue-50 for hover */
+            color: #1d4ed8 !important; /* blue-700 for hover text */
+        }
+      `}</style>
     </div>
   );
 }

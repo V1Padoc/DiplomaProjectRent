@@ -123,6 +123,13 @@ router.put(
   listingController.updateListing
 );
 
+router.put(
+  '/:id/archive', // New specific route for archive/unarchive
+  authMiddleware,
+  validateListingId(),
+  validate,
+  listingController.toggleListingArchiveStatus // New controller function
+);
 // DELETE a listing (requires auth, owner)
 router.delete(
   '/:id',

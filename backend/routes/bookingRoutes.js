@@ -45,6 +45,13 @@ router.get(
     authMiddleware,
     bookingController.getMyBookings // We'll create this controller function
 );
+router.post(
+    '/:bookingId/cancel',
+    authMiddleware, // User must be logged in
+    // No specific role check needed here, controller will verify if user is the tenant
+    bookingController.cancelBookingByUser 
+);
+
 // We will add GET /api/bookings/my-bookings (for tenants) later
 router.get(
     '/owner/pending-count',

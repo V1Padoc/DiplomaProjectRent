@@ -204,7 +204,8 @@ exports.getMyBookings = async (req, res, next) => { // Added 'next'
             include: [
                 {
                     model: Listing,
-                    attributes: ['id', 'title', 'location'],
+                    // Ensure 'photos' attribute is requested here
+                    attributes: ['id', 'title', 'location', 'photos'], // <-- MODIFIED: 'photos' attribute added
                     include: [{
                         model: User,
                         as: 'Owner',
@@ -212,7 +213,8 @@ exports.getMyBookings = async (req, res, next) => { // Added 'next'
                     }]
                 }
             ],
-            order: [['start_date', 'DESC']]
+            // Sort by start_date ascending to show upcoming bookings first in logical order
+            order: [['start_date', 'ASC']] // <-- MODIFIED: Changed to ASC
         });
 
         res.status(200).json(bookings);
@@ -246,5 +248,71 @@ exports.getOwnerPendingBookingsCount = async (req, res, next) => { // Added 'nex
     } catch (error) {
         logger.error('Error fetching owner pending bookings count:', { ownerId, error: error.message, stack: error.stack });
         next(error); // Pass to centralized error handler
+    }
+};
+// backend/controllers/bookingController.js
+// ... (other controller functions)
+
+// *** NEW FUNCTION: cancelBookingByUser ***
+exports.cancelBookingByUser = async (req, res, next) => {
+    const userId = req.user.id;
+    const { bookingId } = req.params;
+
+    try {
+        const booking = await Booking.findByPk(bookingId, {
+            include: [{ model: Listing, attributes: ['title', 'owner_id'] }] // For notification
+        });
+
+        if (!booking) {
+            logger.warn(`[cancelBookingByUser] Booking ${bookingId} not found.`);
+            return res.status(404).json({ message: "Booking not found." });
+        }
+
+        // Check if the logged-in user is the tenant who made the booking
+        if (booking.tenant_id !== userId) {
+            logger.warn(`[cancelBookingByUser] User ${userId} attempted to cancel booking ${bookingId} not belonging to them (tenant: ${booking.tenant_id}).`);
+            return res.status(403).json({ message: "You are not authorized to cancel this booking." });
+        }
+
+        // Check if the booking can be cancelled (e.g., not already past, not already cancelled/rejected)
+        // Add more specific business rules for cancellation eligibility if needed (e.g., cannot cancel within 24 hours of start_date)
+        if (['cancelled', 'rejected'].includes(booking.status)) {
+            logger.info(`[cancelBookingByUser] Booking ${bookingId} is already ${booking.status}. No action taken.`);
+            return res.status(400).json({ message: `Booking is already ${booking.status}.` });
+        }
+        
+        const today = new Date(); today.setHours(0,0,0,0);
+        const startDate = new Date(booking.start_date); startDate.setHours(0,0,0,0);
+        if (startDate < today && booking.status === 'confirmed') { // Example: Cannot cancel confirmed booking if it has already started
+            logger.warn(`[cancelBookingByUser] Attempt to cancel booking ${bookingId} that has already started.`);
+            return res.status(400).json({ message: "Cannot cancel a booking that has already started."});
+        }
+
+
+        booking.status = 'cancelled';
+        // Optionally, you might want a field like 'cancelled_by_tenant' = true
+        await booking.save();
+
+        // Notify owner (optional)
+        const io = req.app.get('socketio');
+        if (io && booking.Listing && booking.Listing.owner_id) {
+            io.to(booking.Listing.owner_id.toString()).emit('booking_cancelled_by_tenant_owner', {
+                message: `The booking for '${booking.Listing.title}' from ${booking.start_date} to ${booking.end_date} has been cancelled by the tenant.`,
+                bookingId: booking.id,
+                listingId: booking.listing_id,
+                listingTitle: booking.Listing.title,
+                tenantId: userId
+            });
+            logger.info(`[cancelBookingByUser] Emitted 'booking_cancelled_by_tenant_owner' to owner ${booking.Listing.owner_id} for booking ${booking.id}`);
+        }
+
+        res.status(200).json({
+            message: 'Booking successfully cancelled.',
+            booking: booking // Send back the updated booking
+        });
+
+    } catch (error) {
+        logger.error("[cancelBookingByUser] Error cancelling booking:", { userId, bookingId, error: error.message, stack: error.stack });
+        next(error);
     }
 };

@@ -1,23 +1,26 @@
 // frontend/src/pages/ListingDetail.jsx
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-// import Slider from 'react-slick'; // Replaced with gallery view
 import { useAuth } from '../context/AuthContext';
 import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+import 'react-calendar/dist/Calendar.css'; // Base calendar styles
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet'; // Leaflet library for icon fix
-import Lightbox from "yet-another-react-lightbox"; // <-- Updated import
-import "yet-another-react-lightbox/styles.css"; // <-- Updated styles import
-import { Captions, Download, Fullscreen, Thumbnails, Zoom } from "yet-another-react-lightbox/plugins"; // <-- Optional plugins
+import L from 'leaflet';
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
+import { Captions, Download, Fullscreen, Thumbnails, Zoom } from "yet-another-react-lightbox/plugins";
 import "yet-another-react-lightbox/plugins/captions.css";
 import "yet-another-react-lightbox/plugins/thumbnails.css";
-import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline'; // For favorites
-import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';     // For favorites
+import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
+import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
+import { StarIcon as StarSolidIcon } from '@heroicons/react/20/solid'; // For review stars
+import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline'; // For review stars
+import { PhotoIcon } from '@heroicons/react/24/solid'; // For "Show all photos" button
 
+// Leaflet icon fix
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
@@ -25,9 +28,17 @@ L.Icon.Default.mergeOptions({
     shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
 
+const formatPrice = (price, type) => {
+    const numericPrice = parseFloat(price);
+    if (isNaN(numericPrice)) return 'Price not available';
+    if (type === 'monthly-rental') return `$${numericPrice.toFixed(2)}/month`;
+    if (type === 'daily-rental') return `$${numericPrice.toFixed(2)}/day`;
+    return `$${numericPrice.toFixed(2)}`;
+};
 
 function ListingDetail() {
-    const { id: listingId } = useParams(); // Use this consistently
+    const { id: listingId } = useParams();
+    const navigate = useNavigate();
 
     const [listing, setListing] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -36,11 +47,12 @@ function ListingDetail() {
     const [reviews, setReviews] = useState([]);
     const [reviewLoading, setReviewLoading] = useState(true);
     const [reviewError, setReviewError] = useState(null);
-    const [newReviewRating, setNewReviewRating] = useState(5);
+    const [newReviewRating, setNewReviewRating] = useState(0);
     const [newReviewComment, setNewReviewComment] = useState('');
 
     const [photoIndex, setPhotoIndex] = useState(0);
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+    const [showAllPhotos, setShowAllPhotos] = useState(false); // State for toggling all photos view
 
     const [reviewSubmitting, setReviewSubmitting] = useState(false);
     const [reviewSubmitError, setReviewSubmitError] = useState(null);
@@ -53,15 +65,11 @@ function ListingDetail() {
 
     const [isFavorited, setIsFavorited] = useState(false);
 
-    // MODIFIED: Added isSocketEligible and fetchSocketEligibility
     const { isAuthenticated, user, token, favorites, toggleFavorite, isSocketEligible, fetchSocketEligibility } = useAuth();
-
-    // Removed: const [listingIdFromParams, setListingIdFromParams] = useState(useParams().id); // This was problematic
 
     const [bookedRanges, setBookedRanges] = useState([]);
     const [loadingBookedDates, setLoadingBookedDates] = useState(true);
 
-    // Effect to fetch main listing details
     useEffect(() => {
         const fetchListing = async () => {
             if (!listingId) return;
@@ -74,31 +82,22 @@ function ListingDetail() {
                 }
                 const response = await axios.get(`http://localhost:5000/api/listings/${listingId}`, config);
                 setListing(response.data);
-                console.log('Listing details fetched (on ID change):', response.data); // Log to confirm it runs less often
             } catch (err) {
                 console.error('Error fetching listing details:', err);
-                if (err.response && err.response.status === 404) {
-                    setError('Listing not found or is not active.');
-                } else {
-                    setError('Failed to fetch listing details. Please try again later.');
-                }
+                setError(err.response?.data?.message || 'Failed to fetch listing details.');
             } finally {
                 setLoading(false);
             }
         };
         fetchListing();
-    }, [listingId, token]); // Depends on listingId and token (for auth header)
+    }, [listingId, token]);
 
-    // Effect to synchronize isFavorited state with favorites from context
     useEffect(() => {
-        if (listingId) {
-            // favorites might be null/undefined if AuthContext is still loading them.
-            // Default to false if favorites is not yet an array.
-            setIsFavorited(favorites ? favorites.includes(listingId) : false);
+        if (listingId && favorites) {
+            setIsFavorited(favorites.includes(listingId));
         }
-    }, [listingId, favorites]); // Depends on listingId and the global favorites list
+    }, [listingId, favorites]);
 
-    // Effect to fetch reviews
     useEffect(() => {
         const fetchReviews = async () => {
             if (!listingId) return;
@@ -107,7 +106,6 @@ function ListingDetail() {
                 setReviewError(null);
                 const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/reviews`);
                 setReviews(response.data);
-                console.log('Reviews fetched:', response.data);
             } catch (err) {
                 console.error('Error fetching reviews:', err);
                 setReviewError('Failed to load reviews.');
@@ -118,131 +116,90 @@ function ListingDetail() {
         fetchReviews();
     }, [listingId]);
 
-    // Effect to fetch booked dates for the listing
     useEffect(() => {
-        const fetchBookedDatesForListing = async () => {
-            if (!listingId) return; // Use listingId from useParams()
+        const fetchBookedDates = async () => {
+            if (!listingId) return;
             setLoadingBookedDates(true);
             try {
                 const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
-                console.log("Raw booked dates from backend:", response.data);
-                const ranges = response.data.map(range => ({
+                setBookedRanges(response.data.map(range => ({
                     start: new Date(range.start),
                     end: new Date(range.end)
-                }));
-                console.log("Processed bookedRanges for calendar:", ranges);
-                setBookedRanges(ranges);
+                })));
             } catch (err) {
                 console.error("Error fetching booked dates:", err);
             } finally {
                 setLoadingBookedDates(false);
             }
         };
-        fetchBookedDatesForListing();
-    }, [listingId]); // Use listingId from useParams()
-
+        fetchBookedDates();
+    }, [listingId]);
 
     const tileDisabled = ({ date, view }) => {
         if (view === 'month') {
+            const today = new Date(); today.setHours(0,0,0,0);
+            if (date < today) return true;
             for (const range of bookedRanges) {
-                const startDate = new Date(range.start);
-                const endDate = new Date(range.end);
-
-                const normalizedCurrentDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                const normalizedRangeStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-                const normalizedRangeEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-
-                // Check if current date falls within a booked range (inclusive)
-                if (normalizedCurrentDate >= normalizedRangeStart && normalizedCurrentDate <= normalizedRangeEnd) {
-                    return true;
-                }
+                const normDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                const normStart = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate());
+                const normEnd = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate());
+                if (normDate >= normStart && normDate <= normEnd) return true;
             }
         }
         return false;
     };
 
-
     const handleReviewSubmit = async (e) => {
         e.preventDefault();
-        setReviewSubmitError(null);
-        setReviewSubmitSuccess(null);
-        setReviewSubmitting(true);
-
-        if (newReviewRating === null || newReviewRating < 1 || newReviewRating > 5) {
-            setReviewSubmitError('Please select a rating between 1 and 5.');
-            setReviewSubmitting(false);
-            return;
+        if (newReviewRating < 1) {
+            setReviewSubmitError('Please select a rating.'); return;
         }
-
+        setReviewSubmitting(true); setReviewError(null); setReviewSubmitSuccess(null);
         try {
             const response = await axios.post(`http://localhost:5000/api/listings/${listingId}/reviews`,
                 { rating: newReviewRating, comment: newReviewComment },
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
-            setReviewSubmitSuccess(response.data.message);
-            console.log('Review submitted:', response.data.review);
+            setReviewSubmitSuccess(response.data.message || "Review submitted!");
             setReviews([response.data.review, ...reviews]);
-            setNewReviewRating(5);
-            setNewReviewComment('');
+            setNewReviewRating(0); setNewReviewComment('');
+            // Fetch updated listing to get new average_rating
+            const listingResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}`);
+            setListing(listingResponse.data);
+            setTimeout(() => setReviewSubmitSuccess(null), 3000);
         } catch (err) {
-            console.error('Error submitting review:', err);
-            setReviewSubmitError(err.response?.data?.message || 'Failed to submit review. Please try again.');
+            setReviewSubmitError(err.response?.data?.message || 'Failed to submit review.');
+            setTimeout(() => setReviewSubmitError(null), 3000);
         } finally {
             setReviewSubmitting(false);
         }
     };
 
     const handleDateChange = (dates) => {
-        setBookingDates(dates);
-        setBookingError(null);
-        setBookingSuccess(null);
+        setBookingDates(dates); setBookingError(null); setBookingSuccess(null);
     };
 
     const handleBookingRequest = async () => {
         if (!bookingDates || !bookingDates[0] || !bookingDates[1]) {
-            setBookingError("Please select a start and end date.");
-            return;
+            setBookingError("Please select a start and end date."); return;
         }
-        setBookingSubmitting(true);
-        setBookingError(null);
-        setBookingSuccess(null);
-
+        setBookingSubmitting(true); setBookingError(null); setBookingSuccess(null);
         try {
             const response = await axios.post('http://localhost:5000/api/bookings', {
                 listing_id: listingId,
                 start_date: bookingDates[0].toISOString().split('T')[0],
                 end_date: bookingDates[1].toISOString().split('T')[0],
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setBookingSuccess(response.data.message);
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            setBookingSuccess(response.data.message || "Booking request submitted!");
             setBookingDates([null, null]);
-
-            // Re-fetch booked dates to update the calendar immediately
-            try {
-                console.log("Re-fetching booked dates after successful booking...");
-                const bookedResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
-                const ranges = bookedResponse.data.map(range => ({
-                    start: new Date(range.start),
-                    end: new Date(range.end)
-                }));
-                setBookedRanges(ranges);
-                console.log("Booked ranges updated for calendar after booking.");
-            } catch (fetchErr) {
-                console.error("Error re-fetching booked dates after booking:", fetchErr);
-                // Optionally, set an error message for this part if critical
-            }
-
-            // ADDED: Dynamic socket eligibility check after a successful booking
-            if (token && isAuthenticated && !isSocketEligible) { 
-                console.log("Booking created, checking for socket eligibility update.");
-                // No need to await here unless immediate UI depends on it; AuthContext will handle state update.
-                fetchSocketEligibility(token); 
-            }
-
+            // Re-fetch booked dates
+            const bookedResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
+            setBookedRanges(bookedResponse.data.map(range => ({ start: new Date(range.start), end: new Date(range.end) })));
+            if (token && isAuthenticated && !isSocketEligible) fetchSocketEligibility(token);
+            setTimeout(() => setBookingSuccess(null), 3000);
         } catch (err) {
-            console.error("Error requesting booking:", err);
             setBookingError(err.response?.data?.message || "Failed to submit booking request.");
+            setTimeout(() => setBookingError(null), 3000);
         } finally {
             setBookingSubmitting(false);
         }
@@ -250,326 +207,396 @@ function ListingDetail() {
 
     const handleFavoriteToggle = async () => {
         if (!isAuthenticated || !listingId) return;
-
         try {
-            // toggleFavorite is expected to:
-            // 1. Make the API call.
-            // 2. Update favorites in AuthContext.
-            // 3. Return the new favorite status (true if favorited, false if not).
-            const newFavoriteStatus = await toggleFavorite(listingId);
-            setIsFavorited(newFavoriteStatus); // Update local state for immediate UI response
+            const newStatus = await toggleFavorite(listingId);
+            setIsFavorited(newStatus);
         } catch (error) {
-            console.error("Failed to toggle favorite status:", error);
-            // Optionally, show an error message to the user.
-            // The useEffect syncing with context.favorites will eventually correct the state if toggleFavorite failed
-            // to update context but an error occurred.
+            console.error("Failed to toggle favorite:", error);
         }
     };
 
-    if (loading) {
-        return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-700 min-h-screen">
-                Loading listing details...
-            </div>
-        );
-    }
+    const handleContactOwner = () => {
+        if (!isAuthenticated) navigate(`/login?redirect=/listings/${listingId}/chat`);
+        else navigate(`/listings/${listingId}/chat`);
+    };
 
-    if (error) {
-        return (
-            <div className="container mx-auto px-4 py-8 text-center text-red-600 min-h-screen">
-                Error: {error}
-            </div>
-        );
-    }
+    if (loading) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>Loading...</div>;
+    if (error) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>Error: {error}</div>;
+    if (!listing) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>Listing not found.</div>;
 
-    if (!listing) {
-        return (
-            <div className="container mx-auto px-4 py-8 text-center text-gray-700 min-h-screen">
-                Listing not found.
-            </div>
-        );
-    }
-
-    const slides = listing.photos ? listing.photos.map((photoFilename, index) => ({
+    const slides = listing.photos?.map((photoFilename, index) => ({
         src: `http://localhost:5000/uploads/${photoFilename}`,
-        title: `${listing.title} - Photo ${index + 1}`,
-    })) : [];
+        title: `${listing.title} - Photo ${index + 1}`
+    })) || [];
 
-    const mapPosition = (listing && listing.latitude && listing.longitude)
-        ? [parseFloat(listing.latitude), parseFloat(listing.longitude)]
-        : [51.505, -0.09]; // Default position
-
-    const isOwner = user && listing && user.id === listing.owner_id;
+    const mapPosition = (listing.latitude && listing.longitude) ? [parseFloat(listing.latitude), parseFloat(listing.longitude)] : [51.505, -0.09];
+    const isOwner = user && listing.owner_id === user.id;
     const canBook = listing.type === 'daily-rental';
 
+    const featuredPhotosCount = 5; // Total featured photos (1 main + 4 small)
+    const mainPhoto = slides.length > 0 ? slides[0] : null;
+    const smallFeaturedPhotos = slides.length > 1 ? slides.slice(1, featuredPhotosCount) : [];
+    const extraPhotos = slides.length > featuredPhotosCount ? slides.slice(featuredPhotosCount) : [];
+
+    const getAvatarUrl = (profileImageUrl, nameOrEmail) => {
+        if (profileImageUrl) {
+            // Assuming profile_image_url contains a path like /uploads/profiles/filename.ext
+            // We need to ensure it's pointing to the correct uploads directory for profiles
+            const filename = profileImageUrl.split('/').pop();
+            return `http://localhost:5000/uploads/profiles/${filename}`;
+        }
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(nameOrEmail || 'U')}&background=random&size=56&color=fff&font-size=0.5`;
+    };
+
     return (
-        <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
-            <div className="bg-white rounded-sm shadow-md overflow-hidden p-6 md:p-8">
-
-                <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-800 mb-2">{listing.title}</h1>
-                        <p className="text-sm text-gray-600 mb-1">Location: {listing.location}</p>
-                    </div>
-                    {isAuthenticated && (
-                        <button onClick={handleFavoriteToggle} className="p-2 rounded-full hover:bg-red-100 transition-colors">
-                            {isFavorited ? (
-                                <HeartSolid className="w-7 h-7 text-red-500" />
-                            ) : (
-                                <HeartOutline className="w-7 h-7 text-red-500" />
-                            )}
-                        </button>
-                    )}
-                </div>
-                 <div className="mb-6 pb-4 border-b border-gray-200">
-                    <p className="text-2xl font-semibold text-blue-600">
-                        {listing.type === 'monthly-rental' ? `$${listing.price}/month` :
-                         (listing.type === 'daily-rental' ? `$${listing.price}/day` : `$${listing.price}`)}
-                    </p>
-                </div>
-
-                <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-3">Photos</h2>
-                    {slides.length > 0 ? (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                            {slides.map((slide, index) => (
-                                <img
-                                    key={index}
-                                    src={slide.src}
-                                    alt={`${listing.title} Photo ${index + 1}`}
-                                    className="w-full h-40 object-cover rounded-sm cursor-pointer hover:opacity-80 transition-opacity"
-                                    onClick={() => { setPhotoIndex(index); setIsLightboxOpen(true); }}
-                                />
-                            ))}
-                             <Lightbox
-                                open={isLightboxOpen}
-                                close={() => setIsLightboxOpen(false)}
-                                slides={slides}
-                                index={photoIndex}
-                                plugins={[Captions, Download, Fullscreen, Thumbnails, Zoom]}
-                             />
-                        </div>
-                    ) : (
-                        <div className="w-full h-64 bg-gray-200 flex items-center justify-center text-gray-600 rounded-sm">
-                            No Photos Available
-                        </div>
-                    )}
-                </div>
-
-                <div className="mb-6 pb-4 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-3">Description</h2>
-                    <p className="text-gray-700 leading-relaxed">{listing.description || 'No description provided.'}</p>
-                </div>
-
-                <div className="mb-6 pb-4 border-b border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">Details</h3>
-                        <p className="text-gray-700"><strong>Type:</strong> 
-                            {listing.type === 'monthly-rental' ? 'Monthly Rental' : 
-                             (listing.type === 'daily-rental' ? 'Daily Rental' : listing.type)}
-                        </p>
-                        {listing.rooms && <p className="text-gray-700"><strong>Rooms:</strong> {listing.rooms}</p>}
-                        {listing.area && <p className="text-gray-700"><strong>Area:</strong> {listing.area} sq ft/m²</p>}
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">Amenities</h3>
-                        <p className="text-gray-700">{listing.amenities || 'No amenities listed.'}</p>
-                    </div>
-                </div>
-
-                {listing.Owner && (
-                    <div className="mb-6 pb-4 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-800 mb-3">Property Owner</h2>
-                        <p className="text-gray-700">
-                            <strong>Name:</strong>
-                            <Link
-                                to={`/profiles/${listing.Owner.id}`}
-                                className="text-blue-600 hover:underline ml-1"
-                            >
-                                {listing.Owner.name || listing.Owner.email}
-                            </Link>
-                        </p>
-                    </div>
-                )}
-
-
-                <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-3">Location on Map</h2>
-                    {(listing && listing.latitude && listing.longitude) ? (
-                        <MapContainer
-                            center={mapPosition}
-                            zoom={15}
-                            scrollWheelZoom={false}
-                            className="w-full h-96 rounded-sm border border-gray-300"
-                        >
-                            <TileLayer
-                                attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            />
-                            <Marker position={mapPosition}>
-                                <Popup>
-                                    {listing.title} <br /> {listing.location}
-                                </Popup>
-                            </Marker>
-                        </MapContainer>
-                    ) : (
-                        <div className="w-full h-64 bg-gray-200 flex items-center justify-center text-gray-600 rounded-sm">
-                            Location coordinates not available for map display.
-                        </div>
-                    )}
-                </div>
-
-                {canBook && isAuthenticated && !isOwner && (
-                    <div className="my-8 p-6 bg-gray-50 rounded-sm shadow">
-                        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Request to Book</h2>
-                         {loadingBookedDates && <p className="text-sm text-gray-600 mb-2">Loading availability...</p>}
-                        <div className="flex flex-col md:flex-row md:space-x-6 items-start">
-                            <div className="mb-4 md:mb-0 md:flex-1">
-                                <Calendar
-                                    onChange={handleDateChange}
-                                    value={bookingDates}
-                                    selectRange={true}
-                                    minDate={new Date()}
-                                    tileDisabled={tileDisabled}
-                                    className="border-gray-300 rounded-sm shadow-sm react-calendar-override"
-                                    tileClassName={({ date, view }) => {
-                                        return null; // Custom class logic can go here if needed
-                                    }}
-                                />
-                            </div>
-                            <div className="md:flex-1">
-                                {bookingDates && bookingDates[0] && bookingDates[1] && (
-                                    <div className="mb-4 p-3 bg-blue-50 rounded-sm text-blue-700">
-                                        <p><strong>Selected Start:</strong> {bookingDates[0].toLocaleDateString()}</p>
-                                        <p><strong>Selected End:</strong> {bookingDates[1].toLocaleDateString()}</p>
-                                    </div>
-                                )}
-                                <button
-                                    onClick={handleBookingRequest}
-                                    disabled={bookingSubmitting || !bookingDates || !bookingDates[0] || !bookingDates[1] || loadingBookedDates}
-                                    className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out disabled:opacity-50"
-                                >
-                                    {bookingSubmitting ? 'Submitting Request...' : (loadingBookedDates ? 'Loading Availability...' : 'Request to Book')}
+        <div className="bg-slate-50 min-h-screen py-5 md:py-10" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>
+            <div className="px-4 sm:px-6 md:px-8">
+                <div className="layout-content-container flex flex-col max-w-5xl mx-auto bg-white shadow-xl rounded-lg overflow-hidden">
+                    
+                    <div className="p-4 sm:p-6 md:p-8">
+                        <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
+                            <h1 className="text-[#0d141c] tracking-light text-3xl lg:text-4xl font-bold leading-tight">
+                                {listing.title}
+                            </h1>
+                            {isAuthenticated && !isOwner && (
+                                <button onClick={handleFavoriteToggle} className="p-2 rounded-full hover:bg-red-100 transition-colors">
+                                    {isFavorited ? <HeartSolid className="w-7 h-7 text-red-500" /> : <HeartOutline className="w-7 h-7 text-red-500" />}
                                 </button>
-                                {bookingError && <p className="mt-2 text-sm text-red-600">{bookingError}</p>}
-                                {bookingSuccess && <p className="mt-2 text-sm text-green-600">{bookingSuccess}</p>}
-                            </div>
+                            )}
                         </div>
-                    </div>
-                )}
-                {!isAuthenticated && canBook && (
-                    <div className="my-8 p-4 bg-gray-100 rounded-sm text-center text-gray-700">
-                        Please <Link to="/login" className="text-blue-600 hover:underline">log in</Link> or <Link to="/register" className="text-blue-600 hover:underline">register</Link> to book this rental.
-                    </div>
-                )}
-                {listing.type === 'monthly-rental' && (
-                     <div className="my-8 p-4 bg-blue-50 rounded-sm text-center text-blue-800">
-                        For monthly rentals, please contact the owner directly to arrange terms and booking.
-                    </div>
-                )}
-
-                <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-3">Reviews</h2>
-
-                    {isAuthenticated ? (
-                        <div className="bg-gray-50 p-4 rounded-sm mb-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Leave a Review</h3>
-
-                            {reviewSubmitting && <div className="text-center text-blue-600 mb-2">Submitting review...</div>}
-                            {reviewSubmitSuccess && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded relative mb-2 text-sm">{reviewSubmitSuccess}</div>}
-                            {reviewSubmitError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded relative mb-2 text-sm">{reviewSubmitError}</div>}
-
-
-                            <form onSubmit={handleReviewSubmit}>
-                                <div className="mb-3">
-                                    <label className="block text-gray-700 text-sm font-bold mb-1" htmlFor="rating">Rating (1-5)</label>
-                                    <input
-                                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                        id="rating"
-                                        type="number"
-                                        min="1"
-                                        max="5"
-                                        value={newReviewRating}
-                                        onChange={(e) => setNewReviewRating(parseInt(e.target.value, 10))}
-                                        required
-                                    />
+                        <div className="mb-6 text-sm text-slate-600">
+                            {listing.location}
+                            {listing.average_rating && parseFloat(listing.average_rating) > 0 && (
+                                <>
+                                    <span className="mx-2">·</span>
+                                    <span className="flex items-center">
+                                        <StarSolidIcon className="w-4 h-4 text-yellow-500 mr-1" />
+                                        {parseFloat(listing.average_rating).toFixed(1)} ({listing.review_count} reviews)
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    
+                        {/* Main Featured Photo Grid */}
+                        <div className="w-full @container mb-2 relative"> {/* Added relative for button positioning */}
+                            {slides.length > 0 ? (
+                                <div className="w-full gap-1 @[480px]:gap-2 aspect-video rounded-lg grid grid-cols-[2fr_1fr_1fr] grid-rows-2 overflow-hidden">
+                                    {mainPhoto && (
+                                        <div
+                                            className="w-full h-full bg-center bg-no-repeat bg-cover row-span-2 col-span-1 cursor-pointer"
+                                            style={{ backgroundImage: `url(${mainPhoto.src})` }}
+                                            onClick={() => { setPhotoIndex(0); setIsLightboxOpen(true); }}
+                                        ></div>
+                                    )}
+                                    {smallFeaturedPhotos.map((photo, index) => (
+                                        <div
+                                            key={`featured-${index}`}
+                                            className={`w-full h-full bg-center bg-no-repeat bg-cover cursor-pointer ${index < 2 ? 'col-start-' + (index + 2) + ' row-start-1' : 'col-start-' + (index - 2 + 2) + ' row-start-2'}`}
+                                            style={{ backgroundImage: `url(${photo.src})` }}
+                                            onClick={() => { setPhotoIndex(index + 1); setIsLightboxOpen(true); }}
+                                        ></div>
+                                    ))}
+                                    {/* Fillers for featured grid if less than 5 photos */}
+                                    {slides.length > 0 && slides.length < featuredPhotosCount && 
+                                     Array.from({ length: Math.max(0, (featuredPhotosCount - 1) - smallFeaturedPhotos.length) }).map((_, i) => {
+                                        const overallIndexInSmallGrid = smallFeaturedPhotos.length + i;
+                                        let colStart, rowStart;
+                                        if (overallIndexInSmallGrid < 2) { colStart = overallIndexInSmallGrid + 2; rowStart = 1; } 
+                                        else { colStart = (overallIndexInSmallGrid - 2) + 2; rowStart = 2; }
+                                        return <div key={`filler-featured-${i}`} className={`w-full h-full bg-slate-200 col-start-${colStart} row-start-${rowStart}`}></div>;
+                                    })}
                                 </div>
-
-                                <div className="mb-4">
-                                    <label className="block text-gray-700 text-sm font-bold mb-1" htmlFor="comment">Comment (Optional)</label>
-                                    <textarea
-                                        className="shadow appearance-none border border-gray-300 rounded-sm w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                        id="comment"
-                                        placeholder="Share your experience..."
-                                        value={newReviewComment}
-                                        onChange={(e) => setNewReviewComment(e.target.value)}
-                                        rows="3"
-                                    ></textarea>
-                                </div>
-
-                                <div className="flex justify-end">
+                            ) : (
+                                <div className="w-full aspect-video bg-slate-200 flex items-center justify-center text-slate-500 rounded-lg">No Photos Available</div>
+                            )}
+                             {/* "Show all photos" Button - positioned over the grid */}
+                            {extraPhotos.length > 0 && ( // Only show if there are extra photos beyond the featured 5
+                                <div className="absolute bottom-4 right-4">
                                     <button
-                                        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out text-sm"
-                                        type="submit"
-                                        disabled={reviewSubmitting}
+                                        onClick={() => setShowAllPhotos(!showAllPhotos)}
+                                        className="flex items-center gap-2 bg-black bg-opacity-70 hover:bg-opacity-80 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-75"
                                     >
-                                        {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                                        <PhotoIcon className="w-5 h-5"/>
+                                        {showAllPhotos ? 'Hide Extra Photos' : `Show ${extraPhotos.length} More`}
                                     </button>
                                 </div>
-                            </form>
+                            )}
                         </div>
-                    ) : (
-                        <div className="bg-gray-100 p-4 rounded-sm text-center text-gray-700 mb-6">
-                            Please log in to leave a review.
-                        </div>
-                    )}
 
-
-                    {reviewLoading && <div className="text-center text-gray-700">Loading reviews...</div>}
-                    {reviewError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 text-center">{reviewError}</div>}
-                    {!reviewLoading && !reviewError && reviews.length === 0 && (
-                        <div className="text-gray-700">No reviews yet. Be the first to leave one!</div>
-                    )}
-                    {!reviewLoading && !reviewError && reviews.length > 0 && (
-                        <div className="space-y-4">
-                            {reviews.map(review => (
-                                <div key={review.id} className="bg-gray-50 p-4 rounded-sm shadow-sm border border-gray-200">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="font-semibold text-gray-800">{review.User?.name || review.User?.email || 'Anonymous'}</span>
-                                        <span className="text-sm text-gray-600">Rating: {review.rating}/5</span>
+                        {/* Expanded Photos Grid (conditionally rendered) */}
+                        {showAllPhotos && extraPhotos.length > 0 && (
+                            <div className="mt-4 mb-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                {extraPhotos.map((slide, index) => (
+                                    <div 
+                                        key={`extra-photo-${index}`} 
+                                        className="aspect-square cursor-pointer overflow-hidden rounded-md hover:opacity-90 transition-opacity"
+                                        onClick={() => { setPhotoIndex(featuredPhotosCount + index); setIsLightboxOpen(true); }} // Correct index for lightbox
+                                    >
+                                        <img
+                                            src={slide.src}
+                                            alt={slide.title}
+                                            className="w-full h-full object-cover"
+                                        />
                                     </div>
-                                    <p className="text-gray-700 leading-snug">{review.comment || 'No comment provided.'}</p>
-                                    <div className="text-xs text-gray-500 mt-2">
-                                        Reviewed on: {new Date(review.createdAt).toLocaleDateString()}
+                                ))}
+                            </div>
+                        )}
+                        
+                        <Lightbox
+                            open={isLightboxOpen}
+                            close={() => setIsLightboxOpen(false)}
+                            slides={slides}
+                            index={photoIndex}
+                            plugins={[Captions, Download, Fullscreen, Thumbnails, Zoom]}
+                        />
+
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-2">About this listing</h2>
+                        <p className="text-slate-700 text-base leading-relaxed pb-3 pt-1 whitespace-pre-wrap">
+                            {listing.description || 'No description provided.'}
+                        </p>
+
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-5">Listing Details</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                            {[
+                                { label: "Price", value: formatPrice(listing.price, listing.type) },
+                                { label: "Rental Type", value: listing.type === 'monthly-rental' ? 'Monthly' : (listing.type === 'daily-rental' ? 'Daily' : listing.type) },
+                                listing.rooms ? { label: "Rooms", value: `${listing.rooms} Bedroom(s)` } : null,
+                                listing.area ? { label: "Area", value: `${listing.area} sq ft/m²` } : null,
+                                { label: "Address", value: listing.location }, // Address is already shown above title, consider removing or rephrasing.
+                                { label: "Amenities", value: listing.amenities || 'N/A' },
+                            ].filter(Boolean).map((item) => (
+                                <div key={item.label} className="flex flex-col py-3 border-t border-solid border-slate-200">
+                                    <p className="text-slate-500 text-sm font-normal leading-normal">{item.label}</p>
+                                    <p className="text-[#0d141c] text-sm font-medium leading-normal">{item.value}</p>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {listing.Owner && (
+                            <>
+                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-5">Owner Information</h2>
+                                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-lg">
+                                    <img
+                                        className="aspect-square bg-cover rounded-full h-14 w-14 object-cover border border-slate-300"
+                                        src={getAvatarUrl(listing.Owner.profile_image_url, listing.Owner.name || listing.Owner.email)}
+                                        alt={listing.Owner.name || 'Owner'}
+                                    />
+                                    <div>
+                                        <Link to={`/profiles/${listing.Owner.id}`} className="text-[#0d141c] text-base font-semibold leading-normal hover:underline">
+                                            {listing.Owner.name || listing.Owner.email}
+                                        </Link>
+                                        <Link to={`/profiles/${listing.Owner.id}`} className="block text-sm text-[#0c7ff2] hover:underline">
+                                            View Profile
+                                        </Link>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {isAuthenticated && !isOwner && (
+                            <>
+                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-2 pt-5">Contact Owner</h2>
+                                <div className="py-2">
+                                    <button
+                                        onClick={handleContactOwner}
+                                        className="w-full sm:w-auto flex items-center justify-center bg-[#0c7ff2] hover:bg-[#0a69c3] text-white font-bold py-2.5 px-6 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] focus:ring-opacity-50"
+                                    >
+                                        Send a Message
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                        {isOwner && <div className="mt-5 p-3 text-sm text-slate-600 bg-slate-100 rounded-lg">You are the owner of this listing. You can manage it from your dashboard.</div>}
+                        {!isAuthenticated && !isOwner && <div className="mt-5 text-sm text-slate-600"><button onClick={handleContactOwner} className="text-[#0c7ff2] hover:underline font-medium">Log in to contact the owner.</button></div>}
+
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Location</h2>
+                        <div className="py-3">
+                            {(listing.latitude && listing.longitude) ? (
+                                <MapContainer center={mapPosition} zoom={15} scrollWheelZoom={false} className="w-full h-80 sm:h-96 rounded-lg border border-slate-300">
+                                    <TileLayer attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                    <Marker position={mapPosition}><Popup>{listing.title}<br/>{listing.location}</Popup></Marker>
+                                </MapContainer>
+                            ) : (
+                                <div className="w-full h-80 sm:h-96 bg-slate-200 flex items-center justify-center text-slate-500 rounded-lg">Map data not available.</div>
+                            )}
+                        </div>
+
+                        {canBook && isAuthenticated && !isOwner && (
+                            <>
+                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Booking</h2>
+                                <div className="flex flex-col md:flex-row items-start gap-6 py-3">
+                                    <div className="flex-1 w-full max-w-md mx-auto md:mx-0">
+                                        {loadingBookedDates && <p className="text-sm text-center text-slate-500 mb-2">Loading availability...</p>}
+                                        <Calendar onChange={handleDateChange} value={bookingDates} selectRange minDate={new Date()} tileDisabled={tileDisabled} className="react-calendar-custom mx-auto" />
+                                    </div>
+                                    <div className="flex-1 w-full max-w-md mx-auto md:mx-0 mt-4 md:mt-0 md:pl-4">
+                                        {bookingDates && bookingDates[0] && bookingDates[1] && (
+                                            <div className="mb-4 p-3 bg-[#e7f2fe] rounded-lg text-[#0c7ff2]">
+                                                <p><strong>Start:</strong> {bookingDates[0].toLocaleDateString()}</p>
+                                                <p><strong>End:</strong> {bookingDates[1].toLocaleDateString()}</p>
+                                            </div>
+                                        )}
+                                        <button onClick={handleBookingRequest} disabled={bookingSubmitting || !bookingDates?.[0] || !bookingDates?.[1] || loadingBookedDates}
+                                            className="w-full bg-[#0c7ff2] hover:bg-[#0a69c3] text-white font-bold py-2.5 px-4 rounded-md text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] focus:ring-opacity-50">
+                                            {bookingSubmitting ? 'Submitting...' : (loadingBookedDates ? 'Loading Dates...' : 'Request to Book')}
+                                        </button>
+                                        {bookingError && <p className="mt-2 text-sm text-red-600">{bookingError}</p>}
+                                        {bookingSuccess && <p className="mt-2 text-sm text-green-600">{bookingSuccess}</p>}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        {!isAuthenticated && canBook && <div className="my-6 p-4 bg-[#e7f2fe] rounded-lg text-center text-[#0c7ff2]"><Link to={`/login?redirect=/listings/${listingId}`} className="font-bold hover:underline">Log in</Link> or <Link to={`/register?redirect=/listings/${listingId}`} className="font-bold hover:underline">register</Link> to book this rental.</div>}
+                        {listing.type === 'monthly-rental' && <div className="my-6 p-4 bg-[#e7f2fe] rounded-lg text-center text-[#0c7ff2]">For monthly rentals, please use the "Contact Owner" button to arrange terms and booking.</div>}
+
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Reviews</h2>
+                        {isAuthenticated && !isOwner && (
+                            <div className="py-3">
+                                {reviewSubmitSuccess && <div className="mb-3 p-3 bg-green-100 text-green-700 rounded-md text-sm">{reviewSubmitSuccess}</div>}
+                                {reviewSubmitError && <div className="mb-3 p-3 bg-red-100 text-red-700 rounded-md text-sm">{reviewSubmitError}</div>}
+                                <form onSubmit={handleReviewSubmit} className="flex flex-col max-w-xl gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-[#0d141c] mb-1">Your Rating</label>
+                                        <div className="flex">
+                                            {[1, 2, 3, 4, 5].map((star) => (
+                                                <button key={star} type="button" onClick={() => setNewReviewRating(star)} aria-label={`Rate ${star} stars`}
+                                                    className={`text-3xl p-1 focus:outline-none ${star <= newReviewRating ? 'text-[#0c7ff2]' : 'text-slate-300 hover:text-slate-400'}`}>
+                                                    {star <= newReviewRating ? <StarSolidIcon className="w-6 h-6" /> : <StarOutlineIcon className="w-6 h-6" />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <label className="flex flex-col">
+                                        <span className="block text-sm font-medium text-[#0d141c] mb-1">Your Review</span>
+                                        <textarea id="comment" placeholder="Share your experience..." value={newReviewComment} onChange={(e) => setNewReviewComment(e.target.value)} rows="4"
+                                            className="form-textarea w-full resize-none rounded-lg text-[#0d141c] focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] border border-slate-300 bg-white min-h-32 p-3 text-base placeholder:text-slate-400"></textarea>
+                                    </label>
+                                    <button type="submit" disabled={reviewSubmitting || newReviewRating === 0}
+                                        className="self-start bg-[#0c7ff2] hover:bg-[#0a69c3] text-white font-bold py-2 px-5 rounded-md text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] focus:ring-opacity-50">
+                                        {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                                    </button>
+                                </form>
+                            </div>
+                        )}
+                        {!isAuthenticated && <div className="py-3 text-sm text-slate-600"><Link to={`/login?redirect=/listings/${listingId}`} className="text-[#0c7ff2] hover:underline font-medium">Log in</Link> to leave a review.</div>}
+                        {isAuthenticated && isOwner && <div className="py-3 text-sm text-slate-600 bg-slate-100 rounded-lg p-3">Owners cannot review their own listings.</div>}
+                        
+                        <div className="mt-6 space-y-6">
+                            {reviewLoading && <p className="text-slate-500">Loading reviews...</p>}
+                            {reviewError && <p className="text-red-500">{reviewError}</p>}
+                            {!reviewLoading && !reviewError && reviews.length === 0 && <p className="text-slate-500">No reviews yet for this listing.</p>}
+                            {reviews.map(review => (
+                                <div key={review.id} className="pb-4 border-b border-slate-200 last:border-b-0">
+                                    <div className="flex items-start gap-3">
+                                        <img
+                                            className="aspect-square bg-cover rounded-full size-10 object-cover border border-slate-300 mt-1"
+                                            src={getAvatarUrl(review.User?.profile_image_url, review.User?.name || review.User?.email)}
+                                            alt={review.User?.name || 'Reviewer'}
+                                        />
+                                        <div className="flex-1">
+                                            <p className="text-[#0d141c] text-base font-semibold leading-normal">{review.User?.name || review.User?.email || 'Anonymous'}</p>
+                                            <p className="text-slate-500 text-xs font-normal leading-normal mb-1">{new Date(review.createdAt).toLocaleDateString()}</p>
+                                            <div className="flex gap-0.5 items-center mb-1.5">
+                                                {[...Array(5)].map((_, i) => <StarSolidIcon key={i} className={`w-5 h-5 ${i < review.rating ? "text-[#0c7ff2]" : "text-slate-300"}`} />)}
+                                                <span className="ml-2 text-sm text-[#0d141c] font-medium">{review.rating}/5</span>
+                                            </div>
+                                            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap">{review.comment || 'No comment provided.'}</p>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    )}
+                    </div>
                 </div>
-
-                <div className="text-center">
-                    {isAuthenticated && !isOwner && (
-                        <Link
-                            to={`/listings/${listingId}/chat`}
-                            className="inline-block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-sm focus:outline-none focus:shadow-outline transition duration-150 ease-in-out"
-                        >
-                            Contact Owner
-                        </Link>
-                    )}
-                    {isOwner && (
-                        <div className="text-gray-600 text-sm">
-                            You are the owner of this listing.
-                        </div>
-                    )}
-                    {!isAuthenticated && (
-                        <div className="text-gray-600 text-sm">
-                            Log in to contact the owner.
-                        </div>
-                    )}
-                </div>
-
             </div>
+
+            <style jsx global>{`
+                .react-calendar-custom {
+                    width: 100%;
+                    border: 1px solid #e2e8f0; /* slate-200 */
+                    border-radius: 0.5rem; /* rounded-lg */
+                    font-family: inherit;
+                    background-color: white;
+                    box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+                }
+                .react-calendar-custom .react-calendar__navigation button {
+                    color: #0c7ff2; /* primary blue */
+                    min-width: 44px;
+                    background: none;
+                    font-size: 1rem;
+                    font-weight: 500;
+                    margin-top: 8px;
+                    border-radius: 0.25rem;
+                }
+                .react-calendar-custom .react-calendar__navigation button:hover,
+                .react-calendar-custom .react-calendar__navigation button:focus {
+                    background-color: #e7f2fe; /* light blue bg */
+                }
+                .react-calendar-custom .react-calendar__navigation button[disabled] {
+                    background-color: #f8fafc; /* slate-50 */
+                    color: #94a3b8; /* slate-400 */
+                }
+                .react-calendar-custom .react-calendar__month-view__weekdays__weekday {
+                    text-align: center;
+                    text-transform: uppercase;
+                    font-weight: 600; /* semibold */
+                    font-size: 0.75em;
+                    color: #49739c; /* muted blue-gray */
+                    padding: 0.5em;
+                }
+                .react-calendar-custom .react-calendar__month-view__days__day {
+                    color: #0d141c; /* dark text */
+                    background: none;
+                    border: 0;
+                    padding: 0.65em 0.5em; 
+                    margin: 1px; 
+                    border-radius: 0.25rem; 
+                    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+                }
+                .react-calendar-custom .react-calendar__month-view__days__day--neighboringMonth {
+                    color: #94a3b8; /* slate-400 */
+                }
+                .react-calendar-custom .react-calendar__tile:disabled {
+                    background-color: #f1f5f9; /* slate-100 */
+                    color: #cbd5e1; /* slate-300 */
+                    text-decoration: line-through;
+                    cursor: not-allowed;
+                }
+                .react-calendar-custom .react-calendar__tile:enabled:hover,
+                .react-calendar-custom .react-calendar__tile:enabled:focus {
+                    background-color: #e7f2fe; /* light blue bg */
+                    color: #0c7ff2;
+                }
+                .react-calendar-custom .react-calendar__tile--now {
+                    background: #dbeafe; /* blue-200ish */
+                    font-weight: bold;
+                    color: #1e40af; /* darker blue text */
+                }
+                .react-calendar-custom .react-calendar__tile--active,
+                .react-calendar-custom .react-calendar__tile--rangeStart,
+                .react-calendar-custom .react-calendar__tile--rangeEnd {
+                    background: #0c7ff2 !important; /* primary blue */
+                    color: white !important;
+                    font-weight: bold;
+                }
+                .react-calendar-custom .react-calendar__tile--active:enabled:hover,
+                .react-calendar-custom .react-calendar__tile--active:enabled:focus {
+                    background: #0a69c3 !important; /* darker primary blue */
+                }
+                .react-calendar-custom .react-calendar__tile.react-calendar__tile--range.react-calendar__month-view__days__day {
+                    background: #e7f2fe; /* design's range color: light blue bg */
+                    color: #0d141c; /* dark text for in-range dates */
+                    border-radius: 0; /* square for continuous range */
+                }
+                .react-calendar-custom .react-calendar__tile--rangeStart { border-top-left-radius: 0.25rem; border-bottom-left-radius: 0.25rem; }
+                .react-calendar-custom .react-calendar__tile--rangeEnd { border-top-right-radius: 0.25rem; border-bottom-right-radius: 0.25rem; }
+
+                /* Photo grid specific styles */
+                .grid .bg-cover { background-size: cover; background-position: center; background-repeat: no-repeat; }
+                /* For @container query for photo grid, ensure your Tailwind setup supports container queries */
+                 /* .@container { container-type: inline-size; } */
+
+            `}</style>
         </div>
     );
 }

@@ -7,10 +7,10 @@ const Review = require('../models/Review');
 const path = require('path');
 const fs = require('fs').promises;
 const Booking = require('../models/Booking');
-const Analytics = require('../models/Analytics'); // Ensure Analytics is imported
-const logger = require('../config/logger'); // Import Winston logger
+const Analytics = require('../models/Analytics');
+const logger = require('../config/logger');
 
-exports.getListings = async (req, res, next) => { // Added 'next'
+exports.getListings = async (req, res, next) => {
   try {
     const {
       page = 1, limit = 10, sortBy = 'created_at', sortOrder = 'DESC',
@@ -66,24 +66,22 @@ exports.getListings = async (req, res, next) => { // Added 'next'
   }
 };
 
-exports.createListing = async (req, res, next) => { // Added 'next'
+exports.createListing = async (req, res, next) => {
   const owner_id = req.user.id;
-  // Fields are now validated by createListingValidationRules middleware
   const { title, description, price, rooms, area, location, amenities, type, latitude, longitude } = req.body;
   const photoFilenames = req.files ? req.files.map(file => file.filename) : [];
 
   try {
-    // Removed: if (!title || !price || !location || !type) validation is now handled by express-validator
     const newListing = await Listing.create({
       owner_id: owner_id,
       title: title,
       description: description,
-      price: parseFloat(price), // Still need to convert as express-validator returns string
-      rooms: rooms ? parseInt(rooms, 10) : null, // Still need to convert
-      area: area ? parseFloat(area) : null, // Still need to convert
+      price: parseFloat(price),
+      rooms: rooms ? parseInt(rooms, 10) : null,
+      area: area ? parseFloat(area) : null,
       location: location,
-      latitude: latitude ? parseFloat(latitude) : null, // Still need to convert
-      longitude: longitude ? parseFloat(longitude) : null, // Still need to convert
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
       amenities: amenities || null,
       type: type,
       status: 'pending',
@@ -115,27 +113,28 @@ exports.createListing = async (req, res, next) => { // Added 'next'
     });
   } catch (error) {
     logger.error('Error creating listing:', { userId: owner_id, body: req.body, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-// backend/controllers/listingController.js
-exports.getListingById = async (req, res, next) => { // Added 'next'
+exports.getListingById = async (req, res, next) => {
   const listingId = req.params.id;
+  logger.info(`[getListingById] Start: Request for listing ID ${listingId}`);
 
-  logger.debug("\n--- getListingById Controller START ---");
-  logger.debug(`Requested Listing ID: ${listingId} (type: ${typeof listingId})`);
+  let userId = null;
+  let userRole = null;
 
-  let isAdmin = false;
-  if (req.user && typeof req.user === 'object' && req.user.role === 'admin') {
-    isAdmin = true;
+  if (req.user && typeof req.user === 'object') {
+    userId = req.user.id;
+    userRole = req.user.role;
+    logger.debug(`[getListingById] Authenticated user: ID=${userId}, Role=${userRole}`);
+  } else {
+    logger.debug("[getListingById] No authenticated user (public access attempt).");
   }
 
-  logger.debug("req.user (from middleware):", req.user ? {id: req.user.id, role: req.user.role, name: req.user.name} : 'undefined');
-  logger.debug(`Calculated 'isAdmin': ${isAdmin}`);
-
   try {
-    let queryOptions = {
+    logger.debug(`[getListingById] Fetching listing (unscoped): ID ${listingId}`);
+    const listing = await Listing.unscoped().findOne({
       where: { id: listingId },
       include: [
         {
@@ -144,27 +143,29 @@ exports.getListingById = async (req, res, next) => { // Added 'next'
           attributes: ['id', 'name', 'email', 'profile_photo_url']
         }
       ]
-    };
-
-    let listing;
-
-    if (isAdmin) {
-      logger.debug(`ADMIN Scoped Query: Fetching listing ID ${listingId}`);
-      listing = await Listing.unscoped().findOne(queryOptions);
-    } else {
-      queryOptions.where.status = 'active'; // Add status constraint
-      logger.debug(`PUBLIC Scoped Query: Fetching listing ID ${listingId}. Query with status='active':`, JSON.stringify(queryOptions.where));
-      listing = await Listing.findOne(queryOptions);
-    }
+    });
 
     if (!listing) {
-      const message = isAdmin ? `Listing ID ${listingId} not found (admin view).` : `Listing ID ${listingId} not found or is not active.`;
-      logger.info(message);
-      return res.status(404).json({ message: message });
+      logger.warn(`[getListingById] Listing ID ${listingId} not found in database.`);
+      return res.status(404).json({ message: `Listing not found.` });
     }
+    logger.debug(`[getListingById] Found listing: ID ${listing.id}, Status ${listing.status}, OwnerID ${listing.owner_id}`);
 
-    // Increment views count only for active listings
-    if (listing.status === 'active') {
+    const isOwner = userId && listing.owner_id === userId;
+    const isAdmin = userRole === 'admin';
+    const isActiveAndPublic = listing.status === 'active';
+
+    const canView = isActiveAndPublic || isAdmin || isOwner;
+
+    if (!canView) {
+      logger.warn(`[getListingById] Access denied for listing ${listingId}. UserID: ${userId}, UserRole: ${userRole}, ListingStatus: ${listing.status}, IsOwner: ${isOwner}, IsAdmin: ${isAdmin}`);
+      return res.status(404).json({ message: 'Listing not found or you do not have permission to view it.' });
+    }
+    
+    logger.info(`[getListingById] Access granted for listing ${listingId}. UserID: ${userId}, UserRole: ${userRole}, IsOwner: ${isOwner}, IsAdmin: ${isAdmin}, ListingStatus: ${listing.status}`);
+
+    // Increment views count only for active listings.
+    if (isActiveAndPublic) { 
         try {
             const [analyticsEntry, created] = await Analytics.findOrCreate({
                 where: { listing_id: listingId },
@@ -173,28 +174,25 @@ exports.getListingById = async (req, res, next) => { // Added 'next'
             if (!created) {
                 await analyticsEntry.increment('views_count');
             }
-            logger.debug(`Views count updated for listing ${listingId}`);
+            logger.debug(`[getListingById] Views count updated for active listing ${listingId}`);
         } catch (analyticsError) {
-            logger.error('Error updating views count:', { listingId, error: analyticsError.message, stack: analyticsError.stack });
-            // Non-critical, so don't fail the main request
+            logger.error('[getListingById] Error updating views count:', { listingId, error: analyticsError.message, stack: analyticsError.stack });
         }
     }
-    logger.debug(`--- getListingById Controller END (Success) ---\n`);
+
     res.status(200).json(listing);
 
   } catch (error) {
-    logger.error('Error in getListingById:', { listingId, error: error.message, stack: error.stack });
-    // This specific error check might be redundant if ID validation is robust.
+    logger.error('[getListingById] Controller error:', { listingId, error: error.message, stack: error.stack });
     if (error.name === 'SequelizeDatabaseError' && error.original && error.original.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
-        logger.warn(`--- getListingById Controller END (Error: Invalid ID Format) ---\n`);
+        logger.warn(`[getListingById] Invalid listing ID format for ID: ${listingId}`);
         return res.status(400).json({ message: 'Invalid listing ID format.' });
     }
-    logger.debug(`--- getListingById Controller END (Error: Server Error) ---\n`);
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-exports.getReviewsByListingId = async (req, res, next) => { // Added 'next'
+exports.getReviewsByListingId = async (req, res, next) => {
   const listingId = req.params.listingId;
   try {
     const reviews = await Review.findAll({
@@ -209,21 +207,19 @@ exports.getReviewsByListingId = async (req, res, next) => { // Added 'next'
     res.status(200).json(reviews);
   } catch (error) {
     logger.error('Error fetching reviews:', { listingId, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-exports.createReview = async (req, res, next) => { // Added 'next'
+exports.createReview = async (req, res, next) => {
   const listingId = req.params.listingId;
   const userId = req.user.id;
-  // `rating` and `comment` are validated by express-validator
   const { rating, comment } = req.body;
   try {
-    // Removed: if (rating === undefined || rating === null || rating < 1 || rating > 5) is now handled by validators
     const newReview = await Review.create({
       listing_id: listingId,
       user_id: userId,
-      rating: parseInt(rating, 10), // Still need to convert
+      rating: parseInt(rating, 10),
       comment: comment || null
     });
     const reviewWithUser = await Review.findByPk(newReview.id, {
@@ -239,14 +235,15 @@ exports.createReview = async (req, res, next) => { // Added 'next'
     });
   } catch (error) {
     logger.error('Error creating review:', { listingId, userId, body: req.body, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-exports.getOwnerListings = async (req, res, next) => { // Added 'next'
+exports.getOwnerListings = async (req, res, next) => {
   const ownerId = req.user.id;
   try {
-    const listings = await Listing.findAll({
+    // USE UNSCOPED TO FETCH ALL LISTINGS REGARDLESS OF STATUS FOR THE OWNER
+    const listings = await Listing.unscoped().findAll({ // <--- ADDED .unscoped()
       where: {
         owner_id: ownerId
       },
@@ -256,15 +253,15 @@ exports.getOwnerListings = async (req, res, next) => { // Added 'next'
     res.status(200).json(listings);
   } catch (error) {
     logger.error('Error fetching owner listings:', { ownerId, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-exports.deleteListing = async (req, res, next) => { // Added 'next'
+exports.deleteListing = async (req, res, next) => {
   const listingId = req.params.id;
   const userId = req.user.id;
   try {
-    const listing = await Listing.findOne({
+    const listing = await Listing.unscoped().findOne({ // Use unscoped to allow owner to delete listings regardless of current status
       where: {
         id: listingId,
         owner_id: userId
@@ -294,11 +291,11 @@ exports.deleteListing = async (req, res, next) => { // Added 'next'
     res.status(200).json({ message: 'Listing deleted successfully.' });
   } catch (error) {
     logger.error('Error deleting listing:', { listingId, userId, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-exports.getListingForEdit = async (req, res, next) => { // Added 'next'
+exports.getListingForEdit = async (req, res, next) => {
   const listingId = req.params.id;
   const userId = req.user.id;
   const userRole = req.user.role;
@@ -321,16 +318,15 @@ exports.getListingForEdit = async (req, res, next) => { // Added 'next'
     res.status(200).json(listing);
   } catch (error) {
     logger.error('Error fetching listing for edit:', { listingId, userId, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-exports.updateListing = async (req, res, next) => { // Added 'next'
+exports.updateListing = async (req, res, next) => {
   const listingId = req.params.id;
   const userId = req.user.id;
   const userRole = req.user.role;
-  // Fields are now validated by updateListingValidationRules middleware
-  const { photoManifest: photoManifestRaw, status, ...restOfBody } = req.body; // Destructure status as well
+  const { photoManifest: photoManifestRaw, status, ...restOfBody } = req.body;
   const newlyUploadedServerFilenames = req.files ? req.files.map(file => file.filename) : [];
 
   try {
@@ -345,7 +341,6 @@ exports.updateListing = async (req, res, next) => { // Added 'next'
     }
 
     const updateData = {
-      // These assignments now rely on express-validator having ensured type and existence for non-optional fields
       title: restOfBody.title,
       description: restOfBody.description,
       price: parseFloat(restOfBody.price),
@@ -425,7 +420,7 @@ exports.updateListing = async (req, res, next) => { // Added 'next'
     if (finalStatus === 'pending') {
         const io = req.app.get('socketio');
         if (io) {
-            io.to('admin_room').emit('admin_pending_count_changed', { // Use a more general event for admin dashboards
+            io.to('admin_room').emit('admin_pending_count_changed', {
                 message: `Listing '${updatedListing.title}' was updated and now requires approval.`,
                 listingId: updatedListing.id,
             });
@@ -448,11 +443,96 @@ exports.updateListing = async (req, res, next) => { // Added 'next'
 
   } catch (error) {
     logger.error('Error updating listing:', { listingId, userId, body: req.body, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };
 
-exports.getListingBookedDates = async (req, res, next) => { // Added 'next'
+// NEW: Controller function to toggle archive status
+exports.toggleListingArchiveStatus = async (req, res, next) => {
+  const listingId = req.params.id;
+  const userId = req.user.id;
+  const userRole = req.user.role;
+  const { status: requestedStatus } = req.body; // The requested new status from frontend ('archived' or 'pending')
+
+  try {
+    const listing = await Listing.unscoped().findByPk(listingId);
+
+    if (!listing) {
+      logger.warn(`Listing ${listingId} not found for archive status update.`);
+      return res.status(404).json({ message: 'Listing not found.' });
+    }
+
+    const isOwner = listing.owner_id === userId;
+    const isAdmin = userRole === 'admin';
+
+    // Authorization check
+    if (!isOwner && !isAdmin) {
+      logger.warn(`User ${userId} (role: ${userRole}) attempted to change archive status of listing ${listingId} they don't own.`);
+      return res.status(403).json({ message: 'You do not have permission to change the archive status of this listing.' });
+    }
+
+    let finalStatus = listing.status; // Default to current status
+
+    if (isAdmin) {
+      // Admin can set any valid status
+      if (['active', 'pending', 'archived', 'rejected'].includes(requestedStatus)) {
+          finalStatus = requestedStatus;
+      } else {
+          return res.status(400).json({ message: 'Invalid status provided by admin.' });
+      }
+    } else if (isOwner) {
+      // Owner specific logic for archive/unarchive
+      if (requestedStatus === 'archived') {
+        // Owner can archive if listing is active, pending, or rejected
+        if (['active', 'pending', 'rejected'].includes(listing.status)) {
+          finalStatus = 'archived';
+        } else {
+          logger.warn(`Owner ${userId} attempted to archive an already archived listing ${listingId} or one in an un-archivable state.`);
+          return res.status(400).json({ message: 'Listing is already archived or in a state that cannot be archived by you.' });
+        }
+      } else if (requestedStatus === 'pending') {
+        // Owner can unarchive ONLY if listing is currently archived. Unarchiving sends to 'pending' for re-approval.
+        if (listing.status === 'archived') {
+          finalStatus = 'pending';
+        } else {
+          logger.warn(`Owner ${userId} attempted to unarchive a non-archived listing ${listingId}.`);
+          return res.status(400).json({ message: 'Listing is not archived and cannot be unarchived by you.' });
+        }
+      } else {
+        logger.warn(`Owner ${userId} attempted an invalid archive/unarchive request for listing ${listingId}: requested status ${requestedStatus}`);
+        return res.status(400).json({ message: 'Invalid status request for owner. Owners can only archive or unarchive to pending.' });
+      }
+    }
+
+    // If the status is not changing, return early
+    if (finalStatus === listing.status) {
+      return res.status(200).json({ message: 'Listing status is already the requested status.', listing });
+    }
+
+    await listing.update({ status: finalStatus });
+
+    // Emit socket event if status changed to 'pending' (from unarchiving or owner edit)
+    if (finalStatus === 'pending') {
+        const io = req.app.get('socketio');
+        if (io) {
+            io.to('admin_room').emit('admin_new_pending_listing', { // Re-using existing event for new pending for admin dashboard
+                message: `Listing '${listing.title}' (ID: ${listing.id}) was ${requestedStatus === 'archived' ? 'updated and needs re-approval' : 'unarchived and needs approval'}.`,
+                listingId: listing.id,
+            });
+            logger.info(`Emitted 'admin_new_pending_listing' to admin_room for listing ${listing.id} (status changed to pending).`);
+        }
+    }
+
+    res.status(200).json({ message: `Listing successfully ${requestedStatus === 'archived' ? 'archived' : 'unarchived to pending'}.`, listing });
+
+  } catch (error) {
+    logger.error('Error toggling listing archive status:', { listingId, userId, body: req.body, error: error.message, stack: error.stack });
+    next(error);
+  }
+};
+
+
+exports.getListingBookedDates = async (req, res, next) => {
     const { listingId } = req.params;
     try {
         const confirmedBookings = await Booking.findAll({
@@ -469,12 +549,11 @@ exports.getListingBookedDates = async (req, res, next) => { // Added 'next'
         res.status(200).json(bookedDateRanges);
     } catch (error) {
         logger.error("Error fetching booked dates:", { listingId, error: error.message, stack: error.stack });
-        next(error); // Pass to centralized error handler
+        next(error);
     }
 };
 
-// MODIFIED getMapData to accept filters
-exports.getMapData = async (req, res, next) => { // Added 'next'
+exports.getMapData = async (req, res, next) => {
   try {
     const { type, priceMin, priceMax, roomsMin, location, search } = req.query;
 
@@ -484,7 +563,6 @@ exports.getMapData = async (req, res, next) => { // Added 'next'
       longitude: { [Op.ne]: null }
     };
 
-    // Apply filters similar to getListings
     if (type) whereClause.type = type;
     if (priceMin && priceMax) whereClause.price = { [Op.between]: [parseFloat(priceMin), parseFloat(priceMax)] };
     else if (priceMin) whereClause.price = { [Op.gte]: parseFloat(priceMin) };
@@ -512,13 +590,12 @@ exports.getMapData = async (req, res, next) => { // Added 'next'
         'location',
         'rooms'
       ]
-      // No pagination for map data, we want all matching markers
     });
 
     res.status(200).json(listings);
 
   } catch (error) {
     logger.error('Error fetching map data listings:', { query: req.query, error: error.message, stack: error.stack });
-    next(error); // Pass to centralized error handler
+    next(error);
   }
 };

@@ -130,4 +130,6 @@ exports.validateListingId = () => [
   param('listingId').optional().isInt({ min: 1 }).withMessage('Listing ID must be a valid integer.') // For routes like /:listingId/reviews
 ];
 
+
+
 exports.validate = validate; // Export the shared handler
