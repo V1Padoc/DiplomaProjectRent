@@ -1,13 +1,54 @@
 // frontend/src/pages/PublicProfilePage.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom'; // Added useNavigate
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext'; // To know if current viewer is this profile's user
+import { useAuth } from '../context/AuthContext';
+import Slider from 'react-slick'; // For listing photos
+// import "slick-carousel/slick/slick.css"; // Ensure these are imported globally or here
+// import "slick-carousel/slick/slick-theme.css";
+import { ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight, UserCircleIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { MapPinIcon, CurrencyDollarIcon, TagIcon, ChatBubbleLeftEllipsisIcon } from '@heroicons/react/20/solid'; // For listing details
+
+// Custom arrow components for react-slick in listing cards (similar to MyBookingsPage)
+function SlickListingCardArrowLeft({ currentSlide, slideCount, ...props }) {
+    return (
+        <button
+            {...props}
+            className="absolute top-1/2 left-2 z-10 -translate-y-1/2 p-1.5 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors focus:outline-none"
+            aria-hidden="true"
+            type="button"
+        >
+            <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+        </button>
+    );
+}
+
+function SlickListingCardArrowRight({ currentSlide, slideCount, ...props }) {
+    return (
+        <button
+            {...props}
+            className="absolute top-1/2 right-2 z-10 -translate-y-1/2 p-1.5 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors focus:outline-none"
+            aria-hidden="true"
+            type="button"
+        >
+            <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+        </button>
+    );
+}
+
+const getListingImageUrl = (photoFilename) => {
+    if (photoFilename) {
+        return `http://localhost:5000/uploads/${photoFilename}`;
+    }
+    return 'https://via.placeholder.com/400x300.png?text=No+Image';
+};
+const fallbackImage = 'https://via.placeholder.com/400x300.png?text=No+Images+for+Listing';
+
 
 function PublicProfilePage() {
     const { userId } = useParams();
-    const { user: currentUser, isAuthenticated } = useAuth(); // Added isAuthenticated
-    const navigate = useNavigate(); // For programmatic navigation
+    const { user: currentUser, isAuthenticated } = useAuth();
+    const navigate = useNavigate();
 
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -18,6 +59,7 @@ function PublicProfilePage() {
             setLoading(true);
             setError(null);
             try {
+                // Assuming this endpoint also returns listings with their 'photos' array
                 const response = await axios.get(`http://localhost:5000/api/users/public-profile/${userId}`);
                 setProfileData(response.data);
             } catch (err) {
@@ -32,102 +74,184 @@ function PublicProfilePage() {
         }
     }, [userId]);
 
-    if (loading) return <div className="container mx-auto px-4 py-8 text-center">Loading profile...</div>;
-    if (error) return <div className="container mx-auto px-4 py-8 text-center text-red-500">Error: {error}</div>;
-    if (!profileData || !profileData.user) return <div className="container mx-auto px-4 py-8 text-center">Profile not found.</div>;
+    if (loading) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading profile...</div>;
+    if (error) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-6 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Error: {error}</div>;
+    if (!profileData || !profileData.user) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700 p-6 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Profile not found.</div>;
 
     const handleContactAboutListing = (listingId) => {
         if (!isAuthenticated) {
-            // Redirect to login if user is not authenticated, pass along where to redirect after login
-            navigate(`/login?redirect=/listings/${listingId}/chat`); 
+            navigate(`/login?redirect=/listings/${listingId}/chat`);
         } else {
-            // If authenticated, navigate directly to the chat page
-            // The ChatPage component is smart enough to figure out the recipient (owner)
             navigate(`/listings/${listingId}/chat`);
         }
     };
 
     const { user: profileUser, listings: userListings } = profileData;
 
+    const profileAvatar = profileUser.profile_photo_url
+        ? `http://localhost:5000/uploads/profiles/${profileUser.profile_photo_url.split('/').pop()}` // Ensure correct path for profiles
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(profileUser.name || profileUser.email || 'U')}&background=random&color=fff&size=160&font-size=0.4&bold=true`;
+
+    const listingSliderSettings = {
+        dots: true,
+        infinite: true,
+        speed: 500,
+        slidesToShow: 1,
+        slidesToScroll: 1,
+        arrows: true,
+        prevArrow: <SlickListingCardArrowLeft />,
+        nextArrow: <SlickListingCardArrowRight />,
+        className: "listing-card-slider-public-profile" // Custom class for specific styling if needed
+    };
+    
+    const formatPrice = (price, type) => {
+        const numericPrice = parseFloat(price);
+        if (isNaN(numericPrice)) return 'N/A';
+        if (type === 'monthly-rental') return `$${numericPrice.toFixed(0)}/mo`;
+        if (type === 'daily-rental') return `$${numericPrice.toFixed(0)}/day`;
+        return `$${numericPrice.toFixed(0)}`;
+    };
+
+
     return (
-        <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
-            <div className="max-w-3xl mx-auto bg-white p-8 rounded-sm shadow-md">
-                <div className="flex flex-col items-center md:flex-row md:items-start md:space-x-6">
-                    <img
-                        src={profileUser.profile_photo_url ? `http://localhost:5000/uploads/profiles/${profileUser.profile_photo_url}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(profileUser.name || profileUser.email || 'U')}&background=random&size=160`}
-                        alt={profileUser.name || 'User profile'}
-                        className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-2 border-gray-300 mb-4 md:mb-0"
-                    />
-                    <div className="text-center md:text-left flex-grow">
-                        <h1 className="text-3xl font-bold text-gray-800">{profileUser.name || 'User'}</h1>
-                        <p className="text-sm text-gray-500 mb-2">Joined: {new Date(profileUser.created_at).toLocaleDateString()}</p>
-                        {currentUser && currentUser.id === profileUser.id && (
-                            <Link 
-                                to="/profile" 
-                                className="text-sm text-blue-600 hover:underline"
-                            >
-                                Edit Your Profile
-                            </Link>
+        <div className="relative flex size-full min-h-screen flex-col bg-slate-50 py-5" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
+            <div className="px-4 sm:px-6 md:px-8 flex flex-1 justify-center">
+                <div className="layout-content-container flex flex-col max-w-4xl w-full flex-1"> {/* Max width increased a bit */}
+                    <div className="p-6 md:p-8 bg-white shadow-xl rounded-lg">
+                        {/* Profile Header */}
+                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6 pb-6 md:pb-8 border-b border-slate-200">
+                            <img
+                                src={profileAvatar}
+                                alt={profileUser.name || 'User profile'}
+                                className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-2 border-slate-300 shrink-0"
+                            />
+                            <div className="text-center sm:text-left flex-grow pt-1">
+                                <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight">
+                                    {profileUser.name || 'User'}
+                                </h1>
+                                <p className="text-sm text-slate-500 mt-1 mb-2">
+                                    Joined: {new Date(profileUser.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                                </p>
+                                {currentUser && currentUser.id === profileUser.id && (
+                                    <Link
+                                        to="/profile"
+                                        className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                                    >
+                                        <PencilSquareIcon className="w-4 h-4 mr-1.5" />
+                                        Edit Your Profile
+                                    </Link>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Bio Section */}
+                        {profileUser.bio && (
+                            <div className="py-6 md:py-8 border-b border-slate-200">
+                                <h2 className="text-xl font-semibold text-[#0d151c] mb-3">
+                                    About {profileUser.name ? profileUser.name.split(' ')[0] : 'User'}
+                                </h2>
+                                <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap">{profileUser.bio}</p>
+                            </div>
+                        )}
+
+                        {/* Listings Section */}
+                        {profileUser.role === 'owner' && userListings && userListings.length > 0 && (
+                            <div className="py-6 md:py-8">
+                                <h2 className="text-xl font-semibold text-[#0d151c] mb-5 sm:mb-6">
+                                    Listings by {profileUser.name || 'this User'} ({userListings.length})
+                                </h2>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-8">
+                                    {userListings.map(listing => (
+                                        <div key={listing.id} className="flex flex-col bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-shadow duration-300 group">
+                                            <div className="relative">
+                                                {listing.photos && listing.photos.length > 0 ? (
+                                                    <div className="w-full h-56 sm:h-60"> {/* Increased height */}
+                                                        <Slider {...listingSliderSettings}>
+                                                            {listing.photos.map((photo, index) => (
+                                                                <div key={index}>
+                                                                    <img src={getListingImageUrl(photo)} alt={`${listing.title} ${index + 1}`} className="w-full h-56 sm:h-60 object-cover" />
+                                                                </div>
+                                                            ))}
+                                                        </Slider>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full h-56 sm:h-60 bg-slate-200 flex items-center justify-center">
+                                                        <img src={fallbackImage} alt="No image available" className="w-full h-56 sm:h-60 object-cover"/>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="p-4 sm:p-5 flex flex-col flex-grow">
+                                                <Link to={`/listings/${listing.id}`} className="block">
+                                                    <h3 className="text-lg sm:text-xl font-semibold mb-1 text-[#0d151c] group-hover:text-blue-600 transition-colors truncate" title={listing.title}>
+                                                        {listing.title}
+                                                    </h3>
+                                                </Link>
+                                                <p className="text-sm text-slate-500 mb-1 flex items-center" title={listing.location}>
+                                                    <MapPinIcon className="w-4 h-4 mr-1.5 text-slate-400 shrink-0" />
+                                                    <span className="truncate">{listing.location}</span>
+                                                </p>
+                                                <p className="text-sm text-slate-500 mb-2.5 flex items-center">
+                                                    <TagIcon className="w-4 h-4 mr-1.5 text-slate-400 shrink-0" />
+                                                    {listing.type === 'monthly-rental' ? 'Monthly Rental' : 'Daily Rental'}
+                                                </p>
+                                                <div className="mt-auto pt-2">
+                                                    <div className="flex items-center justify-between text-[#0d151c]">
+                                                        <span className="text-lg sm:text-xl font-bold flex items-center">
+                                                            <CurrencyDollarIcon className="w-5 h-5 mr-1 text-slate-500"/>
+                                                            {formatPrice(listing.price, listing.type)}
+                                                        </span>
+                                                        {/* Optionally add rooms/area here if available and desired */}
+                                                    </div>
+                                                </div>
+                                                {/* Contact Button */}
+                                                {currentUser?.id !== profileUser.id && ( // Show only if viewer is not the profile owner
+                                                    <div className="mt-4 pt-4 border-t border-slate-200">
+                                                         <button
+                                                            onClick={() => handleContactAboutListing(listing.id)}
+                                                            className="w-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-70"
+                                                            disabled={!isAuthenticated && currentUser?.id === profileUser.id} // Disable if not logged in AND it's their own profile (though button shouldn't show then)
+                                                        >
+                                                            <ChatBubbleLeftEllipsisIcon className="w-5 h-5 mr-2"/>
+                                                            {isAuthenticated ? "Contact about this listing" : "Login to Contact"}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {profileUser.role === 'owner' && (!userListings || userListings.length === 0) && (
+                             <div className="py-6 md:py-8 text-center">
+                                <UserCircleIcon className="w-12 h-12 mx-auto text-slate-400 mb-3"/>
+                                <p className="text-slate-600">{profileUser.name || 'This user'} has not listed any properties yet.</p>
+                            </div>
                         )}
                     </div>
                 </div>
-
-                {profileUser.bio && (
-                    <div className="mt-6 pt-6 border-t border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-700 mb-2">About {profileUser.name || 'Me'}</h2>
-                        <p className="text-gray-600 whitespace-pre-wrap">{profileUser.bio}</p>
-                    </div>
-                )}
-
-                {profileUser.role === 'owner' && userListings && userListings.length > 0 && (
-                    <div className="mt-8 pt-6 border-t border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-700 mb-4">Listings by {profileUser.name || 'this User'}</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {userListings.map(listing => (
-                                <div key={listing.id} className="bg-gray-50 p-4 rounded-sm shadow-sm hover:shadow-md transition-shadow h-full flex flex-col justify-between">
-                                    <div> {/* Wrapper for content before button */}
-                                        <Link to={`/listings/${listing.id}`}>
-                                            {listing.photos && listing.photos.length > 0 ? (
-                                                <img 
-                                                    src={`http://localhost:5000/uploads/${listing.photos[0]}`} 
-                                                    alt={listing.title} 
-                                                    className="w-full h-32 object-cover rounded-sm mb-2"
-                                                />
-                                            ) : (
-                                                <div className="w-full h-32 bg-gray-200 flex items-center justify-center text-gray-500 rounded-sm mb-2">No Image</div>
-                                            )}
-                                            <h3 className="font-semibold text-blue-700 truncate hover:underline">{listing.title}</h3>
-                                        </Link>
-                                        <p className="text-sm text-gray-600 truncate">{listing.location}</p>
-                                        <p className="text-sm font-bold text-gray-800">
-                                            {listing.type === 'rent' ? `$${parseFloat(listing.price).toFixed(2)}/month` : `$${parseFloat(listing.price).toFixed(2)}`}
-                                        </p>
-                                    </div>
-                                    {/* *** NEW: Contact button for each listing *** */}
-                                    {/* Show button if viewer is authenticated AND is NOT the profile owner */}
-                                    {isAuthenticated && currentUser?.id !== profileUser.id && (
-                                        <button
-                                            onClick={() => handleContactAboutListing(listing.id)}
-                                            className="mt-3 w-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold py-2 px-3 rounded-sm transition duration-150"
-                                        >
-                                            Contact about this listing
-                                        </button>
-                                    )}
-                                     {!isAuthenticated && ( // Prompt to login if not authenticated
-                                        <button
-                                            onClick={() => handleContactAboutListing(listing.id)}
-                                            className="mt-3 w-full bg-gray-300 hover:bg-gray-400 text-gray-700 text-sm font-semibold py-2 px-3 rounded-sm transition duration-150"
-                                        >
-                                            Login to Contact
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-                {/* Placeholder for user reviews if you implement that */}
             </div>
+            <style jsx global>{`
+                .tracking-tight { letter-spacing: -0.025em; }
+                /* Styles for listing card slider on public profile page (if needed, can be more specific) */
+                .listing-card-slider-public-profile .slick-dots {
+                    bottom: 8px;
+                }
+                .listing-card-slider-public-profile .slick-dots li button:before {
+                    font-size: 8px; 
+                    color: white;
+                    opacity: 0.6;
+                }
+                .listing-card-slider-public-profile .slick-dots li.slick-active button:before {
+                    opacity: 1;
+                    color: white;
+                }
+                 .listing-card-slider-public-profile .slick-arrow.slick-prev,
+                 .listing-card-slider-public-profile .slick-arrow.slick-next {
+                    width: 28px; 
+                    height: 28px;
+                 }
+            `}</style>
         </div>
     );
 }
