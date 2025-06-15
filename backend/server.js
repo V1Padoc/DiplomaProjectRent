@@ -29,7 +29,7 @@ require('./models/Message');
 require('./models/Analytics');
 
 const app = express();
-
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // *** FIX: Now 'server' is defined and can be used to initialize Socket.IO ***
