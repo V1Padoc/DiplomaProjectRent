@@ -54,14 +54,15 @@ Listing.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
 */
 const allowedOrigins = [
   'http://localhost:3000', // Для локальної розробки
-  process.env.CLIENT_URL   // Для продакшену на Render
+  'https://diplomaprojectrent.onrender.com'   // Для продакшену на Render
 ];
 
 // Middleware
 app.use(cors({
   origin: function (origin, callback) {
-    // Дозволити запити без origin (наприклад, Postman) або якщо origin є у списку
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Дозволяємо запити, якщо їх джерело є у списку `allowedOrigins`,
+    // або якщо запит не має джерела (наприклад, з Postman)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
