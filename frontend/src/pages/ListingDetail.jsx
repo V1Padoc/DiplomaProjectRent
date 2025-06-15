@@ -30,10 +30,10 @@ L.Icon.Default.mergeOptions({
 
 const formatPrice = (price, type) => {
     const numericPrice = parseFloat(price);
-    if (isNaN(numericPrice)) return 'Price not available';
-    if (type === 'monthly-rental') return `$${numericPrice.toFixed(2)}/month`;
-    if (type === 'daily-rental') return `$${numericPrice.toFixed(2)}/day`;
-    return `$${numericPrice.toFixed(2)}`;
+    if (isNaN(numericPrice)) return 'Ціна недоступна';
+    if (type === 'monthly-rental') return `₴${numericPrice.toFixed(2)}/місяць`;
+    if (type === 'daily-rental') return `₴${numericPrice.toFixed(2)}/день`;
+    return `₴${numericPrice.toFixed(2)}`;
 };
 
 function ListingDetail() {
@@ -84,7 +84,7 @@ function ListingDetail() {
                 setListing(response.data);
             } catch (err) {
                 console.error('Error fetching listing details:', err);
-                setError(err.response?.data?.message || 'Failed to fetch listing details.');
+                setError(err.response?.data?.message || 'Не вдалося завантажити деталі оголошення.');
             } finally {
                 setLoading(false);
             }
@@ -108,7 +108,7 @@ function ListingDetail() {
                 setReviews(response.data);
             } catch (err) {
                 console.error('Error fetching reviews:', err);
-                setReviewError('Failed to load reviews.');
+                setReviewError('Не вдалося завантажити відгуки.');
             } finally {
                 setReviewLoading(false);
             }
@@ -152,7 +152,7 @@ function ListingDetail() {
     const handleReviewSubmit = async (e) => {
         e.preventDefault();
         if (newReviewRating < 1) {
-            setReviewSubmitError('Please select a rating.'); return;
+            setReviewSubmitError('Будь ласка, оберіть рейтинг.'); return;
         }
         setReviewSubmitting(true); setReviewError(null); setReviewSubmitSuccess(null);
         try {
@@ -160,7 +160,7 @@ function ListingDetail() {
                 { rating: newReviewRating, comment: newReviewComment },
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
-            setReviewSubmitSuccess(response.data.message || "Review submitted!");
+            setReviewSubmitSuccess(response.data.message || "Відгук надіслано!");
             setReviews([response.data.review, ...reviews]);
             setNewReviewRating(0); setNewReviewComment('');
             // Fetch updated listing to get new average_rating
@@ -168,7 +168,7 @@ function ListingDetail() {
             setListing(listingResponse.data);
             setTimeout(() => setReviewSubmitSuccess(null), 3000);
         } catch (err) {
-            setReviewSubmitError(err.response?.data?.message || 'Failed to submit review.');
+            setReviewSubmitError(err.response?.data?.message || 'Не вдалося надіслати відгук.');
             setTimeout(() => setReviewSubmitError(null), 3000);
         } finally {
             setReviewSubmitting(false);
@@ -181,7 +181,7 @@ function ListingDetail() {
 
     const handleBookingRequest = async () => {
         if (!bookingDates || !bookingDates[0] || !bookingDates[1]) {
-            setBookingError("Please select a start and end date."); return;
+            setBookingError("Будь ласка, оберіть дату початку та дату закінчення."); return;
         }
         setBookingSubmitting(true); setBookingError(null); setBookingSuccess(null);
         try {
@@ -190,7 +190,7 @@ function ListingDetail() {
                 start_date: bookingDates[0].toISOString().split('T')[0],
                 end_date: bookingDates[1].toISOString().split('T')[0],
             }, { headers: { Authorization: `Bearer ${token}` } });
-            setBookingSuccess(response.data.message || "Booking request submitted!");
+            setBookingSuccess(response.data.message || "Запит на бронювання надіслано!");
             setBookingDates([null, null]);
             // Re-fetch booked dates
             const bookedResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
@@ -198,7 +198,7 @@ function ListingDetail() {
             if (token && isAuthenticated && !isSocketEligible) fetchSocketEligibility(token);
             setTimeout(() => setBookingSuccess(null), 3000);
         } catch (err) {
-            setBookingError(err.response?.data?.message || "Failed to submit booking request.");
+            setBookingError(err.response?.data?.message || "Не вдалося надіслати запит на бронювання.");
             setTimeout(() => setBookingError(null), 3000);
         } finally {
             setBookingSubmitting(false);
@@ -211,7 +211,7 @@ function ListingDetail() {
             const newStatus = await toggleFavorite(listingId);
             setIsFavorited(newStatus);
         } catch (error) {
-            console.error("Failed to toggle favorite:", error);
+            console.error("Не вдалося змінити статус обраного:", error);
         }
     };
 
@@ -220,13 +220,13 @@ function ListingDetail() {
         else navigate(`/listings/${listingId}/chat`);
     };
 
-    if (loading) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>Loading...</div>;
-    if (error) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>Error: {error}</div>;
-    if (!listing) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>Listing not found.</div>;
+    if (loading) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження...</div>;
+    if (error) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>;
+    if (!listing) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Оголошення не знайдено.</div>;
 
     const slides = listing.photos?.map((photoFilename, index) => ({
         src: `http://localhost:5000/uploads/${photoFilename}`,
-        title: `${listing.title} - Photo ${index + 1}`
+        title: `${listing.title} - Фото ${index + 1}`
     })) || [];
 
     const mapPosition = (listing.latitude && listing.longitude) ? [parseFloat(listing.latitude), parseFloat(listing.longitude)] : [51.505, -0.09];
@@ -249,7 +249,7 @@ function ListingDetail() {
     };
 
     return (
-        <div className="bg-slate-50 min-h-screen py-5 md:py-10" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>
+        <div className="bg-slate-50 min-h-screen py-5 md:py-10" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
             <div className="px-4 sm:px-6 md:px-8">
                 <div className="layout-content-container flex flex-col max-w-5xl mx-auto bg-white shadow-xl rounded-lg overflow-hidden">
                     
@@ -259,7 +259,7 @@ function ListingDetail() {
                                 {listing.title}
                             </h1>
                             {isAuthenticated && !isOwner && (
-                                <button onClick={handleFavoriteToggle} className="p-2 rounded-full hover:bg-red-100 transition-colors">
+                                <button onClick={handleFavoriteToggle} className="p-2 rounded-full hover:bg-red-100 transition-colors" aria-label="Додати/видалити з обраних">
                                     {isFavorited ? <HeartSolid className="w-7 h-7 text-red-500" /> : <HeartOutline className="w-7 h-7 text-red-500" />}
                                 </button>
                             )}
@@ -271,7 +271,7 @@ function ListingDetail() {
                                     <span className="mx-2">·</span>
                                     <span className="flex items-center">
                                         <StarSolidIcon className="w-4 h-4 text-yellow-500 mr-1" />
-                                        {parseFloat(listing.average_rating).toFixed(1)} ({listing.review_count} reviews)
+                                        {parseFloat(listing.average_rating).toFixed(1)} ({listing.review_count} відгуків)
                                     </span>
                                 </>
                             )}
@@ -307,7 +307,7 @@ function ListingDetail() {
                                     })}
                                 </div>
                             ) : (
-                                <div className="w-full aspect-video bg-slate-200 flex items-center justify-center text-slate-500 rounded-lg">No Photos Available</div>
+                                <div className="w-full aspect-video bg-slate-200 flex items-center justify-center text-slate-500 rounded-lg">Фотографії відсутні</div>
                             )}
                              {/* "Show all photos" Button - positioned over the grid */}
                             {extraPhotos.length > 0 && ( // Only show if there are extra photos beyond the featured 5
@@ -317,7 +317,7 @@ function ListingDetail() {
                                         className="flex items-center gap-2 bg-black bg-opacity-70 hover:bg-opacity-80 text-white font-semibold py-2 px-4 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-75"
                                     >
                                         <PhotoIcon className="w-5 h-5"/>
-                                        {showAllPhotos ? 'Hide Extra Photos' : `Show ${extraPhotos.length} More`}
+                                        {showAllPhotos ? 'Приховати додаткові фото' : `Показати ще ${extraPhotos.length}`}
                                     </button>
                                 </div>
                             )}
@@ -350,20 +350,20 @@ function ListingDetail() {
                             plugins={[Captions, Download, Fullscreen, Thumbnails, Zoom]}
                         />
 
-                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-2">About this listing</h2>
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-2">Про це оголошення</h2>
                         <p className="text-slate-700 text-base leading-relaxed pb-3 pt-1 whitespace-pre-wrap">
-                            {listing.description || 'No description provided.'}
+                            {listing.description || 'Опис відсутній.'}
                         </p>
 
-                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-5">Listing Details</h2>
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-5">Деталі оголошення</h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                             {[
-                                { label: "Price", value: formatPrice(listing.price, listing.type) },
-                                { label: "Rental Type", value: listing.type === 'monthly-rental' ? 'Monthly' : (listing.type === 'daily-rental' ? 'Daily' : listing.type) },
-                                listing.rooms ? { label: "Rooms", value: `${listing.rooms} Bedroom(s)` } : null,
-                                listing.area ? { label: "Area", value: `${listing.area} sq ft/m²` } : null,
-                                { label: "Address", value: listing.location }, // Address is already shown above title, consider removing or rephrasing.
-                                { label: "Amenities", value: listing.amenities || 'N/A' },
+                                { label: "Ціна", value: formatPrice(listing.price, listing.type) },
+                                { label: "Тип оренди", value: listing.type === 'monthly-rental' ? 'Щомісячна' : (listing.type === 'daily-rental' ? 'Щоденна' : listing.type) },
+                                listing.rooms ? { label: "Кімнати", value: `${listing.rooms} спальня(і)` } : null,
+                                listing.area ? { label: "Площа", value: `${listing.area} м²` } : null,
+                                { label: "Адреса", value: listing.location },
+                                { label: "Зручності", value: listing.amenities || 'Н/Д' },
                             ].filter(Boolean).map((item) => (
                                 <div key={item.label} className="flex flex-col py-3 border-t border-solid border-slate-200">
                                     <p className="text-slate-500 text-sm font-normal leading-normal">{item.label}</p>
@@ -374,19 +374,19 @@ function ListingDetail() {
                         
                         {listing.Owner && (
                             <>
-                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-5">Owner Information</h2>
+                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-5">Інформація про власника</h2>
                                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-lg">
                                     <img
                                         className="aspect-square bg-cover rounded-full h-14 w-14 object-cover border border-slate-300"
                                         src={getAvatarUrl(listing.Owner.profile_image_url, listing.Owner.name || listing.Owner.email)}
-                                        alt={listing.Owner.name || 'Owner'}
+                                        alt={listing.Owner.name || 'Власник'}
                                     />
                                     <div>
                                         <Link to={`/profiles/${listing.Owner.id}`} className="text-[#0d141c] text-base font-semibold leading-normal hover:underline">
                                             {listing.Owner.name || listing.Owner.email}
                                         </Link>
                                         <Link to={`/profiles/${listing.Owner.id}`} className="block text-sm text-[#0c7ff2] hover:underline">
-                                            View Profile
+                                            Переглянути профіль
                                         </Link>
                                     </div>
                                 </div>
@@ -395,21 +395,21 @@ function ListingDetail() {
 
                         {isAuthenticated && !isOwner && (
                             <>
-                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-2 pt-5">Contact Owner</h2>
+                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-2 pt-5">Зв'язатися з власником</h2>
                                 <div className="py-2">
                                     <button
                                         onClick={handleContactOwner}
                                         className="w-full sm:w-auto flex items-center justify-center bg-[#0c7ff2] hover:bg-[#0a69c3] text-white font-bold py-2.5 px-6 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] focus:ring-opacity-50"
                                     >
-                                        Send a Message
+                                        Надіслати повідомлення
                                     </button>
                                 </div>
                             </>
                         )}
-                        {isOwner && <div className="mt-5 p-3 text-sm text-slate-600 bg-slate-100 rounded-lg">You are the owner of this listing. You can manage it from your dashboard.</div>}
-                        {!isAuthenticated && !isOwner && <div className="mt-5 text-sm text-slate-600"><button onClick={handleContactOwner} className="text-[#0c7ff2] hover:underline font-medium">Log in to contact the owner.</button></div>}
+                        {isOwner && <div className="mt-5 p-3 text-sm text-slate-600 bg-slate-100 rounded-lg">Ви є власником цього оголошення. Ви можете керувати ним зі своєї панелі інструментів.</div>}
+                        {!isAuthenticated && !isOwner && <div className="mt-5 text-sm text-slate-600"><button onClick={handleContactOwner} className="text-[#0c7ff2] hover:underline font-medium">Увійдіть, щоб зв'язатися з власником.</button></div>}
 
-                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Location</h2>
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Розташування</h2>
                         <div className="py-3">
                             {(listing.latitude && listing.longitude) ? (
                                 <MapContainer center={mapPosition} zoom={15} scrollWheelZoom={false} className="w-full h-80 sm:h-96 rounded-lg border border-slate-300">
@@ -417,28 +417,28 @@ function ListingDetail() {
                                     <Marker position={mapPosition}><Popup>{listing.title}<br/>{listing.location}</Popup></Marker>
                                 </MapContainer>
                             ) : (
-                                <div className="w-full h-80 sm:h-96 bg-slate-200 flex items-center justify-center text-slate-500 rounded-lg">Map data not available.</div>
+                                <div className="w-full h-80 sm:h-96 bg-slate-200 flex items-center justify-center text-slate-500 rounded-lg">Дані карти недоступні.</div>
                             )}
                         </div>
 
                         {canBook && isAuthenticated && !isOwner && (
                             <>
-                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Booking</h2>
+                                <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Бронювання</h2>
                                 <div className="flex flex-col md:flex-row items-start gap-6 py-3">
                                     <div className="flex-1 w-full max-w-md mx-auto md:mx-0">
-                                        {loadingBookedDates && <p className="text-sm text-center text-slate-500 mb-2">Loading availability...</p>}
+                                        {loadingBookedDates && <p className="text-sm text-center text-slate-500 mb-2">Завантаження доступності...</p>}
                                         <Calendar onChange={handleDateChange} value={bookingDates} selectRange minDate={new Date()} tileDisabled={tileDisabled} className="react-calendar-custom mx-auto" />
                                     </div>
                                     <div className="flex-1 w-full max-w-md mx-auto md:mx-0 mt-4 md:mt-0 md:pl-4">
                                         {bookingDates && bookingDates[0] && bookingDates[1] && (
                                             <div className="mb-4 p-3 bg-[#e7f2fe] rounded-lg text-[#0c7ff2]">
-                                                <p><strong>Start:</strong> {bookingDates[0].toLocaleDateString()}</p>
-                                                <p><strong>End:</strong> {bookingDates[1].toLocaleDateString()}</p>
+                                                <p><strong>Початок:</strong> {bookingDates[0].toLocaleDateString('uk-UA')}</p>
+                                                <p><strong>Кінець:</strong> {bookingDates[1].toLocaleDateString('uk-UA')}</p>
                                             </div>
                                         )}
                                         <button onClick={handleBookingRequest} disabled={bookingSubmitting || !bookingDates?.[0] || !bookingDates?.[1] || loadingBookedDates}
                                             className="w-full bg-[#0c7ff2] hover:bg-[#0a69c3] text-white font-bold py-2.5 px-4 rounded-md text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] focus:ring-opacity-50">
-                                            {bookingSubmitting ? 'Submitting...' : (loadingBookedDates ? 'Loading Dates...' : 'Request to Book')}
+                                            {bookingSubmitting ? 'Відправлення...' : (loadingBookedDates ? 'Завантаження дат...' : 'Запит на бронювання')}
                                         </button>
                                         {bookingError && <p className="mt-2 text-sm text-red-600">{bookingError}</p>}
                                         {bookingSuccess && <p className="mt-2 text-sm text-green-600">{bookingSuccess}</p>}
@@ -446,20 +446,20 @@ function ListingDetail() {
                                 </div>
                             </>
                         )}
-                        {!isAuthenticated && canBook && <div className="my-6 p-4 bg-[#e7f2fe] rounded-lg text-center text-[#0c7ff2]"><Link to={`/login?redirect=/listings/${listingId}`} className="font-bold hover:underline">Log in</Link> or <Link to={`/register?redirect=/listings/${listingId}`} className="font-bold hover:underline">register</Link> to book this rental.</div>}
-                        {listing.type === 'monthly-rental' && <div className="my-6 p-4 bg-[#e7f2fe] rounded-lg text-center text-[#0c7ff2]">For monthly rentals, please use the "Contact Owner" button to arrange terms and booking.</div>}
+                        {!isAuthenticated && canBook && <div className="my-6 p-4 bg-[#e7f2fe] rounded-lg text-center text-[#0c7ff2]"><Link to={`/login?redirect=/listings/${listingId}`} className="font-bold hover:underline">Увійдіть</Link> або <Link to={`/register?redirect=/listings/${listingId}`} className="font-bold hover:underline">зареєструйтеся</Link>, щоб забронювати цю оренду.</div>}
+                        {listing.type === 'monthly-rental' && <div className="my-6 p-4 bg-[#e7f2fe] rounded-lg text-center text-[#0c7ff2]">Для місячної оренди, будь ласка, скористайтеся кнопкою "Зв'язатися з власником", щоб домовитися про умови та бронювання.</div>}
 
-                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Reviews</h2>
+                        <h2 className="text-[#0d141c] text-xl sm:text-2xl font-bold leading-tight tracking-[-0.015em] mb-3 pt-8">Відгуки</h2>
                         {isAuthenticated && !isOwner && (
                             <div className="py-3">
                                 {reviewSubmitSuccess && <div className="mb-3 p-3 bg-green-100 text-green-700 rounded-md text-sm">{reviewSubmitSuccess}</div>}
                                 {reviewSubmitError && <div className="mb-3 p-3 bg-red-100 text-red-700 rounded-md text-sm">{reviewSubmitError}</div>}
                                 <form onSubmit={handleReviewSubmit} className="flex flex-col max-w-xl gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-[#0d141c] mb-1">Your Rating</label>
+                                        <label className="block text-sm font-medium text-[#0d141c] mb-1">Ваш рейтинг</label>
                                         <div className="flex">
                                             {[1, 2, 3, 4, 5].map((star) => (
-                                                <button key={star} type="button" onClick={() => setNewReviewRating(star)} aria-label={`Rate ${star} stars`}
+                                                <button key={star} type="button" onClick={() => setNewReviewRating(star)} aria-label={`Оцінити на ${star} зірок`}
                                                     className={`text-3xl p-1 focus:outline-none ${star <= newReviewRating ? 'text-[#0c7ff2]' : 'text-slate-300 hover:text-slate-400'}`}>
                                                     {star <= newReviewRating ? <StarSolidIcon className="w-6 h-6" /> : <StarOutlineIcon className="w-6 h-6" />}
                                                 </button>
@@ -467,40 +467,40 @@ function ListingDetail() {
                                         </div>
                                     </div>
                                     <label className="flex flex-col">
-                                        <span className="block text-sm font-medium text-[#0d141c] mb-1">Your Review</span>
-                                        <textarea id="comment" placeholder="Share your experience..." value={newReviewComment} onChange={(e) => setNewReviewComment(e.target.value)} rows="4"
+                                        <span className="block text-sm font-medium text-[#0d141c] mb-1">Ваш відгук</span>
+                                        <textarea id="comment" placeholder="Поділіться своїм досвідом..." value={newReviewComment} onChange={(e) => setNewReviewComment(e.target.value)} rows="4"
                                             className="form-textarea w-full resize-none rounded-lg text-[#0d141c] focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] border border-slate-300 bg-white min-h-32 p-3 text-base placeholder:text-slate-400"></textarea>
                                     </label>
                                     <button type="submit" disabled={reviewSubmitting || newReviewRating === 0}
                                         className="self-start bg-[#0c7ff2] hover:bg-[#0a69c3] text-white font-bold py-2 px-5 rounded-md text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#0c7ff2] focus:ring-opacity-50">
-                                        {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                                        {reviewSubmitting ? 'Відправлення...' : 'Надіслати відгук'}
                                     </button>
                                 </form>
                             </div>
                         )}
-                        {!isAuthenticated && <div className="py-3 text-sm text-slate-600"><Link to={`/login?redirect=/listings/${listingId}`} className="text-[#0c7ff2] hover:underline font-medium">Log in</Link> to leave a review.</div>}
-                        {isAuthenticated && isOwner && <div className="py-3 text-sm text-slate-600 bg-slate-100 rounded-lg p-3">Owners cannot review their own listings.</div>}
+                        {!isAuthenticated && <div className="py-3 text-sm text-slate-600"><Link to={`/login?redirect=/listings/${listingId}`} className="text-[#0c7ff2] hover:underline font-medium">Увійдіть</Link>, щоб залишити відгук.</div>}
+                        {isAuthenticated && isOwner && <div className="py-3 text-sm text-slate-600 bg-slate-100 rounded-lg p-3">Власники не можуть залишати відгуки до власних оголошень.</div>}
                         
                         <div className="mt-6 space-y-6">
-                            {reviewLoading && <p className="text-slate-500">Loading reviews...</p>}
+                            {reviewLoading && <p className="text-slate-500">Завантаження відгуків...</p>}
                             {reviewError && <p className="text-red-500">{reviewError}</p>}
-                            {!reviewLoading && !reviewError && reviews.length === 0 && <p className="text-slate-500">No reviews yet for this listing.</p>}
+                            {!reviewLoading && !reviewError && reviews.length === 0 && <p className="text-slate-500">До цього оголошення ще немає відгуків.</p>}
                             {reviews.map(review => (
                                 <div key={review.id} className="pb-4 border-b border-slate-200 last:border-b-0">
                                     <div className="flex items-start gap-3">
                                         <img
                                             className="aspect-square bg-cover rounded-full size-10 object-cover border border-slate-300 mt-1"
                                             src={getAvatarUrl(review.User?.profile_image_url, review.User?.name || review.User?.email)}
-                                            alt={review.User?.name || 'Reviewer'}
+                                            alt={review.User?.name || 'Рецензент'}
                                         />
                                         <div className="flex-1">
-                                            <p className="text-[#0d141c] text-base font-semibold leading-normal">{review.User?.name || review.User?.email || 'Anonymous'}</p>
-                                            <p className="text-slate-500 text-xs font-normal leading-normal mb-1">{new Date(review.createdAt).toLocaleDateString()}</p>
+                                            <p className="text-[#0d141c] text-base font-semibold leading-normal">{review.User?.name || review.User?.email || 'Анонімний користувач'}</p>
+                                            <p className="text-slate-500 text-xs font-normal leading-normal mb-1">{new Date(review.createdAt).toLocaleDateString('uk-UA')}</p>
                                             <div className="flex gap-0.5 items-center mb-1.5">
                                                 {[...Array(5)].map((_, i) => <StarSolidIcon key={i} className={`w-5 h-5 ${i < review.rating ? "text-[#0c7ff2]" : "text-slate-300"}`} />)}
                                                 <span className="ml-2 text-sm text-[#0d141c] font-medium">{review.rating}/5</span>
                                             </div>
-                                            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap">{review.comment || 'No comment provided.'}</p>
+                                            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap">{review.comment || 'Коментар відсутній.'}</p>
                                         </div>
                                     </div>
                                 </div>

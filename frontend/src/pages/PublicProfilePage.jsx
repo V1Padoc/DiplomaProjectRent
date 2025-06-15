@@ -40,9 +40,9 @@ const getListingImageUrl = (photoFilename) => {
     if (photoFilename) {
         return `http://localhost:5000/uploads/${photoFilename}`;
     }
-    return 'https://via.placeholder.com/400x300.png?text=No+Image';
+    return 'https://via.placeholder.com/400x300.png?text=Зображення+відсутнє'; // Translated
 };
-const fallbackImage = 'https://via.placeholder.com/400x300.png?text=No+Images+for+Listing';
+const fallbackImage = 'https://via.placeholder.com/400x300.png?text=Немає+зображень+для+оголошення'; // Translated
 
 
 function PublicProfilePage() {
@@ -64,7 +64,7 @@ function PublicProfilePage() {
                 setProfileData(response.data);
             } catch (err) {
                 console.error("Error fetching public profile:", err);
-                setError(err.response?.data?.message || "Could not load profile.");
+                setError(err.response?.data?.message || "Не вдалося завантажити профіль."); // Translated
             } finally {
                 setLoading(false);
             }
@@ -74,9 +74,9 @@ function PublicProfilePage() {
         }
     }, [userId]);
 
-    if (loading) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading profile...</div>;
-    if (error) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-6 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Error: {error}</div>;
-    if (!profileData || !profileData.user) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700 p-6 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Profile not found.</div>;
+    if (loading) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження профілю...</div>; // Translated
+    if (error) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-6 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>; // Translated
+    if (!profileData || !profileData.user) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700 p-6 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Профіль не знайдено.</div>; // Translated
 
     const handleContactAboutListing = (listingId) => {
         if (!isAuthenticated) {
@@ -106,10 +106,18 @@ function PublicProfilePage() {
     
     const formatPrice = (price, type) => {
         const numericPrice = parseFloat(price);
-        if (isNaN(numericPrice)) return 'N/A';
-        if (type === 'monthly-rental') return `$${numericPrice.toFixed(0)}/mo`;
-        if (type === 'daily-rental') return `$${numericPrice.toFixed(0)}/day`;
-        return `$${numericPrice.toFixed(0)}`;
+        if (isNaN(numericPrice)) return 'Н/Д'; // Translated
+        if (type === 'monthly-rental') return `₴${numericPrice.toFixed(0)}/міс`; // Translated
+        if (type === 'daily-rental') return `₴${numericPrice.toFixed(0)}/день`; // Translated
+        return `₴${numericPrice.toFixed(0)}`;
+    };
+
+    // Function to determine plural form for "rooms" (consistent with ListingsPage)
+    const formatRooms = (count) => {
+        if (count === null) return '';
+        if (count === 1) return '1 ліжко';
+        if (count >= 2 && count <= 4) return `${count} ліжка`;
+        return `${count} ліжок`;
     };
 
 
@@ -122,15 +130,15 @@ function PublicProfilePage() {
                         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6 pb-6 md:pb-8 border-b border-slate-200">
                             <img
                                 src={profileAvatar}
-                                alt={profileUser.name || 'User profile'}
+                                alt={profileUser.name || 'Профіль користувача'} // Translated
                                 className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-2 border-slate-300 shrink-0"
                             />
                             <div className="text-center sm:text-left flex-grow pt-1">
                                 <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight">
-                                    {profileUser.name || 'User'}
+                                    {profileUser.name || 'Користувач'} {/* Translated */}
                                 </h1>
                                 <p className="text-sm text-slate-500 mt-1 mb-2">
-                                    Joined: {new Date(profileUser.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                                    Приєднався: {new Date(profileUser.created_at).toLocaleDateString('uk-UA', { year: 'numeric', month: 'long', day: 'numeric' })} {/* Translated & Localized Date */}
                                 </p>
                                 {currentUser && currentUser.id === profileUser.id && (
                                     <Link
@@ -138,7 +146,7 @@ function PublicProfilePage() {
                                         className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
                                     >
                                         <PencilSquareIcon className="w-4 h-4 mr-1.5" />
-                                        Edit Your Profile
+                                        Редагувати ваш профіль {/* Translated */}
                                     </Link>
                                 )}
                             </div>
@@ -148,17 +156,17 @@ function PublicProfilePage() {
                         {profileUser.bio && (
                             <div className="py-6 md:py-8 border-b border-slate-200">
                                 <h2 className="text-xl font-semibold text-[#0d151c] mb-3">
-                                    About {profileUser.name ? profileUser.name.split(' ')[0] : 'User'}
+                                    Про {profileUser.name ? profileUser.name.split(' ')[0] : 'Користувача'} {/* Translated */}
                                 </h2>
                                 <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap">{profileUser.bio}</p>
                             </div>
                         )}
 
                         {/* Listings Section */}
-                        {profileUser.role === 'owner' && userListings && userListings.length > 0 && (
+                        {profileUser.role === 'owner' && userListings && userListings.length > 0 ? (
                             <div className="py-6 md:py-8">
                                 <h2 className="text-xl font-semibold text-[#0d151c] mb-5 sm:mb-6">
-                                    Listings by {profileUser.name || 'this User'} ({userListings.length})
+                                    Оголошення від {profileUser.name || 'цього користувача'} ({userListings.length}) {/* Translated */}
                                 </h2>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-8">
                                     {userListings.map(listing => (
@@ -176,7 +184,7 @@ function PublicProfilePage() {
                                                     </div>
                                                 ) : (
                                                     <div className="w-full h-56 sm:h-60 bg-slate-200 flex items-center justify-center">
-                                                        <img src={fallbackImage} alt="No image available" className="w-full h-56 sm:h-60 object-cover"/>
+                                                        <img src={fallbackImage} alt="Зображення відсутнє" className="w-full h-56 sm:h-60 object-cover"/> {/* Translated */}
                                                     </div>
                                                 )}
                                             </div>
@@ -192,7 +200,7 @@ function PublicProfilePage() {
                                                 </p>
                                                 <p className="text-sm text-slate-500 mb-2.5 flex items-center">
                                                     <TagIcon className="w-4 h-4 mr-1.5 text-slate-400 shrink-0" />
-                                                    {listing.type === 'monthly-rental' ? 'Monthly Rental' : 'Daily Rental'}
+                                                    {listing.type === 'monthly-rental' ? 'Щомісячна оренда' : 'Щоденна оренда'} {/* Translated */}
                                                 </p>
                                                 <div className="mt-auto pt-2">
                                                     <div className="flex items-center justify-between text-[#0d151c]">
@@ -200,7 +208,11 @@ function PublicProfilePage() {
                                                             <CurrencyDollarIcon className="w-5 h-5 mr-1 text-slate-500"/>
                                                             {formatPrice(listing.price, listing.type)}
                                                         </span>
-                                                        {/* Optionally add rooms/area here if available and desired */}
+                                                        {listing.rooms !== null && (
+                                                            <div className="text-sm text-[#4574a1] flex items-center space-x-1.5">
+                                                                <span>{formatRooms(listing.rooms)}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 {/* Contact Button */}
@@ -212,7 +224,7 @@ function PublicProfilePage() {
                                                             disabled={!isAuthenticated && currentUser?.id === profileUser.id} // Disable if not logged in AND it's their own profile (though button shouldn't show then)
                                                         >
                                                             <ChatBubbleLeftEllipsisIcon className="w-5 h-5 mr-2"/>
-                                                            {isAuthenticated ? "Contact about this listing" : "Login to Contact"}
+                                                            {isAuthenticated ? "Зв'язатися щодо цього оголошення" : "Увійдіть, щоб зв'язатися"} {/* Translated */}
                                                         </button>
                                                     </div>
                                                 )}
@@ -221,13 +233,12 @@ function PublicProfilePage() {
                                     ))}
                                 </div>
                             </div>
-                        )}
-                        {profileUser.role === 'owner' && (!userListings || userListings.length === 0) && (
+                        ) : profileUser.role === 'owner' && (!userListings || userListings.length === 0) ? (
                              <div className="py-6 md:py-8 text-center">
                                 <UserCircleIcon className="w-12 h-12 mx-auto text-slate-400 mb-3"/>
-                                <p className="text-slate-600">{profileUser.name || 'This user'} has not listed any properties yet.</p>
+                                <p className="text-slate-600">{profileUser.name || 'Цей користувач'} ще не розміщував жодних об'єктів.</p> {/* Translated */}
                             </div>
-                        )}
+                        ) : null} {/* If not an owner, or no listings, do not show section */}
                     </div>
                 </div>
             </div>

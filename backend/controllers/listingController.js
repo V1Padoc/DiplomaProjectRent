@@ -9,6 +9,36 @@ const fs = require('fs').promises;
 const Booking = require('../models/Booking');
 const Analytics = require('../models/Analytics');
 const logger = require('../config/logger');
+const sharp = require('sharp'); // <--- ADDED
+
+// Helper function for image processing
+const processImage = async (file) => {
+    const originalFilename = file.filename;
+    const thumbnailFilename = `thumb-${originalFilename}`;
+    
+    const uploadDir = path.join(__dirname, '../uploads');
+    const originalPath = path.join(uploadDir, originalFilename);
+    const thumbnailPath = path.join(uploadDir, thumbnailFilename);
+
+    try {
+        await sharp(originalPath)
+            .resize({
+                width: 600, // A good width for a card thumbnail
+                height: 450, // A good height, maintaining aspect ratio
+                fit: sharp.fit.cover, // Crop to cover the dimensions
+                position: sharp.strategy.entropy // Smart crop focus
+            })
+            .jpeg({ quality: 85 }) // Compress to JPEG with good quality
+            .toFile(thumbnailPath);
+            
+        logger.info(`[ProcessImage] Created thumbnail: ${thumbnailFilename}`);
+        return thumbnailFilename; // We will store the original filename in the DB
+    } catch (error) {
+        logger.error(`[ProcessImage] Failed to create thumbnail for ${originalFilename}`, { error });
+        // Depending on requirements, you might want to throw the error or just return null
+        return null; 
+    }
+};
 
 exports.getListings = async (req, res, next) => {
   try {
@@ -66,11 +96,28 @@ exports.getListings = async (req, res, next) => {
   }
 };
 
+// MODIFIED: createListing
 exports.createListing = async (req, res, next) => {
   const owner_id = req.user.id;
   const { title, description, price, rooms, area, location, amenities, type, latitude, longitude } = req.body;
-  const photoFilenames = req.files ? req.files.map(file => file.filename) : [];
+  const files = req.files || [];
 
+  // We will process images but store the ORIGINAL filenames in the DB
+  // This gives us flexibility later to generate other sizes if needed.
+  const photoFilenames = files.map(file => file.filename);
+
+  // Process images in parallel after getting filenames
+  try {
+      for (const file of files) {
+          await processImage(file);
+      }
+  } catch (procError) {
+      // If processing fails, we might want to stop the listing creation.
+      logger.error('Critical error during image processing for new listing', { procError });
+      return next(new Error('Failed to process uploaded images.'));
+  }
+  
+  // The rest of the function remains largely the same...
   try {
     const newListing = await Listing.create({
       owner_id: owner_id,
@@ -88,15 +135,15 @@ exports.createListing = async (req, res, next) => {
       photos: photoFilenames.length > 0 ? photoFilenames : null
     });
     // Emit socket event if status is 'pending'
-  if (newListing.status === 'pending') {
-      const io = req.app.get('socketio');
-      if (io) {
-        io.to('admin_room').emit('admin_new_pending_listing', {
-          message: `New listing '${newListing.title}' needs approval.`,
-          listingId: newListing.id,
-        });
-        logger.info(`Emitted 'admin_new_pending_listing' to admin_room for listing ${newListing.id}`);
-      }
+    if (newListing.status === 'pending') {
+        const io = req.app.get('socketio');
+        if (io) {
+            io.to('admin_room').emit('admin_new_pending_listing', {
+            message: `New listing '${newListing.title}' needs approval.`,
+            listingId: newListing.id,
+            });
+            logger.info(`Emitted 'admin_new_pending_listing' to admin_room for listing ${newListing.id}`);
+        }
     }
 
     res.status(201).json({
@@ -111,6 +158,7 @@ exports.createListing = async (req, res, next) => {
         longitude: newListing.longitude
       }
     });
+
   } catch (error) {
     logger.error('Error creating listing:', { userId: owner_id, body: req.body, error: error.message, stack: error.stack });
     next(error);
@@ -257,6 +305,7 @@ exports.getOwnerListings = async (req, res, next) => {
   }
 };
 
+// MODIFIED: deleteListing
 exports.deleteListing = async (req, res, next) => {
   const listingId = req.params.id;
   const userId = req.user.id;
@@ -274,15 +323,20 @@ exports.deleteListing = async (req, res, next) => {
     if (listing.photos && listing.photos.length > 0) {
         const uploadDir = path.join(__dirname, '../uploads');
         for (const filename of listing.photos) {
-            const filePath = path.join(uploadDir, filename);
-            try {
-                await fs.unlink(filePath);
-                logger.info(`Deleted file: ${filePath}`);
-            } catch (fileError) {
-                if (fileError.code === 'ENOENT') {
-                    logger.warn(`File not found for deletion, skipping: ${filePath}`);
-                } else {
-                    logger.error(`Error deleting file ${filePath}:`, { error: fileError.message, stack: fileError.stack });
+            const originalFilePath = path.join(uploadDir, filename);
+            const thumbFilePath = path.join(uploadDir, `thumb-${filename}`); // <-- Path to thumbnail
+            
+            // Delete both original and thumbnail
+            for (const filePath of [originalFilePath, thumbFilePath]) {
+                 try {
+                    await fs.unlink(filePath);
+                    logger.info(`Deleted file: ${filePath}`);
+                } catch (fileError) {
+                    if (fileError.code === 'ENOENT') {
+                        logger.warn(`File not found for deletion, skipping: ${filePath}`);
+                    } else {
+                        logger.error(`Error deleting file ${filePath}:`, { error: fileError.message, stack: fileError.stack });
+                    }
                 }
             }
         }
@@ -322,12 +376,24 @@ exports.getListingForEdit = async (req, res, next) => {
   }
 };
 
+// MODIFIED: updateListing
 exports.updateListing = async (req, res, next) => {
   const listingId = req.params.id;
   const userId = req.user.id;
   const userRole = req.user.role;
   const { photoManifest: photoManifestRaw, status, ...restOfBody } = req.body;
-  const newlyUploadedServerFilenames = req.files ? req.files.map(file => file.filename) : [];
+  const newlyUploadedFiles = req.files || []; // <-- Get full file objects
+  const newlyUploadedServerFilenames = newlyUploadedFiles.map(file => file.filename);
+
+  // Process newly uploaded images
+  try {
+      for (const file of newlyUploadedFiles) {
+          await processImage(file);
+      }
+  } catch (procError) {
+      logger.error('Critical error during image processing for listing update', { procError });
+      return next(new Error('Failed to process newly uploaded images.'));
+  }
 
   try {
     const listingToUpdate = await Listing.unscoped().findByPk(listingId);
@@ -380,16 +446,18 @@ exports.updateListing = async (req, res, next) => {
         if (photosToDeleteFromStorage.length > 0) {
             const uploadDir = path.join(__dirname, '../uploads');
             for (const filename of photosToDeleteFromStorage) {
-                const filePath = path.join(uploadDir, filename);
-                try {
-                    await fs.access(filePath);
-                    await fs.unlink(filePath);
-                    logger.info(`[UpdateListing] Deleted old photo from storage: ${filename} for listing ${listingId}`);
-                } catch (fileError) {
-                    if (fileError.code === 'ENOENT') {
-                        logger.warn(`[UpdateListing] File not found for deletion, skipping: ${filePath}`);
-                    } else {
-                        logger.error(`[UpdateListing] Error deleting old file ${filePath}:`, { error: fileError.message, stack: fileError.stack });
+                // Also delete the thumbnail for the removed photo
+                const originalFilePath = path.join(uploadDir, filename);
+                const thumbFilePath = path.join(uploadDir, `thumb-${filename}`);
+                
+                for (const filePath of [originalFilePath, thumbFilePath]) {
+                     try {
+                        await fs.unlink(filePath);
+                        logger.info(`[UpdateListing] Deleted old photo: ${filePath}`);
+                    } catch (fileError) {
+                        if (fileError.code !== 'ENOENT') {
+                           logger.error(`[UpdateListing] Error deleting old file ${filePath}:`, fileError);
+                        }
                     }
                 }
             }

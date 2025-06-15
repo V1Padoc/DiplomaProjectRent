@@ -15,10 +15,11 @@ const formatDateHeader = (dateString) => {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const messageDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-    if (messageDateOnly.getTime() === today.getTime()) return 'Today';
-    if (today.getTime() - messageDateOnly.getTime() === 24 * 60 * 60 * 1000) return 'Yesterday';
-    if (now.getFullYear() === messageDateOnly.getFullYear()) return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
-    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    if (messageDateOnly.getTime() === today.getTime()) return 'Сьогодні';
+    if (today.getTime() - messageDateOnly.getTime() === 24 * 60 * 60 * 1000) return 'Вчора';
+    // Use Ukrainian locale for date formatting
+    if (now.getFullYear() === messageDateOnly.getFullYear()) return date.toLocaleDateString('uk-UA', { month: 'long', day: 'numeric' });
+    return date.toLocaleDateString('uk-UA', { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 const getAvatarUrl = (profileImageUrl, nameOrEmail, size = 96) => {
@@ -26,7 +27,8 @@ const getAvatarUrl = (profileImageUrl, nameOrEmail, size = 96) => {
         const filename = profileImageUrl.split('/').pop();
         return `http://localhost:5000/uploads/profiles/${filename}`;
     }
-    const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'U';
+    // 'U' for 'User' in English, 'К' for 'Користувач' in Ukrainian. Could be 'К' but 'U' is widely understood.
+    const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'U'; 
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=${size}&font-size=0.4&bold=true`;
 };
 
@@ -80,12 +82,12 @@ function ChatPage() {
                             if (response.data && response.data.user) {
                                 setChatPartnerDetails(response.data.user);
                             } else {
-                                setChatPartnerDetails({ id: partnerIdToSet, name: `User ${partnerIdToSet}`, email: '' }); // Fallback
+                                setChatPartnerDetails({ id: partnerIdToSet, name: `Користувач ${partnerIdToSet}`, email: '' }); // Fallback for user details
                             }
                         }
                     } catch (err) {
                         console.error("Error fetching chat partner details:", err);
-                        setChatPartnerDetails({ id: partnerIdToSet, name: `User ${partnerIdToSet}`, email: '' }); // Fallback on error
+                        setChatPartnerDetails({ id: partnerIdToSet, name: `Користувач ${partnerIdToSet}`, email: '' }); // Fallback on error
                     }
                 } else {
                     setChatPartnerDetails(null);
@@ -102,7 +104,7 @@ function ChatPage() {
     useEffect(() => {
         const fetchListingDetails = async () => {
             if (!listingIdFromParams || !token) {
-                setErrorListing(!listingIdFromParams ? 'Listing ID missing.' : 'Authentication required.');
+                setErrorListing(!listingIdFromParams ? 'Відсутній ІД оголошення.' : 'Потрібна автентифікація.');
                 setLoadingListing(false); return;
             }
             setLoadingListing(true); setErrorListing(null);
@@ -111,7 +113,7 @@ function ChatPage() {
                 const listingRes = await axios.get(`${API_URL}/listings/${listingIdFromParams}`, config);
                 setListing(listingRes.data);
             } catch (err) {
-                setErrorListing(err.response?.data?.message || 'Failed to load listing.');
+                setErrorListing(err.response?.data?.message || 'Не вдалося завантажити оголошення.');
             } finally {
                 setLoadingListing(false);
             }
@@ -153,7 +155,7 @@ function ChatPage() {
                 }
             }
         } catch (err) {
-            setErrorMessages(err.response?.data?.message || 'Failed to load messages.');
+            setErrorMessages(err.response?.data?.message || 'Не вдалося завантажити повідомлення.');
         } finally {
             setLoadingMessages(false);
         }
@@ -213,7 +215,7 @@ function ChatPage() {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessageContent.trim() || !chatPartnerId) {
-            setErrorSendingMessage("Cannot send message. Missing recipient or content."); return;
+            setErrorSendingMessage("Не вдалося надіслати повідомлення. Відсутній одержувач або вміст."); return;
         }
         setSendingMessage(true); setErrorSendingMessage(null);
         const messageData = { listing_id: listingIdFromParams, content: newMessageContent, receiver_id: chatPartnerId };
@@ -228,7 +230,7 @@ function ChatPage() {
             setNewMessageContent('');
             if (token && !isSocketEligible) await fetchSocketEligibility(token);
         } catch (err) {
-            setErrorSendingMessage(err.response?.data?.message || 'Failed to send message.');
+            setErrorSendingMessage(err.response?.data?.message || 'Не вдалося надіслати повідомлення.');
             setTimeout(() => setErrorSendingMessage(null), 3000);
         } finally {
             setSendingMessage(false);
@@ -238,13 +240,13 @@ function ChatPage() {
     const isLoadingPage = loadingListing || (loadingMessages && messages.length === 0 && !errorMessages && chatPartnerId);
 
     if (isLoadingPage && !listing) { 
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading chat...</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження чату...</div>;
     }
     if (errorListing) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Error: {errorListing}</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {errorListing}</div>;
     }
     if (!listing && !errorListing && !loadingListing) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Listing not found.</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Оголошення не знайдено.</div>;
     }
     
     const canSendMessage = isAuthenticated && user && listing && chatPartnerId;
@@ -272,7 +274,7 @@ function ChatPage() {
                             <RouterLink to={`/profiles/${chatPartnerDetails.id}`}>
                                 <img
                                     src={getAvatarUrl(chatPartnerDetails.profile_photo_url, chatPartnerDetails.name || chatPartnerDetails.email, 40)}
-                                    alt={chatPartnerDetails.name || `User ${chatPartnerDetails.id}`}
+                                    alt={chatPartnerDetails.name || `Користувач ${chatPartnerDetails.id}`}
                                     className="w-10 h-10 rounded-full object-cover border border-slate-200 hover:opacity-80"
                                 />
                             </RouterLink>
@@ -283,17 +285,17 @@ function ChatPage() {
                         <div className="overflow-hidden">
                             <h1 className="text-[#0d151c] text-base sm:text-lg font-semibold leading-tight tracking-tight truncate">
                                 {listing?.title ? (
-                                    <>Chat for <RouterLink to={`/listings/${listingIdFromParams}`} className="text-blue-600 hover:underline">{listing.title}</RouterLink></>
-                                ) : "Chat"}
+                                    <>Чат для <RouterLink to={`/listings/${listingIdFromParams}`} className="text-blue-600 hover:underline">{listing.title}</RouterLink></>
+                                ) : "Чат"}
                             </h1>
                             {chatPartnerDetails && (
                                 <p className="text-xs sm:text-sm text-slate-500 truncate">
-                                    With <RouterLink to={`/profiles/${chatPartnerDetails.id}`} className="hover:underline">{chatPartnerDetails.name || chatPartnerDetails.email || `User ${chatPartnerDetails.id}`}</RouterLink>
-                                    {String(chatPartnerDetails.id) === String(listing?.owner_id) && " (Owner)"}
+                                    З <RouterLink to={`/profiles/${chatPartnerDetails.id}`} className="hover:underline">{chatPartnerDetails.name || chatPartnerDetails.email || `Користувач ${chatPartnerDetails.id}`}</RouterLink>
+                                    {String(chatPartnerDetails.id) === String(listing?.owner_id) && " (Власник)"}
                                 </p>
                             )}
                             {!chatPartnerId && user && listing && String(user.id) === String(listing.owner_id) && !loadingListing && (
-                                <p className="text-xs text-orange-500 mt-0.5">Select a conversation from 'My Chats'.</p>
+                                <p className="text-xs text-orange-500 mt-0.5">Виберіть розмову з розділу "Мої чати".</p>
                             )}
                         </div>
                     </div>
@@ -301,17 +303,17 @@ function ChatPage() {
                     {/* Messages Area */}
                     <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-2 sm:space-y-3 bg-slate-50/50">
                         {loadingMessages && messages.length === 0 && ( 
-                            <p className="text-center text-slate-600 m-auto">Loading messages...</p>
+                            <p className="text-center text-slate-600 m-auto">Завантаження повідомлень...</p>
                         )}
                         {errorMessages && messages.length === 0 && !loadingMessages &&(
-                            <p className="text-center text-red-500 m-auto">Error: {errorMessages}</p>
+                            <p className="text-center text-red-500 m-auto">Помилка: {errorMessages}</p>
                         )}
                         {!loadingMessages && messages.length === 0 && !errorMessages && ( 
                             <p className="text-center text-slate-600 m-auto">
-                                {canSendMessage ? "No messages yet. Send one to start!" : 
+                                {canSendMessage ? "Повідомлень поки немає. Надішліть перше, щоб почати!" : 
                                 (user && listing && String(user.id) === String(listing.owner_id) && !chatPartnerId ? 
-                                    "Select a conversation." : 
-                                    (isAuthenticated ? "No messages in this chat." : "Log in to chat.")
+                                    "Виберіть розмову." : 
+                                    (isAuthenticated ? "У цьому чаті немає повідомлень." : "Увійдіть, щоб спілкуватися.")
                                 )}
                             </p>
                         )}
@@ -336,7 +338,7 @@ function ChatPage() {
                                         <RouterLink to={`/profiles/${senderDetails.id}`} className="flex-shrink-0 self-end mb-1">
                                             <img
                                                 src={getAvatarUrl(senderDetails.profile_photo_url, senderDetails.name || senderDetails.email, 32)}
-                                                alt={senderDetails.name || 'User'}
+                                                alt={senderDetails.name || 'Користувач'}
                                                 className="w-8 h-8 rounded-full mr-2 object-cover hover:opacity-80"
                                             />
                                         </RouterLink>
@@ -348,7 +350,8 @@ function ChatPage() {
                                     }`}>
                                         <p className="break-words text-sm leading-snug">{message.content}</p>
                                         <div className={`text-xs mt-1 opacity-80 ${isCurrentUserSender ? 'text-blue-100' : 'text-slate-500'} text-right`}>
-                                            {new Date(message.created_at || message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                            {/* Using Ukrainian locale for time */}
+                                            {new Date(message.created_at || message.createdAt).toLocaleTimeString('uk-UA', {hour: '2-digit', minute:'2-digit'})}
                                             {isCurrentUserSender && message.is_read && <span className="ml-1 opacity-90">✓✓</span>}
                                             {isCurrentUserSender && !message.is_read && <span className="ml-1 opacity-70">✓</span>}
                                         </div>
@@ -357,7 +360,7 @@ function ChatPage() {
                                         <RouterLink to={`/profile`} className="flex-shrink-0 self-end mb-1">
                                             <img
                                                 src={getAvatarUrl(user.profile_photo_url, user.name || user.email, 32)}
-                                                alt={user.name || 'You'}
+                                                alt={user.name || 'Ви'}
                                                 className="w-8 h-8 rounded-full ml-2 object-cover hover:opacity-80"
                                             />
                                         </RouterLink>
@@ -376,7 +379,7 @@ function ChatPage() {
                                 <input
                                     className="form-input flex-grow rounded-lg border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c] placeholder-slate-400 py-2.5 px-3.5"
                                     type="text"
-                                    placeholder="Type your message..."
+                                    placeholder="Введіть ваше повідомлення..."
                                     value={newMessageContent}
                                     onChange={(e) => setNewMessageContent(e.target.value)}
                                     disabled={sendingMessage}
@@ -386,7 +389,7 @@ function ChatPage() {
                                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60 flex items-center justify-center"
                                     type="submit"
                                     disabled={sendingMessage || !newMessageContent.trim()}
-                                    aria-label="Send message"
+                                    aria-label="Надіслати повідомлення"
                                 >
                                     <PaperAirplaneIcon className="w-5 h-5" />
                                 </button>
@@ -394,10 +397,10 @@ function ChatPage() {
                         </div>
                     ) : (
                         <div className="p-4 border-t border-slate-200 bg-slate-100 text-center text-sm text-slate-600 shrink-0">
-                            {!isAuthenticated ? <RouterLink to={`/login?redirect=${window.location.pathname}${window.location.search}`} className="text-blue-600 hover:underline font-medium">Log in</RouterLink> :
+                            {!isAuthenticated ? <RouterLink to={`/login?redirect=${window.location.pathname}${window.location.search}`} className="text-blue-600 hover:underline font-medium">Увійдіть</RouterLink> :
                             (user && listing && String(user.id) === String(listing.owner_id) && !chatPartnerId ? 
-                                "Select a user to chat with from 'My Chats'." : 
-                                "You cannot send messages in this chat currently."
+                                "Виберіть користувача для спілкування з розділу 'Мої чати'." : 
+                                "Наразі ви не можете надсилати повідомлення в цьому чаті."
                             )}
                         </div>
                     )}

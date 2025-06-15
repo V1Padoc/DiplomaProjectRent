@@ -56,7 +56,7 @@ function ManageListingsPage() {
       setOwnerListings(response.data);
     } catch (err) {
       console.error('Error fetching owner listings:', err);
-      setError(err.response?.data?.message || 'Failed to fetch your listings.');
+      setError(err.response?.data?.message || 'Не вдалося завантажити ваші оголошення.');
     } finally {
       setLoading(false);
     }
@@ -67,12 +67,12 @@ function ManageListingsPage() {
        fetchOwnerListings();
     } else {
         setLoading(false);
-        setError('Authentication token not found. Please log in.');
+        setError('Токен автентифікації не знайдено. Будь ласка, увійдіть.');
     }
   }, [token, fetchOwnerListings]);
 
   const handleDeleteListing = async (listingId) => {
-    const isConfirmed = window.confirm('Are you sure you want to delete this listing? This action cannot be undone.');
+    const isConfirmed = window.confirm('Ви впевнені, що хочете видалити це оголошення? Цю дію неможливо скасувати.');
     if (!isConfirmed) return;
 
     setActionState({ id: listingId, type: 'delete' });
@@ -83,7 +83,7 @@ function ManageListingsPage() {
       setOwnerListings(prev => prev.filter(listing => listing.id !== listingId));
     } catch (err) {
       console.error('Error deleting listing:', err);
-      setActionError(err.response?.data?.message || 'Failed to delete listing.');
+      setActionError(err.response?.data?.message || 'Не вдалося видалити оголошення.');
     } finally {
       setActionState({ id: null, type: null });
     }
@@ -91,8 +91,8 @@ function ManageListingsPage() {
 
   const handleArchiveToggle = async (listingId, currentStatus) => {
     const newStatus = currentStatus === 'archived' ? 'pending' : 'archived'; // Toggle to pending for re-activation
-    const actionText = newStatus === 'archived' ? 'archive' : 'unarchive';
-    const isConfirmed = window.confirm(`Are you sure you want to ${actionText} this listing?`);
+    const actionText = newStatus === 'archived' ? 'архівувати' : 'розархівувати';
+    const isConfirmed = window.confirm(`Ви впевнені, що хочете ${actionText} це оголошення?`);
     if (!isConfirmed) return;
 
     setActionState({ id: listingId, type: 'archive' });
@@ -105,7 +105,7 @@ function ManageListingsPage() {
       // fetchOwnerListings(); // Or just update locally if backend is reliable
     } catch (err) {
       console.error(`Error ${actionText}ing listing:`, err);
-      setActionError(err.response?.data?.message || `Failed to ${actionText} listing.`);
+      setActionError(err.response?.data?.message || `Не вдалося ${actionText} оголошення.`);
     } finally {
       setActionState({ id: null, type: null });
     }
@@ -113,10 +113,10 @@ function ManageListingsPage() {
 
   const cardSliderSettings = {
     dots: false, infinite: true, speed: 500, slidesToShow: 1, slidesToScroll: 1,
-    autoplay: false, arrows: true, prevArrow: <SlickArrowLeft />, nextArrow: <SlickArrowRight />,
+    autoplay: false, arrows: true, prevArrow: <SlickArrowLeft />, nextArrow: <SlickArrowRight />, lazyLoad: 'ondemand', 
   };
 
-  if (loading) return <div className="text-center text-slate-700 py-10" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading your listings...</div>;
+  if (loading) return <div className="text-center text-slate-700 py-10" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження ваших оголошень...</div>;
   
   return (
     <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
@@ -124,21 +124,21 @@ function ManageListingsPage() {
         <div className="max-w-none mx-auto">
           <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
             <h1 className="text-[#0c151d] tracking-tight text-xl sm:text-2xl md:text-[32px] font-bold leading-tight">
-                My Listings
+                Мої оголошення
             </h1>
             <Link 
                 to="/create-listing" 
                 className="w-full sm:w-auto bg-[#359dff] hover:bg-blue-700 text-white text-sm font-bold py-2.5 px-5 rounded-lg h-11 transition-colors flex items-center justify-center"
             >
-                + Create New Listing
+                + Створити нове оголошення
             </Link>
           </div>
 
-          {error && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Error</p><p>{error}</p></div>}
-          {actionError && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Action Error</p><p>{actionError}</p></div>}
+          {error && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Помилка</p><p>{error}</p></div>}
+          {actionError && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Помилка дії</p><p>{actionError}</p></div>}
 
           {!loading && !error && ownerListings.length === 0 && (
-            <p className="text-center text-slate-600 py-10">You haven't created any listings yet. Click "+ Create New Listing" to get started!</p>
+            <p className="text-center text-slate-600 py-10">Ви ще не створили жодного оголошення. Натисніть "+ Створити нове оголошення", щоб розпочати!</p>
           )}
 
           {!loading && !error && ownerListings.length > 0 && (
@@ -155,7 +155,7 @@ function ManageListingsPage() {
                                 ))}
                               </Slider>
                             </div>
-                          ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">No Image</div> )}
+                          ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Немає зображення</div> )}
                         </Link>
                     </div>
                     <div className="p-4 sm:p-5 flex flex-col flex-grow">
@@ -169,16 +169,21 @@ function ManageListingsPage() {
                                    listing.status === 'rejected' ? 'bg-red-100 text-red-700 border border-red-200' :
                                    listing.status === 'archived' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
                                    'bg-gray-100 text-gray-800 border border-gray-200'}`}>
-                               {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
+                               {/* Translate status */}
+                               {listing.status === 'active' ? 'Активне' :
+                                listing.status === 'pending' ? 'На розгляді' :
+                                listing.status === 'rejected' ? 'Відхилено' :
+                                listing.status === 'archived' ? 'В архіві' :
+                                listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
                             </span>
                             <p className="text-xs text-slate-500">
-                                Views: {listing.Analytics && listing.Analytics.length > 0 ? listing.Analytics[0].views_count : 0}
+                                Перегляди: {listing.Analytics && listing.Analytics.length > 0 ? listing.Analytics[0].views_count : 0}
                             </p>
                         </div>
 
                         <div className="text-base sm:text-lg font-bold text-[#0c151d] mb-3 mt-1">
-                              {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/mo` :
-                               (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/day` : `$${parseFloat(listing.price).toFixed(0)}`)}
+                              {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` :
+                               (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
                         </div>
                          
                         <div className="mt-auto pt-2 border-t border-slate-100">
@@ -187,7 +192,7 @@ function ManageListingsPage() {
                                    to={`/manage-listings/edit/${listing.id}`}
                                    className="flex-1 text-center bg-[#e6edf4] hover:bg-slate-300 text-[#0c151d] text-sm font-bold py-2 px-3 rounded-lg h-10 transition-colors flex items-center justify-center"
                                >
-                                   Edit
+                                   Редагувати
                                </Link>
                                 {/* Archive/Unarchive Button */}
                                 {(listing.status === 'active' || listing.status === 'pending') && (
@@ -196,7 +201,7 @@ function ManageListingsPage() {
                                         disabled={actionState.id === listing.id && actionState.type === 'archive'}
                                         className="flex-1 text-center bg-slate-400 hover:bg-slate-500 text-white text-sm font-bold py-2 px-3 rounded-lg h-10 transition-colors disabled:opacity-70 flex items-center justify-center"
                                     >
-                                        {actionState.id === listing.id && actionState.type === 'archive' ? 'Archiving...' : 'Archive'}
+                                        {actionState.id === listing.id && actionState.type === 'archive' ? 'Архівування...' : 'Архівувати'}
                                     </button>
                                 )}
                                 {listing.status === 'archived' && (
@@ -205,7 +210,7 @@ function ManageListingsPage() {
                                         disabled={actionState.id === listing.id && actionState.type === 'archive'}
                                         className="flex-1 text-center bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold py-2 px-3 rounded-lg h-10 transition-colors disabled:opacity-70 flex items-center justify-center"
                                     >
-                                        {actionState.id === listing.id && actionState.type === 'archive' ? 'Unarchiving...' : 'Unarchive'}
+                                        {actionState.id === listing.id && actionState.type === 'archive' ? 'Розархівування...' : 'Розархівувати'}
                                     </button>
                                 )}
                                 <button
@@ -213,7 +218,7 @@ function ManageListingsPage() {
                                    disabled={actionState.id === listing.id && actionState.type === 'delete'}
                                    className="flex-1 text-center bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-2 px-3 rounded-lg h-10 transition-colors disabled:opacity-70 flex items-center justify-center"
                                 >
-                                   {actionState.id === listing.id && actionState.type === 'delete' ? 'Deleting...' : 'Delete'}
+                                   {actionState.id === listing.id && actionState.type === 'delete' ? 'Видалення...' : 'Видалити'}
                                 </button>
                             </div>
                         </div>

@@ -184,11 +184,8 @@ async function startServer() {
     console.log("🚀 server.js is executing");
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
-    //await sequelize.sync({ alter: true }); // Sync database schema if needed
-    //console.log('Database synchronized with alter:true. Tables updated.');
 
     const PORT = process.env.PORT || 5000;
-    // *** FIX: Use 'server.listen' because Socket.IO is attached to 'server' (the http.createServer instance) ***
     server.listen(PORT, () => {
         console.log(`Server with Socket.IO running on port ${PORT}`);
     });
@@ -199,4 +196,8 @@ async function startServer() {
   }
 }
 
-startServer();
+// Запускаємо сервер, тільки якщо файл виконується напряму
+if (require.main === module) {
+  startServer();
+}
+module.exports = { server, sequelize };

@@ -15,8 +15,8 @@ import { ChevronLeftIcon, ChevronRightIcon, XMarkIcon } from '@heroicons/react/2
 
 // Helper function to format date
 const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    if (!dateString) return 'N/A'; // Keep 'N/A' as it's a common abbreviation, or translate to 'Н/Д' if desired.
+    return new Date(dateString).toLocaleDateString('uk-UA', { year: 'numeric', month: 'short', day: 'numeric' }); // Changed to Ukrainian locale
 };
 
 const columnHelper = createColumnHelper();
@@ -67,7 +67,7 @@ function AdminPage() {
 
         } catch (err) {
             console.error("Error fetching listings for admin:", err);
-            setError(err.response?.data?.message || "Failed to load listings.");
+            setError(err.response?.data?.message || "Не вдалося завантажити оголошення.");
         } finally {
             setLoading(false);
         }
@@ -118,7 +118,7 @@ function AdminPage() {
                     // Log message error but don't necessarily fail the whole operation
                     // The status update was successful.
                     console.error(`Failed to send message for listing ${listingId}:`, messageError);
-                    setModalError(`Status updated, but failed to send message: ${messageError.response?.data?.message || messageError.message}. You can try messaging the owner directly from 'My Chats'.`);
+                    setModalError(`Статус оновлено, але не вдалося надіслати повідомлення: ${messageError.response?.data?.message || messageError.message}. Ви можете спробувати написати власнику безпосередньо у 'Моїх чатах'.`);
                     // Keep modal open to show this specific error, or decide to close.
                     // For now, let's close and rely on fetchData to refresh. The error is logged.
                     // Or, we can show this error and then close after a delay or on next click.
@@ -135,7 +135,7 @@ function AdminPage() {
 
         } catch (err) {
             console.error(`Error updating listing ${listingId} to ${newStatus}:`, err);
-            setModalError(err.response?.data?.message || `Failed to update status. ${err.message}`);
+            setModalError(err.response?.data?.message || `Не вдалося оновити статус. ${err.message}`);
         } finally {
             setIsSubmittingAction(false);
         }
@@ -154,7 +154,7 @@ function AdminPage() {
             fetchData(); 
         } catch (err) {
             console.error(`Error updating listing ${listingId} to ${newStatus}:`, err);
-            alert(err.response?.data?.message || `Failed to update status. ${err.message}`);
+            alert(err.response?.data?.message || `Не вдалося оновити статус. ${err.message}`);
             setListings(originalListings.map(l => l.id === listingId ? {...l, isUpdating: false} : l)); 
         }
     };
@@ -162,12 +162,12 @@ function AdminPage() {
 
     const columns = useMemo(() => [
         columnHelper.accessor('id', {
-            header: 'ID',
+            header: 'ІД',
             cell: info => <span className="font-mono text-xs text-slate-700">{info.getValue()}</span>,
             size: 60,
         }),
         columnHelper.accessor('title', {
-            header: 'Title',
+            header: 'Заголовок',
             cell: info => (
                 <Link to={`/listings/${info.row.original.id}`} className="text-blue-600 hover:text-blue-700 hover:underline font-medium" target="_blank" rel="noopener noreferrer">
                     {info.getValue()}
@@ -175,12 +175,12 @@ function AdminPage() {
             ),
         }),
         columnHelper.accessor('Owner', {
-            header: 'Owner',
+            header: 'Власник',
             cell: info => {
                 const owner = info.getValue();
-                if (!owner) return <span className="text-slate-500">N/A</span>;
+                if (!owner) return <span className="text-slate-500">Н/Д</span>;
                 const ownerName = `${owner.name || ''} ${owner.last_name || ''}`.trim();
-                const displayIdentifier = ownerName || owner.email || `User ID: ${owner.id}`;
+                const displayIdentifier = ownerName || owner.email || `ІД Користувача: ${owner.id}`;
                 return (
                     <div>
                         <Link to={`/profiles/${owner.id}`} className="text-blue-600 hover:text-blue-700 hover:underline font-medium" target="_blank" rel="noopener noreferrer">
@@ -192,39 +192,57 @@ function AdminPage() {
             },
         }),
         columnHelper.accessor('price', {
-            header: 'Price',
+            header: 'Ціна',
             cell: info => {
                 const price = parseFloat(info.getValue());
                 const type = info.row.original.type;
                 let priceDisplay = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-                if (type === 'monthly-rental') priceDisplay += '/mo';
-                else if (type === 'daily-rental') priceDisplay += '/day';
+                if (type === 'monthly-rental') priceDisplay += '/міс';
+                else if (type === 'daily-rental') priceDisplay += '/день';
                 return <span className="font-medium text-slate-800">{priceDisplay}</span>;
             },
         }),
         columnHelper.accessor('status', {
-            header: 'Status',
+            header: 'Статус',
             cell: info => {
                 const status = info.getValue();
                 let bgColor = 'bg-slate-100'; let textColor = 'text-slate-700';
-                if (status === 'active') { bgColor = 'bg-green-100'; textColor = 'text-green-700'; }
-                else if (status === 'pending') { bgColor = 'bg-yellow-100'; textColor = 'text-yellow-700'; }
-                else if (status === 'rejected') { bgColor = 'bg-red-100'; textColor = 'text-red-700'; }
-                else if (status === 'archived') { bgColor = 'bg-neutral-100'; textColor = 'text-neutral-700'; }
-                return <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${bgColor} ${textColor} border ${bgColor.replace('bg-','border-')}`}>{status}</span>;
+                let displayStatus = '';
+
+                switch (status) {
+                    case 'active':
+                        bgColor = 'bg-green-100'; textColor = 'text-green-700';
+                        displayStatus = 'Активне';
+                        break;
+                    case 'pending':
+                        bgColor = 'bg-yellow-100'; textColor = 'text-yellow-700';
+                        displayStatus = 'На розгляді';
+                        break;
+                    case 'rejected':
+                        bgColor = 'bg-red-100'; textColor = 'text-red-700';
+                        displayStatus = 'Відхилено';
+                        break;
+                    case 'archived':
+                        bgColor = 'bg-neutral-100'; textColor = 'text-neutral-700';
+                        displayStatus = 'В архіві';
+                        break;
+                    default:
+                        displayStatus = status; // Fallback if status is unexpected
+                }
+                return <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${bgColor} ${textColor} border ${bgColor.replace('bg-','border-')}`}>{displayStatus}</span>;
             },
         }),
         columnHelper.accessor('created_at', {
-            header: 'Submitted',
+            header: 'Подано',
             cell: info => <span className="text-slate-600">{formatDate(info.getValue())}</span>,
         }),
         columnHelper.display({
             id: 'actions',
-            header: 'Actions',
+            header: 'Дії',
             cell: ({ row }) => {
                 const listing = row.original;
                 if (listing.isUpdating) {
-                    return <span className="text-xs text-slate-500 animate-pulse">Updating...</span>;
+                    return <span className="text-xs text-slate-500 animate-pulse">Оновлення...</span>;
                 }
                 return (
                     <div className="flex space-x-1 sm:space-x-2">
@@ -234,13 +252,13 @@ function AdminPage() {
                                     onClick={() => handleDirectUpdateStatus(listing.id, 'active')}
                                     className="text-xs bg-green-500 hover:bg-green-600 text-white font-semibold py-1.5 px-2.5 sm:px-3 rounded-md transition-colors"
                                 >
-                                    Approve
+                                    Схвалити
                                 </button>
                                 <button
                                     onClick={() => openActionModal(listing, 'rejected')}
                                     className="text-xs bg-red-500 hover:bg-red-600 text-white font-semibold py-1.5 px-2.5 sm:px-3 rounded-md transition-colors"
                                 >
-                                    Reject
+                                    Відхилити
                                 </button>
                             </>
                         )}
@@ -250,13 +268,13 @@ function AdminPage() {
                                     onClick={() => openActionModal(listing, 'rejected')}
                                     className="text-xs bg-red-500 hover:bg-red-600 text-white font-semibold py-1.5 px-2.5 sm:px-3 rounded-md transition-colors"
                                 >
-                                    Reject
+                                    Відхилити
                                 </button>
                                 <button
                                     onClick={() => openActionModal(listing, 'archived')}
                                     className="text-xs bg-slate-500 hover:bg-slate-600 text-white font-semibold py-1.5 px-2.5 sm:px-3 rounded-md transition-colors"
                                 >
-                                    Archive
+                                    Архівувати
                                 </button>
                             </>
                         )}
@@ -265,7 +283,7 @@ function AdminPage() {
                                 onClick={() => handleDirectUpdateStatus(listing.id, 'active')}
                                 className="text-xs bg-green-500 hover:bg-green-600 text-white font-semibold py-1.5 px-2.5 sm:px-3 rounded-md transition-colors"
                             >
-                                Re-Approve
+                                Повторно схвалити
                             </button>
                         )}
                          {listing.status === 'archived' && (
@@ -273,7 +291,7 @@ function AdminPage() {
                                 onClick={() => handleDirectUpdateStatus(listing.id, 'active')}
                                 className="text-xs bg-green-500 hover:bg-green-600 text-white font-semibold py-1.5 px-2.5 sm:px-3 rounded-md transition-colors"
                             >
-                                Unarchive
+                                Розархівувати
                             </button>
                         )}
                     </div>
@@ -295,13 +313,13 @@ function AdminPage() {
     });
 
     if (authLoading || (loading && listings.length === 0 && !error)) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-[#0c151d]" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading...</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-[#0c151d]" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження...</div>;
     }
      if (!user || user.role !== 'admin') {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-center text-[#0c151d] p-10" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Access Denied. You must be an administrator to view this page.</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-center text-[#0c151d] p-10" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Доступ заборонено. Ви повинні бути адміністратором, щоб переглядати цю сторінку.</div>;
     }
     if (error) {
-        return <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6 mx-auto max-w-lg" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Error: {error}</div>;
+        return <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6 mx-auto max-w-lg" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>;
     }
 
     return (
@@ -309,11 +327,11 @@ function AdminPage() {
             <div className="flex-1 py-5 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-none mx-auto">
                     <h1 className="text-[#0c151d] tracking-tight text-xl sm:text-2xl md:text-[32px] font-bold leading-tight mb-8">
-                        Admin Panel - Listing Moderation
+                        Панель адміністратора - Модерація оголошень
                     </h1>
 
                     <div className="mb-6">
-                        <label htmlFor="statusFilter" className="mr-2 text-sm font-medium text-[#4574a1]">Filter by status:</label>
+                        <label htmlFor="statusFilter" className="mr-2 text-sm font-medium text-[#4574a1]">Фільтрувати за статусом:</label>
                         <select
                             id="statusFilter"
                             value={filterStatus}
@@ -323,16 +341,16 @@ function AdminPage() {
                             }}
                             className="form-select rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-11 py-2 px-3 text-sm text-[#0c151d]"
                         >
-                            <option value="pending">Pending</option>
-                            <option value="active">Active</option>
-                            <option value="rejected">Rejected</option>                   
-                            <option value="archived">Archived</option>
-                            <option value="">All</option>
+                            <option value="pending">На розгляді</option>
+                            <option value="active">Активне</option>
+                            <option value="rejected">Відхилено</option>                   
+                            <option value="archived">В архіві</option>
+                            <option value="">Усі</option>
                         </select>
                     </div>
 
                     {listings.length === 0 && !loading ? (
-                        <p className="text-center text-slate-600 py-10">No listings found for the selected status.</p>
+                        <p className="text-center text-slate-600 py-10">Оголошень за вибраним статусом не знайдено.</p>
                     ) : (
                     <div className="overflow-x-auto bg-white shadow-xl rounded-xl">
                         <table className="min-w-full divide-y divide-slate-200">
@@ -419,23 +437,23 @@ function AdminPage() {
                     <div className="bg-white rounded-lg shadow-xl p-5 sm:p-6 w-full max-w-md transform transition-all duration-300 ease-in-out scale-100">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-lg sm:text-xl font-semibold text-[#0c151d]">
-                              {modalAction === 'rejected' ? 'Reason for Rejection' : 'Reason for Archiving'}                  </h2>
+                              {modalAction === 'rejected' ? 'Причина відхилення' : 'Причина архівування'}                  </h2>
                             <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
                         
                         <p className="text-sm text-slate-600 mb-1">
-                            Listing: <span className="font-medium">{modalTargetListing.title}</span>
+                            Оголошення: <span className="font-medium">{modalTargetListing.title}</span>
                         </p>
                         <p className="text-sm text-slate-600 mb-4">
-                            Owner: <span className="font-medium">{modalTargetListing.Owner?.name || modalTargetListing.Owner?.email || 'N/A'}</span>
+                            Власник: <span className="font-medium">{modalTargetListing.Owner?.name || modalTargetListing.Owner?.email || 'Н/Д'}</span>
                         </p>
 
                         <form onSubmit={(e) => { e.preventDefault(); handleConfirmAction(); }}>
                             <div className="mb-4">
                                 <label htmlFor="actionReason" className="block text-sm font-medium text-slate-700 mb-1">
-                                    Reason (optional):
+                                    Причина (необов'язково):
                                 </label>
                                 <textarea
                                     id="actionReason"
@@ -443,12 +461,11 @@ function AdminPage() {
                                     onChange={(e) => setActionReason(e.target.value)}
                                     rows="3"
                                    className="form-textarea w-full rounded-md border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c] placeholder-slate-400 py-2 px-3 shadow-sm"
-                                    // ***** FIX HERE *****
-                                    placeholder={`Enter reason for ${modalAction === 'rejected' ? 'rejecting' : 'archiving'}... If provided, a message will be sent to the owner.`}
+                                    placeholder={`Введіть причину ${modalAction === 'rejected' ? 'відхилення' : 'архівування'}... Якщо вказано, власнику буде надіслано повідомлення.`}
                                 />
                                 {!(modalTargetListing.Owner && modalTargetListing.Owner.id) && actionReason.trim() && (
                                      <p className="text-xs text-yellow-600 mt-1">
-                                        Warning: Owner details not found. Message cannot be sent.
+                                        Увага: Дані власника не знайдено. Повідомлення не може бути надіслано.
                                      </p>
                                 )}
                             </div>
@@ -466,7 +483,7 @@ function AdminPage() {
                                     disabled={isSubmittingAction}
                                     className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-400 disabled:opacity-50"
                                 >
-                                    Cancel
+                                    Скасувати
                                 </button>
                                 <button
                                     type="submit"
@@ -474,9 +491,8 @@ function AdminPage() {
                                     className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isSubmittingAction ? 
-                                         (modalAction === 'rejected' ? 'Rejecting...' : 'Archiving...') : 
-                                        // ***** FIX HERE *****
-                                        (modalAction === 'rejected' ? 'Confirm Reject' : 'Confirm Archive')          }
+                                         (modalAction === 'rejected' ? 'Відхилення...' : 'Архівування...') : 
+                                        (modalAction === 'rejected' ? 'Підтвердити відхилення' : 'Підтвердити архівування')          }
                                 </button>
                             </div>
                         </form>

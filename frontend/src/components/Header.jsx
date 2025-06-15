@@ -7,10 +7,10 @@ import {
   BellIcon,
   ChatBubbleLeftEllipsisIcon,
   CalendarDaysIcon,
-  UserGroupIcon,
-  HeartIcon as FavHeartIcon,
-  HomeModernIcon, // For Create Listing / My Listings
-  UserCircleIcon, // Fallback for avatar
+  UserGroupIcon, // This icon is not used in the header's visible elements currently.
+  HeartIcon as FavHeartIcon, // This icon is not used in the header's visible elements currently.
+  HomeModernIcon, // This icon is not used in the header's visible elements currently.
+  UserCircleIcon, // Fallback for avatar - handled by getAvatarUrl
   ArrowRightOnRectangleIcon, // Logout
   ChevronDownIcon, // Dropdown indicator
   MagnifyingGlassIcon, // For Listings
@@ -28,7 +28,7 @@ const NotificationBadge = ({ count }) => {
 };
 
 // Helper to get avatar URL, similar to ProfilePage
-const getAvatarUrl = (profileImageUrl, nameOrEmail, size = 32) => {
+const getAvatarUrl = (profileImageUrl, nameOrEmail, size = 36) => {
     if (profileImageUrl) {
         const filename = profileImageUrl.split('/').pop();
         return `http://localhost:5000/uploads/profiles/${filename}`;
@@ -69,7 +69,7 @@ function Header() {
   const UserAvatar = () => (
     <img
         src={getAvatarUrl(user?.profile_photo_url, user?.name || user?.email, 36)}
-        alt={user?.name || 'User'}
+        alt={user?.name || 'Користувач'}
         className="w-9 h-9 rounded-full object-cover border-2 border-slate-200 hover:border-blue-500 transition-colors"
     />
   );
@@ -83,14 +83,14 @@ function Header() {
           {/* Left Side: Logo and Primary Nav */}
           <div className="flex items-center space-x-8">
             <Link to="/" className="text-2xl font-bold text-slate-800 hover:text-blue-600 transition-colors">
-              Rentify
+              Твоя Квартира Тут
             </Link>
             <nav className="hidden md:flex space-x-5 items-center">
               <Link to="/listings" className="text-slate-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center">
-                <MagnifyingGlassIcon className="w-5 h-5 mr-1.5 text-slate-400 group-hover:text-blue-500"/> Listings
+                <MagnifyingGlassIcon className="w-5 h-5 mr-1.5 text-slate-400 group-hover:text-blue-500"/> Оголошення
               </Link>
               <Link to="/map-listings" className="text-slate-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center">
-                <MapIcon className="w-5 h-5 mr-1.5 text-slate-400 group-hover:text-blue-500"/> Map View
+                <MapIcon className="w-5 h-5 mr-1.5 text-slate-400 group-hover:text-blue-500"/> Перегляд на карті
               </Link>
             </nav>
           </div>
@@ -101,25 +101,25 @@ function Header() {
               <>
                 {/* Notification Icons Area */}
                 <div className="flex items-center space-x-2 sm:space-x-3">
-                  <Link to="/my-chats" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="My Chats">
+                  <Link to="/my-chats" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Мої чати">
                     <ChatBubbleLeftEllipsisIcon className="w-6 h-6" />
                     <NotificationBadge count={unreadMessagesCount} />
                   </Link>
 
                   {user.role === 'owner' && (
-                    <Link to="/booking-requests" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Booking Requests">
+                    <Link to="/booking-requests" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Запити на бронювання">
                       <BellIcon className="w-6 h-6" />
                       <NotificationBadge count={unreadBookingRequestsCount} />
                     </Link>
                   )}
                   {user.role === 'tenant' && (
-                     <Link to="/my-bookings" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="My Bookings Updates">
+                     <Link to="/my-bookings" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Оновлення моїх бронювань">
                         <CalendarDaysIcon className="w-6 h-6"/>
                         <NotificationBadge count={unreadMyBookingsUpdatesCount} />
                      </Link>
                   )}
                   {user.role === 'admin' && (
-                    <Link to="/admin" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Admin Panel">
+                    <Link to="/admin" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Панель адміністратора">
                       <Cog6ToothIcon className="w-6 h-6" />
                        <NotificationBadge count={unreadAdminTasksCount} />
                     </Link>
@@ -142,27 +142,27 @@ function Header() {
                     <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-xl bg-white ring-1 ring-black ring-opacity-5 focus:outline-none py-1">
                       <div className="px-4 py-3">
                         <p className="text-sm font-medium text-slate-800 truncate">{user.name || user.email}</p>
-                        <p className="text-xs text-slate-500 capitalize">{user.role}</p>
+                        <p className="text-xs text-slate-500 capitalize">{user.role === 'tenant' ? 'Орендар' : user.role === 'owner' ? 'Власник' : user.role === 'admin' ? 'Адміністратор' : user.role}</p>
                       </div>
                       <div className="border-t border-slate-200"></div>
                       <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                        My Profile
+                        Мій профіль
                       </Link>
                       <Link to="/favorites" onClick={() => setIsProfileDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                        Favorites
+                        Обрані
                       </Link>
                       {(user.role === 'tenant' || user.role === 'owner') && (
                           <Link to="/my-bookings" onClick={() => setIsProfileDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                            My Bookings
+                            Мої бронювання
                           </Link>
                       )}
                       {user.role === 'owner' && (
                         <>
                           <Link to="/manage-listings" onClick={() => setIsProfileDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                            My Listings
+                            Мої оголошення
                           </Link>
                           <Link to="/create-listing" onClick={() => setIsProfileDropdownOpen(false)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                            Create Listing
+                            Створити оголошення
                           </Link>
                         </>
                       )}
@@ -171,7 +171,7 @@ function Header() {
                         onClick={handleLogout}
                         className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
                       >
-                        <ArrowRightOnRectangleIcon className="w-5 h-5 inline-block mr-2 -mt-0.5"/> Logout
+                        <ArrowRightOnRectangleIcon className="w-5 h-5 inline-block mr-2 -mt-0.5"/> Вийти
                       </button>
                     </div>
                   )}
@@ -184,13 +184,13 @@ function Header() {
                   to="/login"
                   className="text-slate-600 hover:text-blue-600 px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 >
-                  Login
+                  Увійти
                 </Link>
                 <Link
                   to="/register"
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm"
                 >
-                  Sign Up
+                  Зареєструватися
                 </Link>
               </div>
             )}
@@ -203,7 +203,7 @@ function Header() {
                   to="/login"
                   className="text-slate-600 hover:text-blue-600 p-2 rounded-md text-sm font-medium transition-colors"
                 >
-                  Login
+                  Увійти
                 </Link>
               )}
             </div>

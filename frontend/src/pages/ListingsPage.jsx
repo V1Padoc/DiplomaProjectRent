@@ -145,7 +145,7 @@ function ListingsPage() {
       }));
     } catch (err) {
       console.error('Error fetching listings:', err);
-      setError('Failed to fetch listings. Please try again later.');
+      setError('Не вдалося завантажити оголошення. Будь ласка, спробуйте пізніше.');
     } finally {
       setLoading(false);
     }
@@ -266,15 +266,32 @@ function ListingsPage() {
     }
   }, [handleSliderMouseMove, handleSliderMouseUp]);
 
-  const sliderSettings = {
-    dots: false, infinite: true, speed: 500, slidesToShow: 1, slidesToScroll: 1,
-    autoplay: false, arrows: true, prevArrow: <SlickArrowLeft />, nextArrow: <SlickArrowRight />,
-  };
+ const sliderSettings = {
+        dots: false,
+        infinite: true, // Keep this for seamless looping if you like
+        speed: 500,
+        slidesToShow: 1,
+        slidesToScroll: 1,
+        autoplay: false,
+        arrows: true,
+        prevArrow: <SlickArrowLeft />,
+        nextArrow: <SlickArrowRight />,
+        lazyLoad: 'ondemand', 
+    };
 
   const sortOptions = useMemo(() => [
-    { label: 'Date Added', field: 'created_at' }, { label: 'Price', field: 'price' },
-    { label: 'Rooms', field: 'rooms' }, { label: 'Area', field: 'area' },
+    { label: 'Дата додавання', field: 'created_at' }, 
+    { label: 'Ціна', field: 'price' },
+    { label: 'Кімнати', field: 'rooms' }, 
+    { label: 'Площа', field: 'area' },
   ], []);
+
+  // Function to determine plural form for "rooms"
+  const formatRooms = (count) => {
+    if (count === 1) return '1 ліжко';
+    if (count >= 2 && count <= 4) return `${count} ліжка`;
+    return `${count} ліжок`;
+  };
 
   return (
     <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
@@ -282,7 +299,7 @@ function ListingsPage() {
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
         className="fixed bottom-6 left-4 right-auto z-50 p-3 bg-slate-700 text-white rounded-full shadow-lg hover:bg-slate-600 transition-colors lg:hidden"
-        aria-label={isSidebarOpen ? "Close filters" : "Open filters"}
+        aria-label={isSidebarOpen ? "Закрити фільтри" : "Відкрити фільтри"}
       >
         {isSidebarOpen ? <XMarkIcon className="h-6 w-6" /> : <Bars3Icon className="h-6 w-6" />}
       </button>
@@ -292,7 +309,7 @@ function ListingsPage() {
         onClick={scrollToTop}
         className={`fixed bottom-6 right-6 z-50 p-3 bg-slate-700 text-white rounded-full shadow-lg hover:bg-slate-600 transition-opacity duration-300
                     ${showBackToTop ? 'opacity-100 visible' : 'opacity-0 invisible'}`}
-        aria-label="Back to top"
+        aria-label="Нагору"
       >
         <ArrowUpIcon className="h-6 w-6" />
       </button>
@@ -323,21 +340,21 @@ function ListingsPage() {
             `}
           >
             <div className="h-full lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] overflow-y-auto pt-5 lg:pt-0">
-              <h2 className="text-[#0c151d] text-xl sm:text-[22px] font-bold leading-tight tracking-tight px-4 pb-3 pt-4 lg:pt-0">Filters</h2>
+              <h2 className="text-[#0c151d] text-xl sm:text-[22px] font-bold leading-tight tracking-tight px-4 pb-3 pt-4 lg:pt-0">Фільтри</h2>
               
               <div className="px-4 py-2.5"> {/* Reduced py */}
-                <label htmlFor="search-keyword" className="sr-only">Search by keyword</label>
-                <input id="search-keyword" name="search" placeholder="Search by keyword"
+                <label htmlFor="search-keyword" className="sr-only">Пошук за ключовим словом</label>
+                <input id="search-keyword" name="search" placeholder="Пошук за ключовим словом"
                   className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 sm:h-14 p-3 sm:p-[15px] text-sm sm:text-base placeholder:text-[#4574a1]"
                   value={filters.search} onChange={handleFilterChange}/>
               </div>
 
-              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Listing Type</h3> {/* Reduced pb, pt */}
+              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Тип оголошення</h3> {/* Reduced pb, pt */}
               <div className="flex flex-col gap-2 p-3"> {/* Reduced gap, p */}
                 {[
-                    { label: 'All Types', value: ''},
-                    { label: 'Monthly Rental', value: 'monthly-rental' },
-                    { label: 'Daily Rental', value: 'daily-rental' },
+                    { label: 'Усі типи', value: ''},
+                    { label: 'Щомісячна оренда', value: 'monthly-rental' },
+                    { label: 'Щоденна оренда', value: 'daily-rental' },
                 ].map(typeOpt => (
                     <label key={typeOpt.value} className="flex items-center gap-3 sm:gap-4 rounded-lg border border-solid border-[#cddcea] p-3 sm:p-[15px] cursor-pointer hover:border-blue-400 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 transition-colors">
                         <input
@@ -353,10 +370,10 @@ function ListingsPage() {
                 ))}
               </div>
 
-              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Price Range</h3> {/* Reduced pb, pt */}
+              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Діапазон цін</h3> {/* Reduced pb, pt */}
                 <div className="px-4 pt-0 pb-3"> {/* Reduced pb */}
                     <p className="text-[#0c151d] text-sm font-medium leading-normal mb-2 text-center">
-                        ${filters.priceMin} - {filters.priceMax === String(SLIDER_SCALE_MAX) ? `${SLIDER_SCALE_MAX}+` : `$${filters.priceMax}`}
+                        ${filters.priceMin} - {filters.priceMax === String(SLIDER_SCALE_MAX) ? `${SLIDER_SCALE_MAX}+` : `₴${filters.priceMax}`}
                     </p>
                     <div className="relative h-[38px] w-full pt-1.5">
                         <div ref={sliderTrackRef} className="relative h-1 w-full rounded-sm bg-[#cddcea]">
@@ -375,17 +392,17 @@ function ListingsPage() {
                     </div>
                 </div>
               
-              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Rooms</h3> {/* Reduced pb, pt */}
+              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Кімнати</h3> {/* Reduced pb, pt */}
                <div className="p-3"> {/* Reduced p */}
-                    <label htmlFor="roomsMin" className="sr-only">Min. Rooms</label>
-                    <input type="number" name="roomsMin" id="roomsMin" value={filters.roomsMin} onChange={handleFilterChange} min="0" placeholder="Min. Bedrooms"
+                    <label htmlFor="roomsMin" className="sr-only">Мін. кімнат</label>
+                    <input type="number" name="roomsMin" id="roomsMin" value={filters.roomsMin} onChange={handleFilterChange} min="0" placeholder="Мін. спалень"
                            className="form-input w-full rounded-lg border-[#cddcea] bg-slate-50 h-12 sm:h-14 p-3 sm:p-[15px] text-sm sm:text-base placeholder:text-[#4574a1]"/>
                </div>
 
-              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Location</h3> {/* Reduced pb, pt */}
+              <h3 className="text-[#0c151d] text-base sm:text-lg font-bold leading-tight tracking-tight px-4 pb-1.5 pt-3">Місцезнаходження</h3> {/* Reduced pb, pt */}
               <div className="px-4 py-2.5"> {/* Reduced py */}
-                <label htmlFor="location-filter" className="sr-only">Location</label>
-                <input id="location-filter" name="location" placeholder="City, Neighborhood, ZIP"
+                <label htmlFor="location-filter" className="sr-only">Місцезнаходження</label>
+                <input id="location-filter" name="location" placeholder="Місто, район, поштовий індекс"
                   className="form-input w-full rounded-lg border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 sm:h-14 p-3 sm:p-[15px] text-sm sm:text-base placeholder:text-[#4574a1]"
                   value={filters.location} onChange={handleFilterChange}/>
               </div>
@@ -393,11 +410,11 @@ function ListingsPage() {
               <div className="flex flex-col gap-2 px-4 py-4"> {/* Reduced gap, py */}
                 <button onClick={handleApplyFilters}
                   className="w-full bg-[#359dff] hover:bg-blue-600 text-white text-sm font-bold rounded-lg h-10 sm:h-12 transition-colors">
-                  Apply Filters
+                  Застосувати фільтри
                 </button>
                 <button onClick={handleResetFilters}
                   className="w-full bg-[#e6edf4] hover:bg-slate-300 text-[#0c151d] text-sm font-bold rounded-lg h-10 sm:h-12 transition-colors">
-                  Reset Filters
+                  Скинути фільтри
                 </button>
               </div>
             </div>
@@ -406,10 +423,10 @@ function ListingsPage() {
           <main className="flex-1 min-w-0">
             <div className="px-0 sm:px-4">
                 <p className="text-[#0c151d] tracking-tight text-xl sm:text-2xl md:text-[32px] font-bold leading-tight mb-4">
-                    Apartments for rent
+                    Квартири в оренду
                 </p>
                 <p className="text-sm text-slate-600 mb-6">
-                    {pagination.totalItems > 0 ? `Showing ${((pagination.currentPage - 1) * itemsPerPage) + 1}-${Math.min(pagination.currentPage * itemsPerPage, pagination.totalItems)} of ${pagination.totalItems} results` : 'No results'}
+                    {pagination.totalItems > 0 ? `Показано ${((pagination.currentPage - 1) * itemsPerPage) + 1}-${Math.min(pagination.currentPage * itemsPerPage, pagination.totalItems)} з ${pagination.totalItems} результатів` : 'Немає результатів'}
                 </p>
             </div>
 
@@ -431,11 +448,11 @@ function ListingsPage() {
               </div>
             </div>
 
-            {loading && <div className="text-center text-slate-700 py-10">Loading listings...</div>}
+            {loading && <div className="text-center text-slate-700 py-10">Завантаження оголошень...</div>}
             {error && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6">{error}</div>}
             
             {!loading && !error && listings.length === 0 && (
-              <div className="text-center text-slate-600 py-10">No listings found matching your criteria. Try adjusting your filters.</div>
+              <div className="text-center text-slate-600 py-10">Оголошень, що відповідають вашим критеріям, не знайдено. Спробуйте змінити фільтри.</div>
             )}
 
             {!loading && !error && listings.length > 0 && (
@@ -448,7 +465,7 @@ function ListingsPage() {
                         {isAuthenticated && (
                             <button onClick={async (e) => { e.stopPropagation(); e.preventDefault(); await toggleFavorite(listing.id); }}
                                 className="absolute top-3 right-3 z-10 p-2 bg-black bg-opacity-40 rounded-full text-white hover:bg-opacity-60 focus:outline-none transition-colors"
-                                aria-label={favorites.includes(String(listing.id)) ? "Remove from favorites" : "Add to favorites"}>
+                                aria-label={favorites.includes(String(listing.id)) ? "Видалити з обраних" : "Додати до обраних"}>
                                 {favorites.includes(String(listing.id)) ? 
                                     <HeartSolid className="w-5 h-5 text-red-400"/> : 
                                     <HeartOutline className="w-5 h-5 text-white"/>}
@@ -459,11 +476,20 @@ function ListingsPage() {
                             <div className="w-full h-60 sm:h-64 slick-listing-card">
                               <Slider {...sliderSettings}>
                                 {listing.photos.map((photo, index) => (
-                                  <div key={index}> <img src={`http://localhost:5000/uploads/${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover"/> </div>
+                                  <div key={index}>
+                                    {/* --- THE CORE FRONTEND CHANGE --- */}
+                                    <img 
+                                      src={`http://localhost:5000/uploads/thumb-${photo}`} // <--- Use the thumbnail
+                                      alt={`${listing.title} ${index + 1}`} 
+                                      className="w-full h-60 sm:h-64 object-cover"
+                                      loading="lazy" // <--- Native browser lazy loading
+                                      decoding="async" // <--- Helps prevent blocking the main thread
+                                    />
+                                  </div>
                                 ))}
                               </Slider>
                             </div>
-                          ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">No Image</div> )}
+                          ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> )}
                         </Link>
                       </div>
                       <Link to={`/listings/${listing.id}`} className="block p-4 sm:p-5 flex flex-col flex-grow">
@@ -472,14 +498,14 @@ function ListingsPage() {
                         <div className="mt-auto pt-2">
                           <div className="flex items-baseline justify-between text-[#0c151d]">
                             <span className="text-base sm:text-lg font-bold">
-                              {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/mo` :
-                               (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/day` : `$${parseFloat(listing.price).toFixed(0)}`)}
+                              {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` :
+                               (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
                             </span>
                             {(listing.rooms !== null || listing.area !== null) && (
                                 <div className="text-sm text-[#4574a1] flex items-center space-x-2">
-                                    {listing.rooms !== null && ( <span>{listing.rooms} bed{listing.rooms === 1 ? '' : 's'}</span> )}
+                                    {listing.rooms !== null && ( <span>{formatRooms(listing.rooms)}</span> )}
                                     {listing.rooms !== null && listing.area !== null && <span>·</span>}
-                                    {listing.area !== null && ( <span>{listing.area} sqft</span> )}
+                                    {listing.area !== null && ( <span>{listing.area} м²</span> )}
                                 </div>
                             )}
                           </div>

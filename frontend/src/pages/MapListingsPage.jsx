@@ -98,6 +98,13 @@ function MapBoundsAdjuster({ mapListings }) {
     return null;
 }
 
+// Function to determine plural form for "rooms" (consistent with ListingsPage)
+const formatRooms = (count) => {
+    if (count === 1) return '1 ліжко';
+    if (count >= 2 && count <= 4) return `${count} ліжка`;
+    return `${count} ліжок`;
+};
+
 
 function MapListingsPage() {
     const [listData, setListData] = useState([]);
@@ -173,7 +180,7 @@ function MapListingsPage() {
             });
         } catch (err) {
             console.error('Error fetching list data:', err);
-            setError(prev => prev || 'Failed to fetch listings. Please try again.');
+            setError(prev => prev || 'Не вдалося завантажити оголошення. Будь ласка, спробуйте ще раз.');
         } finally {
             setLoadingList(false);
         }
@@ -195,7 +202,7 @@ function MapListingsPage() {
             }
         } catch (err) {
             console.error('Error fetching map data:', err);
-            setError(prev => prev || 'Failed to load map data.');
+            setError(prev => prev || 'Не вдалося завантажити дані карти.');
         } finally {
             setLoadingMap(false);
         }
@@ -275,6 +282,7 @@ function MapListingsPage() {
         arrows: true,
         prevArrow: <SlickArrowLeftSlick />,
         nextArrow: <SlickArrowRightSlick />,
+        lazyLoad: 'ondemand', 
     };
 
     return (
@@ -284,42 +292,42 @@ function MapListingsPage() {
                 <div className="max-w-none mx-auto px-2 sm:px-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-3 items-end">
                         <div>
-                            <label htmlFor="location" className="block text-xs text-[#4574a1] mb-0.5">Location</label>
+                            <label htmlFor="location" className="block text-xs text-[#4574a1] mb-0.5">Місцезнаходження</label>
                             <input
                                 type="text" name="location" id="location" value={filters.location} onChange={handleFilterChange}
-                                placeholder="City, Neighborhood, ZIP"
+                                placeholder="Місто, район, поштовий індекс"
                                 className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"
                             />
                         </div>
                         <div>
-                            <label htmlFor="type" className="block text-xs text-[#4574a1] mb-0.5">Type</label>
+                            <label htmlFor="type" className="block text-xs text-[#4574a1] mb-0.5">Тип</label>
                             <select name="type" id="type" value={filters.type} onChange={handleFilterChange} className="form-select w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-2 pr-8 text-sm text-[#0c151d]">
-                                <option value="">All Types</option>
-                                <option value="monthly-rental">Monthly Rental</option>
-                                <option value="daily-rental">Daily Rental</option>
+                                <option value="">Усі типи</option>
+                                <option value="monthly-rental">Щомісячна оренда</option>
+                                <option value="daily-rental">Щоденна оренда</option>
                             </select>
                         </div>
                         <div className="flex space-x-2">
                             <div className="flex-1">
-                                <label htmlFor="priceMin" className="block text-xs text-[#4574a1] mb-0.5">Min Price</label>
-                                <input type="number" name="priceMin" id="priceMin" value={filters.priceMin} onChange={handleFilterChange} placeholder="Any" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+                                <label htmlFor="priceMin" className="block text-xs text-[#4574a1] mb-0.5">Мін. ціна</label>
+                                <input type="number" name="priceMin" id="priceMin" value={filters.priceMin} onChange={handleFilterChange} placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
                             </div>
                             <div className="flex-1">
-                                <label htmlFor="priceMax" className="block text-xs text-[#4574a1] mb-0.5">Max Price</label>
-                                <input type="number" name="priceMax" id="priceMax" value={filters.priceMax} onChange={handleFilterChange} placeholder="Any" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+                                <label htmlFor="priceMax" className="block text-xs text-[#4574a1] mb-0.5">Макс. ціна</label>
+                                <input type="number" name="priceMax" id="priceMax" value={filters.priceMax} onChange={handleFilterChange} placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
                             </div>
                         </div>
                         <div>
-                            <label htmlFor="roomsMin" className="block text-xs text-[#4574a1] mb-0.5">Min Rooms</label>
-                            <input type="number" name="roomsMin" id="roomsMin" value={filters.roomsMin} onChange={handleFilterChange} min="0" placeholder="Any" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+                            <label htmlFor="roomsMin" className="block text-xs text-[#4574a1] mb-0.5">Мін. кімнат</label>
+                            <input type="number" name="roomsMin" id="roomsMin" value={filters.roomsMin} onChange={handleFilterChange} min="0" placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
                         </div>
                         <div>
-                            <label htmlFor="search" className="block text-xs text-[#4574a1] mb-0.5">Keyword</label>
-                            <input type="text" name="search" id="search" value={filters.search} onChange={handleFilterChange} placeholder="e.g. waterfront, cozy" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+                            <label htmlFor="search" className="block text-xs text-[#4574a1] mb-0.5">Ключове слово</label>
+                            <input type="text" name="search" id="search" value={filters.search} onChange={handleFilterChange} placeholder="напр., набережна, затишна" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
                         </div>
                         <div className="flex space-x-2 items-end">
-                             <button onClick={handleApplyFilters} className="w-full bg-[#359dff] hover:bg-blue-600 text-white text-sm font-bold rounded-lg h-10 transition-colors">Apply</button>
-                             <button onClick={handleResetFilters} className="w-full bg-[#e6edf4] hover:bg-slate-300 text-[#0c151d] text-sm font-bold rounded-lg h-10 transition-colors">Reset</button>
+                             <button onClick={handleApplyFilters} className="w-full bg-[#359dff] hover:bg-blue-600 text-white text-sm font-bold rounded-lg h-10 transition-colors">Застосувати</button>
+                             <button onClick={handleResetFilters} className="w-full bg-[#e6edf4] hover:bg-slate-300 text-[#0c151d] text-sm font-bold rounded-lg h-10 transition-colors">Скинути</button>
                         </div>
                     </div>
                 </div>
@@ -350,9 +358,9 @@ function MapListingsPage() {
                                 <Tooltip>
                                     <strong className="text-sm">{listing.title}</strong><br />
                                     <span className="text-xs">
-                                    {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/mo` : 
-                                     (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/day` : `$${parseFloat(listing.price).toFixed(0)}`)}
-                                    {listing.rooms ? ` · ${listing.rooms} bed${listing.rooms === 1 ? '' : 's'}` : ''}
+                                    {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` : 
+                                     (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
+                                    {listing.rooms ? ` · ${formatRooms(listing.rooms)}` : ''}
                                     </span>
                                 </Tooltip>
                                 <Popup>
@@ -363,42 +371,42 @@ function MapListingsPage() {
                                         <h3 className="font-semibold text-base mb-1 text-[#0c151d] truncate">{listing.title}</h3>
                                         <p className="text-xs text-[#4574a1] mb-1 truncate">{listing.location}</p>
                                         <p className="text-sm font-bold text-[#0c151d] mb-2">
-                                            {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/mo` : 
-                                             (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/day` : `$${parseFloat(listing.price).toFixed(0)}`)}
+                                            {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` : 
+                                             (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
                                         </p>
                                         <Link to={`/listings/${listing.id}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm bg-[#359dff] hover:bg-blue-600 text-white font-bold py-1.5 px-2 rounded-md transition-colors">
-                                            View Details
+                                            Переглянути деталі
                                         </Link>
                                     </div>
                                 </Popup>
                             </Marker>
                         ))}
                     </MapContainer>
-                    {(loadingMap || (loadingList && !mapData.length)) && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 p-6 rounded-lg shadow-xl z-[1000] text-[#0c151d] font-medium">Loading map & listings...</div>}
+                    {(loadingMap || (loadingList && !mapData.length)) && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 p-6 rounded-lg shadow-xl z-[1000] text-[#0c151d] font-medium">Завантаження карти та оголошень...</div>}
                 </div>
 
                 {/* Listings List Area - Adjusted width and grid */}
                 <div className="w-2/5 lg:w-2/5 xl:w-1/3 h-full overflow-y-auto p-4 bg-slate-50">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold text-[#0c151d]">
-                            {pagination.totalItems > 0 ? `${pagination.totalItems} Homes Found` : "Listings"}
+                            {pagination.totalItems > 0 ? `${pagination.totalItems} Знайдено житла` : "Оголошення"}
                         </h2>
                         <div className="flex items-center space-x-2">
-                            <label htmlFor="sortByList" className="text-sm text-[#4574a1]">Sort:</label>
+                            <label htmlFor="sortByList" className="text-sm text-[#4574a1]">Сортувати:</label>
                             <select name="sortBy" id="sortByList" value={sort.sortBy} onChange={handleSortChange} className="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:ring-opacity-50 text-sm h-9 py-1 pl-2 pr-7">
-                                <option value="created_at">Date</option><option value="price">Price</option><option value="rooms">Rooms</option>
+                                <option value="created_at">Дата</option><option value="price">Ціна</option><option value="rooms">Кімнати</option>
                             </select>
                             <select name="sortOrder" id="sortOrderList" value={sort.sortOrder} onChange={handleSortChange} className="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:ring-opacity-50 text-sm h-9 py-1 pl-2 pr-7">
-                                <option value="DESC">Desc</option><option value="ASC">Asc</option>
+                                <option value="DESC">Спад.</option><option value="ASC">Зрост.</option>
                             </select>
                         </div>
                     </div>
 
-                    {loadingList && <div className="text-center py-10 text-slate-700">Loading listings...</div>}
+                    {loadingList && <div className="text-center py-10 text-slate-700">Завантаження оголошень...</div>}
                     {error && !loadingList && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6">{error}</div>}
                     
                     {!loadingList && !error && listData.length === 0 && (
-                        <div className="text-center py-10 text-slate-600">No listings match your current filters.</div>
+                        <div className="text-center py-10 text-slate-600">Жодне оголошення не відповідає вашим поточним фільтрам.</div>
                     )}
 
                     {!loadingList && !error && listData.length > 0 && (
@@ -419,7 +427,7 @@ function MapListingsPage() {
                                                         e.stopPropagation(); e.preventDefault(); await toggleFavorite(listing.id); 
                                                     }}
                                                     className="absolute top-3 right-3 z-10 p-2 bg-black bg-opacity-40 rounded-full text-white hover:bg-opacity-60 focus:outline-none transition-colors"
-                                                    aria-label={favorites.includes(String(listing.id)) ? "Remove from favorites" : "Add to favorites"}
+                                                    aria-label={favorites.includes(String(listing.id)) ? "Видалити з обраних" : "Додати до обраних"}
                                                 >
                                                     {favorites.includes(String(listing.id)) ? 
                                                         <HeartSolid className="w-5 h-5 text-red-400"/> : 
@@ -431,11 +439,11 @@ function MapListingsPage() {
                                                     <div className="w-full h-48 sm:h-56 slick-listing-card">
                                                     <Slider {...listCardSliderSettings}>
                                                         {listing.photos.map((photo, index) => (
-                                                        <div key={index}> <img src={`http://localhost:5000/uploads/${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-48 sm:h-56 object-cover"/> </div>
+                                                        <div key={index}> <img src={`http://localhost:5000/uploads/thumb-${photo}`}  alt={`${listing.title} ${index + 1}`} className="w-full h-48 sm:h-56 object-cover" loading="lazy" decoding="async" /> </div>
                                                         ))}
                                                     </Slider>
                                                     </div>
-                                                ) : ( <div className="w-full h-48 sm:h-56 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">No Image</div> )}
+                                                ) : ( <div className="w-full h-48 sm:h-56 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> )}
                                             </Link>
                                         </div>
                                         <Link to={`/listings/${listing.id}`} className="block p-4 flex flex-col flex-grow">
@@ -444,14 +452,14 @@ function MapListingsPage() {
                                             <div className="mt-auto pt-2">
                                                 <div className="flex items-baseline justify-between text-[#0c151d]">
                                                     <span className="text-base font-bold">
-                                                    {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/mo` :
-                                                    (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/day` : `$${parseFloat(listing.price).toFixed(0)}`)}
+                                                    {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` :
+                                                    (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
                                                     </span>
                                                     {(listing.rooms !== null || listing.area !== null) && (
                                                         <div className="text-sm text-[#4574a1] flex items-center space-x-1.5"> {/* Changed space-x-2 to space-x-1.5 */}
-                                                            {listing.rooms !== null && ( <span>{listing.rooms} bed{listing.rooms === 1 ? '' : 's'}</span> )}
+                                                            {listing.rooms !== null && ( <span>{formatRooms(listing.rooms)}</span> )}
                                                             {listing.rooms !== null && listing.area !== null && <span>·</span>}
-                                                            {listing.area !== null && ( <span>{listing.area} sqft</span> )}
+                                                            {listing.area !== null && ( <span>{listing.area} м²</span> )}
                                                         </div>
                                                     )}
                                                 </div>

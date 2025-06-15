@@ -47,20 +47,28 @@ const getListingImageUrl = (photoFilename) => {
     if (photoFilename) {
         return `http://localhost:5000/uploads/${photoFilename}`;
     }
-    return 'https://via.placeholder.com/400x300.png?text=Image+Not+Available';
+    return 'https://via.placeholder.com/400x300.png?text=Зображення+відсутнє';
 };
-const fallbackImage = 'https://via.placeholder.com/400x300.png?text=No+Images+for+Listing';
+const fallbackImage = 'https://via.placeholder.com/400x300.png?text=Немає+зображень+для+оголошення';
 
 const formatDateRange = (startDateStr, endDateStr) => {
     const options = { month: 'short', day: 'numeric', year: 'numeric' };
-    const startDate = new Date(startDateStr).toLocaleDateString(undefined, options);
-    const endDate = new Date(endDateStr).toLocaleDateString(undefined, options);
+    const startDate = new Date(startDateStr).toLocaleDateString('uk-UA', options); // Changed to Ukrainian locale
+    const endDate = new Date(endDateStr).toLocaleDateString('uk-UA', options);     // Changed to Ukrainian locale
     if (startDate === endDate) return startDate;
     return `${startDate} - ${endDate}`;
 };
 
+// Map English statuses to Ukrainian for display
+const statusDisplayMap = {
+    'confirmed': 'Підтверджено',
+    'pending': 'На розгляді',
+    'rejected': 'Відхилено',
+    'cancelled': 'Скасовано',
+    // Add other statuses if needed, though only these are typically shown in this context.
+};
+
 function MyBookingsPage() {
-    // ... (useState, useCallback, useEffect for fetching data - no changes here)
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -73,7 +81,7 @@ function MyBookingsPage() {
     const fetchMyBookings = useCallback(async () => {
         if (!token) {
             setLoading(false);
-            setError("Authentication required.");
+            setError("Потрібна автентифікація.");
             return;
         }
         setError(null);
@@ -86,7 +94,7 @@ function MyBookingsPage() {
             setBookings(sortedBookings);
         } catch (err) {
             console.error("Error fetching my bookings:", err);
-            setError(err.response?.data?.message || "Failed to load your bookings.");
+            setError(err.response?.data?.message || "Не вдалося завантажити ваші бронювання.");
         } finally {
             setLoading(false);
         }
@@ -126,9 +134,9 @@ function MyBookingsPage() {
 
     const handleCancelBooking = async (bookingId) => {
         setActionError(null);
-        const confirmCancel = window.confirm("Are you sure you want to cancel this booking?");
+        const confirmCancel = window.confirm("Ви впевнені, що хочете скасувати це бронювання?");
         if (confirmCancel) {
-            const doubleConfirmCancel = window.confirm("This action cannot be undone. Please confirm cancellation.");
+            const doubleConfirmCancel = window.confirm("Цю дію неможливо скасувати. Будь ласка, підтвердіть скасування.");
             if (doubleConfirmCancel) {
                 try {
                     setLoading(true);
@@ -138,7 +146,7 @@ function MyBookingsPage() {
                     await fetchMyBookings();
                 } catch (err) {
                     console.error("Error cancelling booking:", err);
-                    setActionError(err.response?.data?.message || "Could not cancel booking. Please try again.");
+                    setActionError(err.response?.data?.message || "Не вдалося скасувати бронювання. Будь ласка, спробуйте ще раз.");
                 } finally {
                     setLoading(false);
                 }
@@ -147,7 +155,6 @@ function MyBookingsPage() {
     };
     
     const tileClassName = ({ date, view }) => {
-        // ... (tileClassName logic - no changes here)
         if (view === 'month') {
             const classes = [];
             const currentDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -167,7 +174,8 @@ function MyBookingsPage() {
                     } else if (booking.status === 'cancelled') {
                         classes.push('cancelled-booking-day');
                     } else { 
-                        classes.push('other-booking-day');
+                        // Assuming 'rejected' status falls here, or any other status not explicitly handled
+                        classes.push('other-booking-day'); // Using 'other-booking-day' for rejected bookings.
                     }
 
                     if (currentDateOnly.getTime() === startDate.getTime()) classes.push('booking-start-date');
@@ -177,11 +185,12 @@ function MyBookingsPage() {
             });
 
             let finalClasses = '';
+            // Prioritize status classes that are most relevant/visible
             if (classes.includes('confirmed-booking-day')) finalClasses = 'booked-day confirmed-booking-day';
             else if (classes.includes('pending-booking-day')) finalClasses = 'booked-day pending-booking-day';
             else if (classes.includes('cancelled-booking-day')) finalClasses = 'booked-day cancelled-booking-day';
             else if (classes.includes('past-confirmed-booking-day')) finalClasses = 'booked-day past-confirmed-booking-day';
-            else if (classes.includes('other-booking-day')) finalClasses = 'booked-day other-booking-day'; 
+            else if (classes.includes('other-booking-day')) finalClasses = 'booked-day other-booking-day'; // Catches 'rejected'
             else if (classes.includes('past-pending-booking-day')) finalClasses = 'booked-day past-pending-booking-day';
 
             if (finalClasses) {
@@ -203,17 +212,16 @@ function MyBookingsPage() {
         new Date(b.end_date) < today ||
         ['rejected', 'cancelled'].includes(b.status) ||
         (b.status === 'pending' && new Date(b.end_date) < today)
-    ).sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+    ).sort((a, b) => new Date(b.start_date) - new Date(b.start_date)); // Ensure consistent sorting for history, perhaps by start_date DESC
 
     if (loading && bookings.length === 0) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-100 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading your bookings...</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-100 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження ваших бронювань...</div>;
     }
     if (error) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-100 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Error: {error}</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-100 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>;
     }
 
     const BookingCard = ({ booking, isSelected, onCancel }) => {
-        // ... (BookingCard component - no changes here from previous version)
         const canCancel = (booking.status === 'pending' || booking.status === 'confirmed') && new Date(booking.start_date) >= today;
 
         const sliderSettings = {
@@ -241,7 +249,7 @@ function MyBookingsPage() {
                                     <Link to={`/listings/${booking.Listing?.id}`} className="block">
                                         <img
                                             src={getListingImageUrl(photoFile)}
-                                            alt={`${booking.Listing?.title || 'Listing'} - Photo ${index + 1}`}
+                                            alt={`${booking.Listing?.title || 'Оголошення'} - Фото ${index + 1}`}
                                             className="w-full h-56 sm:h-60 object-cover"
                                         />
                                     </Link>
@@ -252,7 +260,7 @@ function MyBookingsPage() {
                         <Link to={`/listings/${booking.Listing?.id}`} className="block">
                             <img
                                 src={fallbackImage}
-                                alt={booking.Listing?.title || 'Listing Image'}
+                                alt={booking.Listing?.title || 'Зображення оголошення'}
                                 className="w-full h-56 sm:h-60 object-cover bg-slate-200"
                             />
                         </Link>
@@ -262,7 +270,7 @@ function MyBookingsPage() {
                 <div className="p-4 sm:p-5">
                     <div className="flex justify-between items-start mb-2">
                         <h3 className="text-lg sm:text-xl font-semibold text-slate-800 hover:text-blue-600 transition-colors">
-                            <Link to={`/listings/${booking.Listing?.id}`}>{booking.Listing?.title || 'N/A'}</Link>
+                            <Link to={`/listings/${booking.Listing?.id}`}>{booking.Listing?.title || 'Н/Д'}</Link>
                         </h3>
                         <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
                             booking.status === 'pending' ? 'bg-amber-100 text-amber-800' :
@@ -270,13 +278,13 @@ function MyBookingsPage() {
                                     booking.status === 'cancelled' ? 'bg-rose-100 text-rose-700' :
                                         'bg-slate-100 text-slate-800'
                             }`}>
-                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                            {statusDisplayMap[booking.status] || booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                         </span>
                     </div>
 
                     <p className="text-sm text-slate-600 mb-1 flex items-center">
                         <MapPinIcon className="w-4 h-4 mr-2 text-slate-400 shrink-0" />
-                        <span className="truncate">{booking.Listing?.location || 'N/A'}</span>
+                        <span className="truncate">{booking.Listing?.location || 'Н/Д'}</span>
                     </p>
                     <p className="text-sm text-slate-600 mb-3 flex items-center">
                         <CalendarDaysIcon className="w-4 h-4 mr-2 text-slate-400 shrink-0" />
@@ -286,7 +294,7 @@ function MyBookingsPage() {
                     {booking.Listing?.Owner && (
                         <p className="text-sm text-slate-600 mb-3 flex items-center">
                             <UserCircleIcon className="w-4 h-4 mr-2 text-slate-400 shrink-0" />
-                            Owner: <span className="truncate ml-1">{booking.Listing.Owner.name || booking.Listing.Owner.email || 'N/A'}</span>
+                            Власник: <span className="truncate ml-1">{booking.Listing.Owner.name || booking.Listing.Owner.email || 'Н/Д'}</span>
                         </p>
                     )}
 
@@ -297,7 +305,7 @@ function MyBookingsPage() {
                                 className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium"
                             >
                                 <ChatBubbleLeftEllipsisIcon className="w-4 h-4 mr-1.5" />
-                                Contact Owner
+                                Зв'язатися з власником
                             </Link>
                         )}
                         {canCancel && (
@@ -307,7 +315,7 @@ function MyBookingsPage() {
                                 disabled={loading}
                             >
                                 <TrashIcon className="w-4 h-4 mr-1.5" />
-                                Cancel Booking
+                                Скасувати бронювання
                             </button>
                         )}
                     </div>
@@ -330,7 +338,7 @@ function MyBookingsPage() {
            <div className={`py-4 sm:py-5 ${colorClass.bgSection || 'bg-slate-50'}`}>
                 {bookingsList.length === 0 ? (
                     <div className="bg-white/70 p-6 text-center text-slate-500 rounded-md max-w-md sm:max-w-lg mx-auto w-full"> {/* Card-like for empty state */}
-                        No bookings in this category.
+                        Немає бронювань у цій категорії.
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-6">
@@ -350,25 +358,24 @@ function MyBookingsPage() {
         <div className="min-h-screen bg-slate-100 py-8" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <header className="mb-6 text-center">
-                    <h1 className="text-4xl font-bold text-slate-800 tracking-tight">My Bookings</h1>
-                    <p className="mt-2 text-lg text-slate-600">View and manage your rental bookings on the calendar and in the list below.</p>
+                    <h1 className="text-4xl font-bold text-slate-800 tracking-tight">Мої бронювання</h1>
+                    <p className="mt-2 text-lg text-slate-600">Переглядайте та керуйте своїми бронюваннями оренди в календарі та в списку нижче.</p>
                 </header>
 
                 {actionError && (
                     <div className="mb-6 max-w-3xl mx-auto bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
-                        <p className="font-bold">Error</p>
+                        <p className="font-bold">Помилка</p>
                         <p>{actionError}</p>
                     </div>
                 )}
 
                 {bookings.length === 0 && !loading && (
-                    // ... (No bookings yet - no changes)
                     <div className="bg-white p-10 rounded-lg shadow-xl text-center max-w-lg mx-auto">
                         <CalendarDaysIcon className="w-16 h-16 mx-auto text-slate-400 mb-4" />
-                        <h2 className="text-2xl font-semibold text-slate-700 mb-2">No Bookings Yet</h2>
-                        <p className="text-slate-500 mb-6">You haven't made any bookings. Start exploring to find your next stay!</p>
+                        <h2 className="text-2xl font-semibold text-slate-700 mb-2">Ще немає бронювань</h2>
+                        <p className="text-slate-500 mb-6">Ви ще не зробили жодного бронювання. Почніть досліджувати, щоб знайти своє наступне житло!</p>
                         <Link to="/listings" className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-                            Explore Listings
+                            Дослідити оголошення
                         </Link>
                     </div>
                 )}
@@ -376,7 +383,6 @@ function MyBookingsPage() {
                 {bookings.length > 0 && (
                     <div className="flex flex-col lg:flex-row gap-8 lg:gap-10">
                         <aside className="lg:w-2/5 xl:w-1/3 lg:sticky lg:top-8 self-start">
-                            {/* ... (Calendar and legend - no changes here) */}
                             <div className="bg-white p-1 sm:p-3 rounded-xl shadow-xl">
                                 <Calendar
                                     onChange={handleCalendarDateChange}
@@ -389,11 +395,11 @@ function MyBookingsPage() {
                                     className="react-calendar-custom-bookings"
                                 />
                                 <div className="mt-4 p-3 space-y-2 text-xs text-slate-600 border-t border-slate-200">
-                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-blue-500 mr-2 shrink-0"></span>Confirmed</div>
-                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-amber-500 mr-2 shrink-0"></span>Pending</div>
-                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-slate-400 mr-2 shrink-0"></span>Past</div>
-                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-rose-500 mr-2 shrink-0"></span>Cancelled</div>
-                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-red-500 mr-2 shrink-0"></span>Rejected/Other</div>
+                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-blue-500 mr-2 shrink-0"></span>Підтверджено</div>
+                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-amber-500 mr-2 shrink-0"></span>На розгляді</div>
+                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-slate-400 mr-2 shrink-0"></span>Минулі</div>
+                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-rose-500 mr-2 shrink-0"></span>Скасовано</div>
+                                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-red-500 mr-2 shrink-0"></span>Відхилено/Інші</div>
                                 </div>
                             </div>
                         </aside>
@@ -401,21 +407,21 @@ function MyBookingsPage() {
                         <main className="max-w-2xl w-full mx-auto">
                             {loading && bookings.length > 0 && (
                                 <div className="text-center py-4">
-                                    <p className="text-slate-600">Updating bookings...</p>
+                                    <p className="text-slate-600">Оновлення бронювань...</p>
                                 </div>
                             )}
                             {upcomingAndActiveBookings.length > 0 && renderBookingSection(
-                                "Upcoming & Active", upcomingAndActiveBookings, CheckCircleIcon,
+                                "Майбутні та активні", upcomingAndActiveBookings, CheckCircleIcon,
                                 { text: 'text-green-700', icon: 'text-green-600', bgSection: 'bg-green-50' }, // bgSection applied to list wrapper
                                 'border-green-500'
                             )}
                             {pendingBookings.length > 0 && renderBookingSection(
-                                "Pending Requests", pendingBookings, ClockIcon,
+                                "Запити на розгляді", pendingBookings, ClockIcon,
                                 { text: 'text-amber-700', icon: 'text-amber-600', bgSection: 'bg-amber-50' }, // bgSection applied to list wrapper
                                 'border-amber-500'
                             )}
                             {historyBookings.length > 0 && renderBookingSection(
-                                "Booking History", historyBookings, ArchiveBoxIcon,
+                                "Історія бронювань", historyBookings, ArchiveBoxIcon,
                                 { text: 'text-slate-700', icon: 'text-slate-600', bgSection: 'bg-slate-200' }, // bgSection applied to list wrapper
                                 'border-slate-500'
                             )}

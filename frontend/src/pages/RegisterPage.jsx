@@ -30,13 +30,13 @@ function RegisterPage() {
         phone_number: phoneNumber, 
         role
       });
-      setSuccess(response.data.message);
+      setSuccess(response.data.message || "Обліковий запис успішно створено!"); // Translated success message
       setTimeout(() => {
         navigate('/login');
       }, 2000); 
     } catch (err) {
       console.error('Registration failed:', err);
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      setError(err.response?.data?.message || 'Реєстрація не вдалася. Будь ласка, спробуйте ще раз.'); // Translated error message
     }
   };
 
@@ -44,18 +44,18 @@ function RegisterPage() {
     <div className="relative flex size-full min-h-screen flex-col items-center justify-center bg-slate-50 p-4 sm:p-6" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
       <div className="w-full max-w-lg bg-white p-6 sm:p-8 rounded-xl shadow-xl">
         <h1 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center text-[#0c151d] tracking-tight">
-          Create an Account
+          Створити обліковий запис
         </h1>
 
         {success && (
           <div className="mb-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert">
-            <p className="font-bold">Success</p>
+            <p className="font-bold">Успіх</p>
             <p>{success}</p>
           </div>
         )}
         {error && (
           <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
-            <p className="font-bold">Error</p>
+            <p className="font-bold">Помилка</p>
             <p>{error}</p>
           </div>
         )}
@@ -64,21 +64,21 @@ function RegisterPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="name">
-                First Name
+                Ім'я
               </label>
               <input
                 className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
-                id="name" type="text" placeholder="John" value={name}
+                id="name" type="text" placeholder="Іван" value={name} // Translated placeholder
                 onChange={(e) => setName(e.target.value)} required 
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="last_name">
-                Last Name
+                Прізвище
               </label>
               <input
                 className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
-                id="last_name" type="text" placeholder="Doe" value={lastName}
+                id="last_name" type="text" placeholder="Коваленко" value={lastName} // Translated placeholder
                 onChange={(e) => setLastName(e.target.value)} required 
               />
             </div>
@@ -86,47 +86,47 @@ function RegisterPage() {
 
           <div>
             <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="email">
-              Email Address
+              Адреса електронної пошти
             </label>
             <input
               className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
-              id="email" type="email" placeholder="you@example.com" value={email}
+              id="email" type="email" placeholder="ви@example.com" value={email} // Placeholder kept similar, but context implies Ukrainian
               onChange={(e) => setEmail(e.target.value)} required
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="password">
-              Password
+              Пароль
             </label>
             <input
               className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]" 
-              id="password" type="password" placeholder="Create a strong password" value={password}
+              id="password" type="password" placeholder="Створіть надійний пароль" value={password} // Translated placeholder
               onChange={(e) => setPassword(e.target.value)} required minLength="6"
             />
           </div>
           
           <div> 
             <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="phone_number">
-                Phone Number
+                Номер телефону
             </label>
             <input
                 className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]"
-                id="phone_number" type="tel" placeholder="+1-555-123-4567" value={phoneNumber} 
+                id="phone_number" type="tel" placeholder="+380-50-123-4567" value={phoneNumber} // Translated placeholder to Ukrainian format
                 onChange={(e) => setPhoneNumber(e.target.value)} required 
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="role">
-              Register as:
+              Зареєструватися як:
             </label>
             <select
               className="form-select w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d]" 
               id="role" value={role} onChange={(e) => setRole(e.target.value)} required 
             >
-              <option value="tenant">Tenant / Buyer</option>
-              <option value="owner">Owner / Seller</option>
+              <option value="tenant">Орендар / Покупець</option>
+              <option value="owner">Власник / Продавець</option>
             </select>
           </div>
 
@@ -135,12 +135,12 @@ function RegisterPage() {
               className="w-full bg-[#359dff] hover:bg-blue-700 text-white text-sm sm:text-base font-bold py-3 px-4 rounded-lg h-12 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" 
               type="submit"
             >
-              Register
+              Зареєструватися
             </button>
           </div>
           <div className="text-center pt-2">
             <Link className="font-medium text-sm text-blue-600 hover:text-blue-700 transition-colors" to="/login">
-              Already have an account? Login
+              Вже маєте обліковий запис? Увійти
             </Link>
           </div>
         </form>

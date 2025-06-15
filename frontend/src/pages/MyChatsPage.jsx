@@ -5,22 +5,22 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const formatLastMessageTimestamp = (timestampStr) => {
-    if (!timestampStr) return 'No time';
+    if (!timestampStr) return '23:04'; // Translated
     const date = new Date(timestampStr);
-    if (isNaN(date.getTime())) return 'Invalid date';
+    if (isNaN(date.getTime())) return 'Недійсна дата'; // Translated
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const messageDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
     if (messageDateOnly.getTime() === today.getTime()) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }); // Changed locale
     } else if (today.getTime() - messageDateOnly.getTime() === 24 * 60 * 60 * 1000) {
-        return 'Yesterday';
+        return 'Вчора'; // Translated
     } else if (now.getFullYear() === messageDateOnly.getFullYear()) {
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        return date.toLocaleDateString('uk-UA', { month: 'short', day: 'numeric' }); // Changed locale
     } else {
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        return date.toLocaleDateString('uk-UA', { month: 'short', day: 'numeric', year: 'numeric' }); // Changed locale
     }
 };
 
@@ -44,7 +44,7 @@ function MyChatsPage() {
 
     const fetchMyChats = useCallback(async () => {
         if (!token) {
-            setError("Authentication required.");
+            setError("Потрібна автентифікація."); // Translated
             setLoading(false);
             return;
         }
@@ -56,7 +56,7 @@ function MyChatsPage() {
             setConversations(response.data);
         } catch (err) {
             console.error("Error fetching my chats:", err);
-            setError(err.response?.data?.message || "Failed to load chats.");
+            setError(err.response?.data?.message || "Не вдалося завантажити чати."); // Translated
         } finally {
             setLoading(false);
         }
@@ -77,11 +77,11 @@ function MyChatsPage() {
     }, [fetchMyChats, fetchUnreadMessagesCount]);
 
     if (loading) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Loading your chats...</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження ваших чатів...</div>; {/* Translated */}
     }
 
     if (error) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Error: {error}</div>;
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>; {/* Translated */}
     }
 
     return (
@@ -90,19 +90,19 @@ function MyChatsPage() {
                 <div className="layout-content-container flex flex-col max-w-3xl w-full flex-1 bg-white shadow-xl rounded-lg">
                     <div className="p-6 md:p-8">
                         <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight mb-8 text-center">
-                            My Chats
+                            Мої чати
                         </h1>
 
                         {conversations.length === 0 ? (
-                            <p className="text-center text-slate-600 py-10">You have no active chats yet.</p>
+                            <p className="text-center text-slate-600 py-10">У вас ще немає активних чатів.</p> 
                         ) : (
                             <div className="space-y-1"> {/* Reduced space for tighter list */}
                                 {conversations.map((convo) => {
-                                    const otherParticipantName = convo.otherParticipant?.name || 'Unknown User';
+                                    const otherParticipantName = convo.otherParticipant?.name || 'Невідомий користувач'; // Translated
                                     const otherParticipantAvatar = getAvatarUrl(convo.otherParticipant?.profile_image_url, otherParticipantName);
                                     
-                                    let lastMessageContent = "No messages yet. Start the conversation!";
-                                    let formattedTimestamp = "No time";
+                                    let lastMessageContent = "Ще немає повідомлень. Почніть розмову!"; // Translated
+                                    let formattedTimestamp = "Немає часу"; // Translated
                                     let lastMessagePrefix = "";
                                     let isLastMessageUnreadByCurrentUser = false;
 
@@ -111,7 +111,7 @@ function MyChatsPage() {
                                         formattedTimestamp = formatLastMessageTimestamp(timestampValueFromMessage);
                                         lastMessageContent = convo.lastMessage.content;
                                         if (convo.lastMessage.senderId === user?.id) {
-                                            lastMessagePrefix = "You: ";
+                                            lastMessagePrefix = "Ви: "; // Translated
                                         } else {
                                             // Use first name of other participant if available
                                             const otherFirstName = otherParticipantName.split(' ')[0];
@@ -136,15 +136,15 @@ function MyChatsPage() {
                                             />
                                             <div className="flex-grow overflow-hidden">
                                                 <div className="flex justify-between items-start mb-0.5">
-                                                    <h2 className="text-[#0d151c] text-base sm:text-lg font-semibold truncate" title={`Chat for: ${convo.listingTitle}`}>
+                                                    <h2 className="text-[#0d151c] text-base sm:text-lg font-semibold truncate" title={`Чат для: ${convo.listingTitle}`}> {/* Translated */}
                                                         {convo.listingTitle}
                                                     </h2>
                                                     <span className="text-xs text-slate-500 whitespace-nowrap ml-2">
                                                         {formattedTimestamp}
                                                     </span>
                                                 </div>
-                                                <p className="text-sm text-slate-700 mb-1 truncate" title={`With: ${otherParticipantName}`}>
-                                                    With: <span className="font-medium">{otherParticipantName}</span>
+                                                <p className="text-sm text-slate-700 mb-1 truncate" title={`З: ${otherParticipantName}`}> {/* Translated */}
+                                                    З: <span className="font-medium">{otherParticipantName}</span> {/* Translated */}
                                                 </p>
                                                 <div className="flex items-center">
                                                     <p className={`text-sm text-slate-600 truncate flex-grow ${

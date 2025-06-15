@@ -71,8 +71,8 @@ function LocationMarker({ onPositionChange, initialPosition }) {
     return position === null ? null : (
         <Marker position={position}>
             <Popup>
-                Property Location: <br/> Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)} <br/>
-                Click to adjust.
+                Місцезнаходження об'єкта: <br/> Шир: {position.lat.toFixed(6)}, Довг: {position.lng.toFixed(6)} <br/>
+                Натисніть, щоб налаштувати.
             </Popup>
         </Marker>
     );
@@ -93,7 +93,7 @@ const SearchField = ({ onLocationSelected }) => {
             retainZoomLevel: false, // Do not keep current zoom level after search
             animateZoom: true, // Animate map movement to result
             keepResult: true, // Keep the search result text in the bar
-            searchLabel: 'Enter address to find on map...',
+            searchLabel: 'Введіть адресу, щоб знайти на карті...',
         });
 
         map.addControl(searchControl); // Add the search control to the map
@@ -176,12 +176,12 @@ function EditListingPage() {
             setMarkerPosition(initialPos); setMapCenter([initialPos.lat, initialPos.lng]);
         } else { setMarkerPosition(null); }
       } catch (err) {
-        console.error('Error fetching listing for edit:', err);
-        setError(err.response?.data?.message || 'Failed to fetch listing data.');
+        console.error('Помилка при отриманні оголошення для редагування:', err);
+        setError(err.response?.data?.message || 'Не вдалося завантажити дані оголошення.');
       } finally { setLoading(false); }
     };
     if (listingId && token) { fetchListingForEdit(); }
-    else if (!token) { setLoading(false); setError('Authentication token missing.'); }
+    else if (!token) { setLoading(false); setError('Відсутній токен автентифікації.'); }
   }, [listingId, token]);
 
   useEffect(() => {
@@ -300,8 +300,8 @@ function EditListingPage() {
       const response = await axios.put(`http://localhost:5000/api/listings/${listingId}`, updateFormData, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setSubmitSuccess(response.data.message || "Listing updated successfully!");
-      console.log('Listing updated:', response.data.listing);
+      setSubmitSuccess(response.data.message || "Оголошення успішно оновлено!");
+      console.log('Оголошення оновлено:', response.data.listing);
       displayPhotos.forEach(p => { if (p.type === 'new' && p.previewUrl.startsWith('blob:')) URL.revokeObjectURL(p.previewUrl); });
       const updatedListingFromServer = response.data.listing;
       setOriginalListing(prev => ({...prev, ...updatedListingFromServer }));
@@ -312,8 +312,8 @@ function EditListingPage() {
       })));
       setTimeout(() => { navigate('/manage-listings'); }, 2500);
     } catch (err) {
-      console.error('Error updating listing:', err);
-      setSubmitError(err.response?.data?.message || 'Failed to update listing. Please try again.');
+      console.error('Помилка при оновленні оголошення:', err);
+      setSubmitError(err.response?.data?.message || 'Не вдалося оновити оголошення. Будь ласка, спробуйте ще раз.');
       setTimeout(() => setSubmitError(null), 3000);
     } finally { setSubmitting(false); }
   };
@@ -321,7 +321,7 @@ function EditListingPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-gray-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
-        Loading listing data...
+        Завантаження даних оголошення...
       </div>
     );
   }
@@ -329,7 +329,7 @@ function EditListingPage() {
   if (error) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
-        Error: {error}
+        Помилка: {error}
       </div>
     );
   }
@@ -337,7 +337,7 @@ function EditListingPage() {
   if (!originalListing) {
       return (
           <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-gray-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
-              Listing data not available.
+              Дані оголошення недоступні.
           </div>
       );
   }
@@ -348,102 +348,102 @@ function EditListingPage() {
     <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
       <div className="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
         <div className="layout-content-container flex flex-col max-w-3xl w-full flex-1 bg-white shadow-xl rounded-lg p-6 md:p-8">
-          <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight mb-8 text-center">Edit Listing</h1>
+          <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight mb-8 text-center">Редагувати оголошення</h1>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="title">Title</label>
-              <input id="title" type="text" placeholder="Listing Title" name="title" value={formData.title} onChange={handleInputChange} required
+              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="title">Заголовок</label>
+              <input id="title" type="text" placeholder="Назва оголошення" name="title" value={formData.title} onChange={handleInputChange} required
                 className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
             </div>
 
             <div>
-              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="description">Description</label>
-              <textarea id="description" placeholder="Detailed description of the property" name="description" value={formData.description} onChange={handleInputChange} rows="4"
+              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="description">Опис</label>
+              <textarea id="description" placeholder="Детальний опис об'єкта" name="description" value={formData.description} onChange={handleInputChange} rows="4"
                 className="form-textarea w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"></textarea>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="price">Price</label>
-                <input id="price" type="number" step="0.01" placeholder="e.g. 1200.50" name="price" value={formData.price} onChange={handleInputChange} required
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="price">Ціна</label>
+                <input id="price" type="number" step="0.01" placeholder="напр. 1200.50" name="price" value={formData.price} onChange={handleInputChange} required
                   className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
               </div>
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="type">Listing Type</label>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="type">Тип оголошення</label>
                 <select id="type" name="type" value={formData.type} onChange={handleInputChange} required
                   className="form-select w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]">
-                  <option value="monthly-rental">Monthly Rental</option>
-                  <option value="daily-rental">Daily Rental</option>
+                  <option value="monthly-rental">Щомісячна оренда</option>
+                  <option value="daily-rental">Щоденна оренда</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="rooms">Rooms (Bedrooms)</label>
-                <input id="rooms" type="number" step="1" placeholder="e.g. 3" name="rooms" value={formData.rooms} onChange={handleInputChange}
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="rooms">Кімнати (Спальні)</label>
+                <input id="rooms" type="number" step="1" placeholder="напр. 3" name="rooms" value={formData.rooms} onChange={handleInputChange}
                   className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
               </div>
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="area">Area (sq ft / sq m)</label>
-                <input id="area" type="number" step="0.01" placeholder="e.g. 150.75" name="area" value={formData.area} onChange={handleInputChange}
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="area">Площа (м²)</label>
+                <input id="area" type="number" step="0.01" placeholder="напр. 150.75" name="area" value={formData.area} onChange={handleInputChange}
                   className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
               </div>
             </div>
 
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="location">Address / Location Description</label>
-                <input id="location" type="text" placeholder="e.g., 123 Main St, City or use map search" name="location" value={formData.location} onChange={handleInputChange} required
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="location">Адреса / Опис місцезнаходження</label>
+                <input id="location" type="text" placeholder="напр., вул. Головна, 123, Місто або використовуйте пошук на карті" name="location" value={formData.location} onChange={handleInputChange} required
                     className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
             </div>
           
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-2">Update Property Location on Map</label>
+                <label className="block text-[#49749c] text-sm font-medium mb-2">Оновити місцезнаходження об'єкта на карті</label>
                 <MapContainer center={mapCenter} zoom={markerPosition ? 15 : 13} scrollWheelZoom={true} style={{ height: '400px', width: '100%' }} className="rounded-lg border border-slate-300" whenCreated={mapInstance => { mapRef.current = mapInstance; }}>
                     <TileLayer attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
                     <LocationMarker onPositionChange={handleMapPositionChange} initialPosition={markerPosition} />
                     <SearchField onLocationSelected={handleGeocodeResult} />
                 </MapContainer>
-                <p className="text-xs text-slate-500 mt-1">Selected: Lat: {formData.latitude || "N/A"}, Lng: {formData.longitude || "N/A"}</p>
+                <p className="text-xs text-slate-500 mt-1">Вибрано: Шир: {formData.latitude || "Н/Д"}, Довг: {formData.longitude || "Н/Д"}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
                 <div>
-                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="latitude">Latitude (from map)</label>
-                    <input id="latitude" type="text" name="latitude" value={formData.latitude} readOnly placeholder="Set via map"
+                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="latitude">Широта (з карти)</label>
+                    <input id="latitude" type="text" name="latitude" value={formData.latitude} readOnly placeholder="Встановлюється через карту"
                     className="form-input w-full rounded-lg border-[#cedce8] bg-slate-100 text-sm text-slate-700"/>
                 </div>
                 <div>
-                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="longitude">Longitude (from map)</label>
-                    <input id="longitude" type="text" name="longitude" value={formData.longitude} readOnly placeholder="Set via map"
-                    className="form-input w-full rounded-lg border-[#cedce8] bg-slate-100 text-sm text-slate-700"/>
+                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="longitude">Довгота (з карти)</label>
+                    <input id="longitude" type="text" name="longitude" value={formData.longitude} readOnly placeholder="Встановлюється через карту"
+                    className="form-input w-full rounded-lg border-[#cedce8] bg-slate-100 text-sm text-[#0d151c]"/>
                 </div>
             </div>
             
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="amenities">Amenities (comma-separated)</label>
-                <input id="amenities" type="text" placeholder="e.g. Parking, Gym, Pool" name="amenities" value={formData.amenities} onChange={handleInputChange}
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="amenities">Зручності (через кому)</label>
+                <input id="amenities" type="text" placeholder="напр., Парковка, Спортзал, Басейн" name="amenities" value={formData.amenities} onChange={handleInputChange}
                 className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
             </div>
 
             {user && user.role === 'admin' && originalListing && (
              <div className="p-4 border border-orange-300 rounded-lg bg-orange-50">
                 <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="status">
-                    Listing Status (Admin Control)
+                    Статус оголошення (Контроль адміністратора)
                 </label>
                 <select
                     id="status" name="status" value={formData.status} onChange={handleInputChange}
                     className="form-select w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"
                 >
-                    <option value="pending">Pending</option>
-                    <option value="active">Active</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="archived">Archived</option>
+                    <option value="pending">На розгляді</option>
+                    <option value="active">Активне</option>
+                    <option value="rejected">Відхилено</option>
+                    <option value="archived">В архіві</option>
                 </select>
-                <p className="text-xs text-slate-500 mt-1">Original status: {originalListing.status}. Change will apply on save.</p>
+                <p className="text-xs text-slate-500 mt-1">Початковий статус: {originalListing.status}. Зміни будуть застосовані після збереження.</p>
             </div>
             )}
 
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-2">Photos (Drag to reorder)</label>
+                <label className="block text-[#49749c] text-sm font-medium mb-2">Фотографії (Перетягніть для зміни порядку)</label>
                 <div
                     ref={photoDropZoneRef}
                     onClick={() => newPhotoInputRef.current?.click()} 
@@ -455,8 +455,8 @@ function EditListingPage() {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <p className="text-[#111418] text-base sm:text-lg font-bold leading-tight tracking-tight max-w-[480px] text-center">Drag and drop photos here</p>
-                    <p className="text-slate-600 text-sm font-normal leading-normal max-w-[480px] text-center">Or click to upload (Max 10MB per photo)</p>
+                    <p className="text-[#111418] text-base sm:text-lg font-bold leading-tight tracking-tight max-w-[480px] text-center">Перетягніть фотографії сюди</p>
+                    <p className="text-slate-600 text-sm font-normal leading-normal max-w-[480px] text-center">Або натисніть, щоб завантажити (Макс. 10МБ на фото)</p>
                 </div>
                 <input
                     ref={newPhotoInputRef}
@@ -479,28 +479,28 @@ function EditListingPage() {
                     <DragOverlay dropAnimation={null}>
                         {activePhotoForOverlay ? (
                         <div className="relative w-28 h-28 sm:w-32 sm:h-32 border rounded-md overflow-hidden shadow-2xl bg-white z-50">
-                            <img src={activePhotoForOverlay.previewUrl} alt="Dragging preview" className="w-full h-full object-cover"/>
-                            {activePhotoForOverlay.type === 'existing' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-gray-700 opacity-75">Saved</span>}
-                            {activePhotoForOverlay.type === 'new' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-blue-600 opacity-75">New</span>}
+                            <img src={activePhotoForOverlay.previewUrl} alt="Попередній перегляд перетягування" className="w-full h-full object-cover"/>
+                            {activePhotoForOverlay.type === 'existing' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-gray-700 opacity-75">Збережено</span>}
+                            {activePhotoForOverlay.type === 'new' && <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-xs text-white text-center bg-blue-600 opacity-75">Нове</span>}
                         </div>
                         ) : null}
                     </DragOverlay>
                 </DndContext>
-                {displayPhotos.length === 0 && <p className="text-sm text-slate-500 mt-2">No photos for this listing. Add some new photos.</p>}
+                {displayPhotos.length === 0 && <p className="text-sm text-slate-500 mt-2">Немає фотографій для цього оголошення. Додайте нові фотографії.</p>}
             </div>
 
             <div className="mt-10 flex items-center justify-center">
                 <button type="submit" disabled={submitting || loading}
                 className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-md text-base transition duration-150 ease-in-out disabled:opacity-70">
-                {submitting ? 'Saving...' : 'Save Changes'}
+                {submitting ? 'Збереження...' : 'Зберегти зміни'}
                 </button>
             </div>
           </form>
 
           {/* Moved Messages to the bottom of the form area */}
-          {submitting && !submitSuccess && !submitError && <div className="mt-6 text-center text-blue-600 p-3 bg-blue-50 rounded-md">Saving changes, please wait...</div>}
-          {submitSuccess && <div className="mt-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Success!</p><p>{submitSuccess}</p></div>}
-          {submitError && <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Error</p><p>{submitError}</p></div>}
+          {submitting && !submitSuccess && !submitError && <div className="mt-6 text-center text-blue-600 p-3 bg-blue-50 rounded-md">Збереження змін, будь ласка, зачекайте...</div>}
+          {submitSuccess && <div className="mt-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Успіх!</p><p>{submitSuccess}</p></div>}
+          {submitError && <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Помилка</p><p>{submitError}</p></div>}
           
         </div>
       </div>

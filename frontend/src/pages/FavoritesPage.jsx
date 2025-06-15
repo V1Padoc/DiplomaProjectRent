@@ -44,7 +44,7 @@ function FavoritesPage() {
 
     const fetchFavorites = useCallback(async () => {
         if (!token) {
-            setError("Authentication required to view favorites.");
+            setError("Потрібна автентифікація для перегляду обраних.");
             setLoading(false);
             return;
         }
@@ -57,7 +57,7 @@ function FavoritesPage() {
             setFavoriteListings(response.data);
         } catch (err) {
             console.error("Error fetching favorites:", err);
-            setError(err.response?.data?.message || "Failed to load favorites.");
+            setError(err.response?.data?.message || "Не вдалося завантажити обрані.");
         } finally {
             setLoading(false);
         }
@@ -83,21 +83,22 @@ function FavoritesPage() {
         arrows: true,
         prevArrow: <SlickArrowLeft />,
         nextArrow: <SlickArrowRight />,
+        lazyLoad: 'ondemand', 
     };
 
-    if (loading) return <div className="text-center text-slate-700 py-10">Loading your favorites...</div>;
-    if (error) return <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6 mx-auto max-w-lg">Error: {error}</div>;
+    if (loading) return <div className="text-center text-slate-700 py-10">Завантаження ваших обраних...</div>;
+    if (error) return <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6 mx-auto max-w-lg">Помилка: {error}</div>;
 
     return (
         <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
             <div className="flex-1 py-5 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-none mx-auto"> {/* Full width container */}
                     <h1 className="text-[#0c151d] tracking-tight text-xl sm:text-2xl md:text-[32px] font-bold leading-tight mb-8">
-                        My Favorites
+                        Мої обрані
                     </h1>
 
                     {favoriteListings.length === 0 ? (
-                        <p className="text-center text-slate-600 py-10">You haven't favorited any listings yet. Start by browsing listings and clicking the heart icon!</p>
+                        <p className="text-center text-slate-600 py-10">Ви ще не додали жодного оголошення до обраних. Почніть переглядати оголошення та натисніть на іконку серця!</p>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-8">
                             {favoriteListings.map((listing) => (
@@ -106,7 +107,7 @@ function FavoritesPage() {
                                         <button 
                                             onClick={() => handleRemoveFavorite(listing.id)}
                                             className="absolute top-3 right-3 z-10 p-2 bg-black bg-opacity-40 rounded-full text-white hover:bg-opacity-60 focus:outline-none transition-colors"
-                                            aria-label="Remove from favorites"
+                                            aria-label="Видалити з обраних"
                                         >
                                             <HeartSolid className="w-5 h-5 text-red-400"/>
                                         </button>
@@ -115,11 +116,11 @@ function FavoritesPage() {
                                             <div className="w-full h-60 sm:h-64 slick-listing-card">
                                               <Slider {...cardSliderSettings}>
                                                 {listing.photos.map((photo, index) => (
-                                                  <div key={index}> <img src={`http://localhost:5000/uploads/${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover"/> </div>
+                                                  <div key={index}> <img src={`http://localhost:5000/uploads/thumb-${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover" loading="lazy" decoding="async"/> </div>
                                                 ))}
                                               </Slider>
                                             </div>
-                                          ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">No Image</div> )}
+                                          ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> )}
                                         </Link>
                                     </div>
                                     <Link to={`/listings/${listing.id}`} className="block p-4 sm:p-5 flex flex-col flex-grow">
@@ -128,14 +129,14 @@ function FavoritesPage() {
                                         <div className="mt-auto pt-2">
                                           <div className="flex items-baseline justify-between text-[#0c151d]">
                                             <span className="text-base sm:text-lg font-bold">
-                                              {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/mo` :
-                                               (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/day` : `$${parseFloat(listing.price).toFixed(0)}`)}
+                                              {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/міс` :
+                                               (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/день` : `$${parseFloat(listing.price).toFixed(0)}`)}
                                             </span>
                                             {(listing.rooms !== null || listing.area !== null) && (
                                                 <div className="text-sm text-[#4574a1] flex items-center space-x-2">
-                                                    {listing.rooms !== null && ( <span>{listing.rooms} bed{listing.rooms === 1 ? '' : 's'}</span> )}
+                                                    {listing.rooms !== null && ( <span>{listing.rooms} {listing.rooms === 1 ? 'ліжко' : 'ліжка'}</span> )}
                                                     {listing.rooms !== null && listing.area !== null && <span>·</span>}
-                                                    {listing.area !== null && ( <span>{listing.area} sqft</span> )}
+                                                    {listing.area !== null && ( <span>{listing.area} м²</span> )} {/* Keeping sqft, but translated the word */}
                                                 </div>
                                             )}
                                           </div>

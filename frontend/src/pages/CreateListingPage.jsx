@@ -61,8 +61,8 @@ function LocationMarker({ onPositionChange, initialPosition }) {
     return position === null ? null : (
         <Marker position={position}>
             <Popup>
-                Property Location: <br/> Lat: {position.lat.toFixed(6)}, Lng: {position.lng.toFixed(6)} <br/>
-                Click to adjust.
+                Місцезнаходження об'єкта: <br/> Шир: {position.lat.toFixed(6)}, Довг: {position.lng.toFixed(6)} <br/>
+                Натисніть, щоб налаштувати.
             </Popup>
         </Marker>
     );
@@ -75,7 +75,7 @@ const SearchField = ({ onLocationSelected }) => {
         const searchControl = new GeoSearchControl({
             provider: provider, style: 'bar', showMarker: false, showPopup: false,
             autoClose: true, retainZoomLevel: false, animateZoom: true, keepResult: true,
-            searchLabel: 'Enter address...',
+            searchLabel: 'Введіть адресу...', // Translated
         });
         map.addControl(searchControl);
         map.on('geosearch/showlocation', (result) => {
@@ -221,8 +221,8 @@ function CreateListingPage() {
       const response = await axios.post('http://localhost:5000/api/listings', formDataToSend, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setSuccess("Listing created successfully! You will be redirected shortly.");
-      console.log('Listing created:', response.data.listing);
+      setSuccess("Оголошення успішно створено! Вас буде перенаправлено за кілька секунд."); // Translated
+      console.log('Оголошення створено:', response.data.listing); // Translated
       setTitle(''); setDescription(''); setPrice(''); setRooms(''); setArea('');
       setLocation(''); setLatitude(''); setLongitude(''); setAmenities('');
       setType('monthly-rental'); setPhotos([]);
@@ -230,8 +230,8 @@ function CreateListingPage() {
       setMarkerPosition(null);
       setTimeout(() => { navigate('/listings'); }, 2500);
     } catch (err) {
-      console.error('Error creating listing:', err);
-      setError(err.response?.data?.message || 'Failed to create listing. Please try again.');
+      console.error('Помилка при створенні оголошення:', err); // Translated
+      setError(err.response?.data?.message || 'Не вдалося створити оголошення. Будь ласка, спробуйте ще раз.'); // Translated
       setTimeout(() => setError(''), 3000);
     } finally {
       setLoading(false);
@@ -241,7 +241,7 @@ function CreateListingPage() {
   if (!user || user.role !== 'owner') {
        return (
             <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
-                Access Denied. You must be logged in as an owner to create listings.
+                Доступ заборонено. Ви повинні увійти як власник, щоб створювати оголошення. {/* Translated */}
             </div>
         );
   }
@@ -252,84 +252,84 @@ function CreateListingPage() {
     <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
       <div className="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
         <div className="layout-content-container flex flex-col max-w-3xl w-full flex-1 bg-white shadow-xl rounded-lg p-6 md:p-8">
-          <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight mb-8 text-center">Create New Listing</h1>
+          <h1 className="text-[#0d151c] text-2xl sm:text-3xl font-bold leading-tight tracking-tight mb-8 text-center">Створити нове оголошення</h1> {/* Translated */}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="title">Title</label>
-              <input id="title" type="text" placeholder="e.g., Cozy Downtown Apartment" value={title} onChange={(e) => setTitle(e.target.value)} required
+              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="title">Заголовок</label> {/* Translated */}
+              <input id="title" type="text" placeholder="напр., Затишна квартира в центрі" value={title} onChange={(e) => setTitle(e.target.value)} required // Translated
                 className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
             </div>
 
             <div>
-              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="description">Description</label>
-              <textarea id="description" placeholder="Detailed description of the property..." value={description} onChange={(e) => setDescription(e.target.value)} rows="4"
+              <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="description">Опис</label> {/* Translated */}
+              <textarea id="description" placeholder="Детальний опис об'єкта..." value={description} onChange={(e) => setDescription(e.target.value)} rows="4" // Translated
                 className="form-textarea w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"></textarea>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="price">Price</label>
-                <input id="price" type="number" step="0.01" placeholder="e.g. 1200.50" value={price} onChange={(e) => setPrice(e.target.value)} required
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="price">Ціна</label> {/* Translated */}
+                <input id="price" type="number" step="0.01" placeholder="напр. 1200.50" value={price} onChange={(e) => setPrice(e.target.value)} required // Translated
                   className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
               </div>
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="type">Listing Type</label>
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="type">Тип оголошення</label> {/* Translated */}
                 <select id="type" value={type} onChange={(e) => setType(e.target.value)} required
                   className="form-select w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]">
-                  <option value="monthly-rental">Monthly Rental</option>
-                  <option value="daily-rental">Daily Rental</option>
+                  <option value="monthly-rental">Щомісячна оренда</option> {/* Translated */}
+                  <option value="daily-rental">Щоденна оренда</option> {/* Translated */}
                 </select>
               </div>
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="rooms">Rooms (Bedrooms)</label>
-                <input id="rooms" type="number" step="1" placeholder="e.g. 3" value={rooms} onChange={(e) => setRooms(e.target.value)}
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="rooms">Кімнати (Спальні)</label> {/* Translated */}
+                <input id="rooms" type="number" step="1" placeholder="напр. 3" value={rooms} onChange={(e) => setRooms(e.target.value)} // Translated
                   className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
               </div>
               <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="area">Area (sq ft / sq m)</label>
-                <input id="area" type="number" step="0.01" placeholder="e.g. 150.75" value={area} onChange={(e) => setArea(e.target.value)}
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="area">Площа (м²)</label> {/* Translated */}
+                <input id="area" type="number" step="0.01" placeholder="напр. 150.75" value={area} onChange={(e) => setArea(e.target.value)} // Translated
                   className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
               </div>
             </div>
             
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="location">Address / Location Description</label>
-                <input id="location" type="text" placeholder="e.g., 123 Main St, City or use map search" value={location} onChange={(e) => setLocation(e.target.value)} required
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="location">Адреса / Опис місцезнаходження</label> {/* Translated */}
+                <input id="location" type="text" placeholder="напр., вул. Головна, 123, Місто або використовуйте пошук на карті" value={location} onChange={(e) => setLocation(e.target.value)} required // Translated
                     className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
             </div>
           
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-2">Set Property Location on Map</label>
+                <label className="block text-[#49749c] text-sm font-medium mb-2">Встановити місцезнаходження об'єкта на карті</label> {/* Translated */}
                 <MapContainer center={mapCenter} zoom={13} scrollWheelZoom={true} style={{ height: '400px', width: '100%' }} className="rounded-lg border border-slate-300" whenCreated={mapInstance => { mapRef.current = mapInstance; }}>
                     <TileLayer attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
                     <LocationMarker onPositionChange={handleMapPositionChange} initialPosition={markerPosition} />
                     <SearchField onLocationSelected={handleGeocodeResult} />
                 </MapContainer>
-                <p className="text-xs text-slate-500 mt-1">Selected: Lat: {latitude || "N/A"}, Lng: {longitude || "N/A"}</p>
+                <p className="text-xs text-slate-500 mt-1">Вибрано: Шир: {latitude || "Н/Д"}, Довг: {longitude || "Н/Д"}</p> {/* Translated N/A to Н/Д */}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-6">
                 <div>
-                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="latitude">Latitude (from map)</label>
-                    <input id="latitude" type="text" value={latitude} readOnly placeholder="Set via map"
+                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="latitude">Широта (з карти)</label> {/* Translated */}
+                    <input id="latitude" type="text" value={latitude} readOnly placeholder="Встановлюється через карту" // Translated
                     className="form-input w-full rounded-lg border-[#cedce8] bg-slate-100 text-sm text-slate-700"/>
                 </div>
                 <div>
-                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="longitude">Longitude (from map)</label>
-                    <input id="longitude" type="text" value={longitude} readOnly placeholder="Set via map"
+                    <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="longitude">Довгота (з карти)</label> {/* Translated */}
+                    <input id="longitude" type="text" value={longitude} readOnly placeholder="Встановлюється через карту" // Translated
                     className="form-input w-full rounded-lg border-[#cedce8] bg-slate-100 text-sm text-slate-700"/>
                 </div>
             </div>
             
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="amenities">Amenities (comma-separated)</label>
-                <input id="amenities" type="text" placeholder="e.g. Parking, Gym, Pool" value={amenities} onChange={(e) => setAmenities(e.target.value)}
+                <label className="block text-[#49749c] text-sm font-medium mb-1" htmlFor="amenities">Зручності (через кому)</label> {/* Translated */}
+                <input id="amenities" type="text" placeholder="напр., Парковка, Спортзал, Басейн" value={amenities} onChange={(e) => setAmenities(e.target.value)} // Translated
                 className="form-input w-full rounded-lg border-[#cedce8] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm text-[#0d151c]"/>
             </div>
 
             <div>
-                <label className="block text-[#49749c] text-sm font-medium mb-2">Photos (Drag to reorder)</label>
+                <label className="block text-[#49749c] text-sm font-medium mb-2">Фотографії (Перетягніть для зміни порядку)</label> {/* Translated */}
                 {/* Styled Drop Zone */}
                 <div
                     ref={photoDropZoneRef}
@@ -342,8 +342,8 @@ function CreateListingPage() {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <p className="text-[#111418] text-base sm:text-lg font-bold leading-tight tracking-tight max-w-[480px] text-center">Drag and drop photos here</p>
-                    <p className="text-slate-600 text-sm font-normal leading-normal max-w-[480px] text-center">Or click to upload (Max 10MB per photo)</p>
+                    <p className="text-[#111418] text-base sm:text-lg font-bold leading-tight tracking-tight max-w-[480px] text-center">Перетягніть фотографії сюди</p> {/* Translated */}
+                    <p className="text-slate-600 text-sm font-normal leading-normal max-w-[480px] text-center">Або натисніть, щоб завантажити (Макс. 10МБ на фото)</p> {/* Translated */}
                 </div>
                 <input ref={fileInputRef} id="photos-input-hidden" type="file" multiple accept="image/*" onChange={handleFileChange} className="hidden"/>
             
@@ -363,21 +363,21 @@ function CreateListingPage() {
                         ) : null}
                     </DragOverlay>
                 </DndContext>
-                {photos.length === 0 && <p className="text-sm text-slate-500 mt-2">No photos selected yet.</p>}
+                {photos.length === 0 && <p className="text-sm text-slate-500 mt-2">Фотографії ще не вибрано.</p>} {/* Translated */}
             </div>
 
             <div className="mt-10 flex items-center justify-center">
                 <button type="submit" disabled={loading}
                 className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-md text-base transition duration-150 ease-in-out disabled:opacity-70">
-                {loading ? 'Creating...' : 'Create Listing'}
+                {loading ? 'Створення...' : 'Створити оголошення'} {/* Translated */}
                 </button>
             </div>
           </form>
 
           {/* Moved Messages to the bottom of the form area */}
-          {loading && !success && !error && <div className="mt-6 text-center text-blue-600 p-3 bg-blue-50 rounded-md">Creating listing, please wait...</div>}
-          {success && <div className="mt-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Success!</p><p>{success}</p></div>}
-          {error && <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Error</p><p>{error}</p></div>}
+          {loading && !success && !error && <div className="mt-6 text-center text-blue-600 p-3 bg-blue-50 rounded-md">Створення оголошення, будь ласка, зачекайте...</div>} {/* Translated */}
+          {success && <div className="mt-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Успіх!</p><p>{success}</p></div>} {/* Translated */}
+          {error && <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Помилка</p><p>{error}</p></div>} {/* Translated */}
 
         </div>
       </div>

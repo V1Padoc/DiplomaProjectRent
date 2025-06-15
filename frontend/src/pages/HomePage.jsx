@@ -70,31 +70,31 @@ function HomePage() {
   const featureCards = [
     {
       icon: <MagnifyingGlassIcon className="w-10 h-10 text-blue-600 mb-3" />,
-      title: "Find Your Perfect Stay",
-      description: "Easily search and filter through a wide variety of daily and monthly rentals. Your next home or getaway is just a few clicks away.",
+      title: "Знайдіть своє ідеальне житло",
+      description: "Легко шукайте та фільтруйте серед великої різноманітності добової та місячної оренди. Ваш наступний дім або відпочинок знаходяться лише за кілька кліків.",
       link: "/listings",
-      linkText: "Browse Rentals"
+      linkText: "Переглянути оренду"
     },
     {
       icon: <HomeModernIcon className="w-10 h-10 text-blue-600 mb-3" />,
-      title: "List Your Property",
-      description: "Reach thousands of potential tenants by listing your property. Our platform makes it simple to manage your rentals and bookings.",
+      title: "Розмістіть свою нерухомість",
+      description: "Охопіть тисячі потенційних орендарів, розмістивши свою нерухомість. Наша платформа спрощує керування вашими орендами та бронюваннями.",
       link: isAuthenticated && user?.role === 'owner' ? "/create-listing" : "/register?role=owner",
-      linkText: "Become an Owner"
+      linkText: "Стати власником"
     },
     {
       icon: <ChatBubbleLeftRightIcon className="w-10 h-10 text-blue-600 mb-3" />,
-      title: "Connect Directly",
-      description: "Communicate seamlessly with property owners or tenants through our integrated chat system for inquiries and arrangements.",
+      title: "Спілкуйтеся безпосередньо",
+      description: "Легко спілкуйтеся з власниками нерухомості або орендарями через нашу інтегровану систему чату для запитів та домовленостей.",
       link: isAuthenticated ? "/my-chats" : "/login",
-      linkText: "View Chats"
+      linkText: "Переглянути чати"
     },
     {
         icon: <MapPinIcon className="w-10 h-10 text-blue-600 mb-3" />,
-        title: "Explore on the Map",
-        description: "Visualize listings on an interactive map to find properties in your desired location with ease.",
+        title: "Досліджуйте на карті",
+        description: "Візуалізуйте оголошення на інтерактивній карті, щоб легко знайти нерухомість у бажаному місці.",
         link: "/map-listings",
-        linkText: "View Map"
+        linkText: "Переглянути карту"
     }
   ];
 
@@ -125,31 +125,31 @@ function HomePage() {
         {/* Content */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-20">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
-            Discover Your Next Space
+            Відкрийте свій наступний простір
           </h1>
           <p className="text-lg sm:text-xl text-slate-200 mb-10 max-w-2xl mx-auto">
-            Find unique places for short-term getaways or long-term stays. Rent out your property with confidence and ease.
+            Знайдіть унікальні місця для короткострокового відпочинку або довгострокового проживання. Здавайте свою нерухомість з упевненістю та легкістю.
           </p>
           <form onSubmit={handleSearchSubmit} className="max-w-xl mx-auto flex flex-col sm:flex-row gap-3">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Enter a city, neighborhood, or address..."
+              placeholder="Введіть місто, район або адресу..."
               className="form-input flex-grow w-full sm:w-auto rounded-lg border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 text-slate-900 placeholder-slate-400 py-3 px-4 text-base"
             />
             <button
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg text-base transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75"
             >
-              <MagnifyingGlassIcon className="w-5 h-5 inline-block mr-2 -mt-1" /> Search
+              <MagnifyingGlassIcon className="w-5 h-5 inline-block mr-2 -mt-1" /> Пошук
             </button>
           </form>
            <Link
             to="/listings"
             className="mt-8 inline-block text-blue-300 hover:text-blue-200 hover:underline transition-colors text-sm"
           >
-            Or browse all listings »
+            Або переглянути всі оголошення »
           </Link>
         </div>
       </section>
@@ -159,10 +159,10 @@ function HomePage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-4">
-              A Platform Built for You
+              Платформа, створена для вас
             </h2>
             <p className="text-slate-600 max-w-xl mx-auto text-lg">
-              Whether you're looking for a place or offering one, we provide the tools you need.
+              Незалежно від того, шукаєте ви місце чи пропонуєте його, ми надаємо вам необхідні інструменти.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -189,45 +189,33 @@ function HomePage() {
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div className="bg-white p-8 rounded-lg shadow-xl text-center md:text-left">
               <BuildingStorefrontIcon className="w-12 h-12 text-blue-600 mb-4 mx-auto md:mx-0"/>
-              <h3 className="text-2xl font-bold text-slate-800 mb-3">Ready to Find Your Next Stay?</h3>
+              <h3 className="text-2xl font-bold text-slate-800 mb-3">Готові знайти своє наступне житло?</h3>
               <p className="text-slate-600 mb-6">
-                Explore thousands of verified listings. Filter by location, price, amenities, and more.
+                Досліджуйте тисячі перевірених оголошень. Фільтруйте за місцезнаходженням, ціною, зручностями та іншим.
               </p>
               <Link
                 to="/listings"
                 className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg text-base transition-colors shadow-md"
               >
-                Browse Properties
+                Переглянути об'єкти
               </Link>
             </div>
             <div className="bg-white p-8 rounded-lg shadow-xl text-center md:text-left">
               <KeyIcon className="w-12 h-12 text-green-600 mb-4 mx-auto md:mx-0"/>
-              <h3 className="text-2xl font-bold text-slate-800 mb-3">Have a Property to List?</h3>
+              <h3 className="text-2xl font-bold text-slate-800 mb-3">Маєте нерухомість для здачі?</h3>
               <p className="text-slate-600 mb-6">
-                Join our community of property owners. It's free to list and easy to manage.
+                Приєднуйтесь до нашої спільноти власників нерухомості. Розміщення безкоштовне, а керування просте.
               </p>
               <Link
                 to={isAuthenticated && user?.role === 'owner' ? "/create-listing" : "/register?role=owner"}
                 className="inline-block bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg text-base transition-colors shadow-md"
               >
-                {isAuthenticated && user?.role === 'owner' ? "Create a Listing" : "List Your Property"}
+                {isAuthenticated && user?.role === 'owner' ? "Створити оголошення" : "Розмістити свою нерухомість"}
               </Link>
             </div>
           </div>
         </div>
       </section>
-
-      {/* Footer (simple version) */}
-      <footer className="py-8 bg-slate-800 text-slate-400 text-center">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-sm">© {new Date().getFullYear()} YourRentalSite. All rights reserved.</p>
-           <p className="text-xs mt-1">
-            <Link to="/listings" className="hover:text-slate-200 transition-colors">Browse</Link> |
-            <Link to="/login" className="ml-2 hover:text-slate-200 transition-colors">Login</Link> |
-            <Link to="/register" className="ml-2 hover:text-slate-200 transition-colors">Register</Link>
-          </p>
-        </div>
-      </footer>
 
       <style jsx global>{`
         .form-input { @apply shadow-sm; }

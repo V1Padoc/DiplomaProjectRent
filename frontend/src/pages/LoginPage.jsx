@@ -36,7 +36,7 @@ function LoginPage() {
       // navigate('/'); 
     } catch (err) {
       console.error('Login failed:', err);
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.message || 'Вхід не вдався. Будь ласка, перевірте свої облікові дані.');
     }
   };
 
@@ -48,12 +48,12 @@ function LoginPage() {
     <div className="relative flex size-full min-h-screen flex-col items-center justify-center bg-slate-50 p-4 sm:p-6" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
       <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-xl shadow-xl">
         <h1 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center text-[#0c151d] tracking-tight">
-          Login to Your Account
+          Увійдіть до свого облікового запису
         </h1>
 
         {error && (
           <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
-            <p className="font-bold">Error</p>
+            <p className="font-bold">Помилка</p>
             <p>{error}</p>
           </div>
         )}
@@ -61,13 +61,13 @@ function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="email">
-              Email Address
+              Адреса електронної пошти
             </label>
             <input
               className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]"
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder="ви@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -76,13 +76,13 @@ function LoginPage() {
 
           <div>
             <label className="block text-sm font-medium text-[#4574a1] mb-1" htmlFor="password">
-              Password
+              Пароль
             </label>
             <input
               className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-12 p-3 text-sm text-[#0c151d] placeholder:text-[#7b98b4]"
               id="password"
               type="password"
-              placeholder="Enter your password"
+              placeholder="Введіть ваш пароль"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -94,12 +94,12 @@ function LoginPage() {
               className="w-full bg-[#359dff] hover:bg-blue-700 text-white text-sm sm:text-base font-bold py-3 px-4 rounded-lg h-12 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               type="submit"
             >
-              Login
+              Увійти
             </button>
           </div>
            <div className="text-center pt-2">
             <Link className="font-medium text-sm text-blue-600 hover:text-blue-700 transition-colors" to="/register">
-              Don't have an account? Register
+              Не маєте облікового запису? Зареєструватися
             </Link>
           </div>
         </form>
