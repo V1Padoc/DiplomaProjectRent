@@ -1,6 +1,7 @@
 // frontend/src/pages/FavoritesPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
@@ -8,7 +9,7 @@ import Slider from 'react-slick'; // Added for photo slider
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'; // For slider arrows
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick (copied from ListingsPage)
 function SlickArrowLeft({ currentSlide, slideCount, ...props }) {
     return (
@@ -51,7 +52,7 @@ function FavoritesPage() {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get('http://localhost:5000/api/users/me/favorites', {
+            const response = await api.get('/users/me/favorites', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setFavoriteListings(response.data);
@@ -116,7 +117,7 @@ function FavoritesPage() {
                                             <div className="w-full h-60 sm:h-64 slick-listing-card">
                                               <Slider {...cardSliderSettings}>
                                                 {listing.photos.map((photo, index) => (
-                                                  <div key={index}> <img src={`http://localhost:5000/uploads/thumb-${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover" loading="lazy" decoding="async"/> </div>
+                                                  <div key={index}> <img src={`${SERVER_URL}/uploads/thumb-${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover" loading="lazy" decoding="async"/> </div>
                                                 ))}
                                               </Slider>
                                             </div>

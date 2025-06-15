@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import Slider from 'react-slick'; // For listing photos
 // import "slick-carousel/slick/slick.css"; // Ensure these are imported globally or here
 // import "slick-carousel/slick/slick-theme.css";
 import { ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight, UserCircleIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { MapPinIcon, CurrencyDollarIcon, TagIcon, ChatBubbleLeftEllipsisIcon } from '@heroicons/react/20/solid'; // For listing details
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick in listing cards (similar to MyBookingsPage)
 function SlickListingCardArrowLeft({ currentSlide, slideCount, ...props }) {
     return (
@@ -38,7 +39,7 @@ function SlickListingCardArrowRight({ currentSlide, slideCount, ...props }) {
 
 const getListingImageUrl = (photoFilename) => {
     if (photoFilename) {
-        return `http://localhost:5000/uploads/${photoFilename}`;
+        return `${SERVER_URL}/uploads/${photoFilename}`;
     }
     return 'https://via.placeholder.com/400x300.png?text=Зображення+відсутнє'; // Translated
 };
@@ -60,7 +61,7 @@ function PublicProfilePage() {
             setError(null);
             try {
                 // Assuming this endpoint also returns listings with their 'photos' array
-                const response = await axios.get(`http://localhost:5000/api/users/public-profile/${userId}`);
+                const response = await api.get(`/users/public-profile/${userId}`);
                 setProfileData(response.data);
             } catch (err) {
                 console.error("Error fetching public profile:", err);
@@ -89,7 +90,7 @@ function PublicProfilePage() {
     const { user: profileUser, listings: userListings } = profileData;
 
     const profileAvatar = profileUser.profile_photo_url
-        ? `http://localhost:5000/uploads/profiles/${profileUser.profile_photo_url.split('/').pop()}` // Ensure correct path for profiles
+        ? `${SERVER_URL}/uploads/profiles/${profileUser.profile_photo_url.split('/').pop()}` // Ensure correct path for profiles
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(profileUser.name || profileUser.email || 'U')}&background=random&color=fff&size=160&font-size=0.4&bold=true`;
 
     const listingSliderSettings = {

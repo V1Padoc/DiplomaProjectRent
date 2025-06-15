@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, Link as RouterLink } from 'react-router-dom';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import { PaperAirplaneIcon } from '@heroicons/react/24/solid'; // Send icon
-
-const API_URL = 'http://localhost:5000/api';
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
+const API_URL = '';
 
 const formatDateHeader = (dateString) => {
     const date = new Date(dateString);
@@ -25,7 +26,7 @@ const formatDateHeader = (dateString) => {
 const getAvatarUrl = (profileImageUrl, nameOrEmail, size = 96) => {
     if (profileImageUrl) {
         const filename = profileImageUrl.split('/').pop();
-        return `http://localhost:5000/uploads/profiles/${filename}`;
+        return `${SERVER_URL}/uploads/profiles/${filename}`;
     }
     // 'U' for 'User' in English, 'К' for 'Користувач' in Ukrainian. Could be 'К' but 'U' is widely understood.
     const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'U'; 
@@ -76,7 +77,7 @@ function ChatPage() {
                         if (partnerIdToSet === String(listing.owner_id) && listing.Owner) {
                              setChatPartnerDetails(listing.Owner);
                         } else if (token) { // Otherwise, fetch public profile
-                            const response = await axios.get(`${API_URL}/users/public-profile/${partnerIdToSet}`, {
+                            const response = await api.get(`${API_URL}/users/public-profile/${partnerIdToSet}`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
                             if (response.data && response.data.user) {
@@ -110,7 +111,7 @@ function ChatPage() {
             setLoadingListing(true); setErrorListing(null);
             try {
                 const config = { headers: { Authorization: `Bearer ${token}` } };
-                const listingRes = await axios.get(`${API_URL}/listings/${listingIdFromParams}`, config);
+                const listingRes = await api.get(`${API_URL}/listings/${listingIdFromParams}`, config);
                 setListing(listingRes.data);
             } catch (err) {
                 setErrorListing(err.response?.data?.message || 'Не вдалося завантажити оголошення.');
@@ -136,7 +137,7 @@ function ChatPage() {
         if (params.toString()) messagesApiUrl += `?${params.toString()}`;
         
         try {
-            const response = await axios.get(messagesApiUrl, { headers: { Authorization: `Bearer ${token}` } });
+            const response = await api.get(messagesApiUrl, { headers: { Authorization: `Bearer ${token}` } });
             const fetchedMessages = response.data;
             setMessages(fetchedMessages);
 
@@ -220,7 +221,7 @@ function ChatPage() {
         setSendingMessage(true); setErrorSendingMessage(null);
         const messageData = { listing_id: listingIdFromParams, content: newMessageContent, receiver_id: chatPartnerId };
         try {
-            const response = await axios.post(`${API_URL}/chats/send`, messageData, { headers: { Authorization: `Bearer ${token}` } });
+            const response = await api.post(`${API_URL}/chats/send`, messageData, { headers: { Authorization: `Bearer ${token}` } });
             if(response.data.newMessage) {
                  setMessages(prev => {
                     if (prev.find(m => m.id === response.data.newMessage.id)) return prev;

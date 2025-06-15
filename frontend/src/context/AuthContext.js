@@ -2,10 +2,11 @@
 
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { io } from 'socket.io-client'; // Import socket.io-client
 
 // API URL base
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '';
 const SOCKET_URL = 'http://localhost:5000';
 
 // Create the Auth Context
@@ -84,7 +85,7 @@ export const AuthProvider = ({ children }) => {
   const fetchUnreadMessagesCount = useCallback(async (currentTokenParam) => {
     if (!currentTokenParam) return;
     try {
-      const response = await axios.get(`${API_URL}/chats/my-unread-count`, {
+      const response = await api.get(`${API_URL}/chats/my-unread-count`, {
         headers: { Authorization: `Bearer ${currentTokenParam}` },
       });
       setUnreadMessagesCount(response.data.unreadCount);
@@ -96,7 +97,7 @@ export const AuthProvider = ({ children }) => {
   const fetchFavoriteIds = useCallback(async (currentTokenParam) => {
     if (currentTokenParam) {
         try {
-            const response = await axios.get(`${API_URL}/users/me/favorites/ids`, {
+            const response = await api.get(`${API_URL}/users/me/favorites/ids`, {
                 headers: { Authorization: `Bearer ${currentTokenParam}` },
             });
             setFavorites(response.data.favorite_ids ? response.data.favorite_ids.map(String) : []);
@@ -117,7 +118,7 @@ export const AuthProvider = ({ children }) => {
   const fetchUnreadBookingUpdatesCount = useCallback(async (currentTokenParam) => {
     if (!currentTokenParam || user?.role !== 'tenant') return;
     try {
-      const response = await axios.get(`${API_URL}/users/me/unread-booking-updates-count`, { // You'd need to create this endpoint on backend
+      const response = await api.get(`${API_URL}/users/me/unread-booking-updates-count`, { // You'd need to create this endpoint on backend
         headers: { Authorization: `Bearer ${currentTokenParam}` },
       });
       setUnreadMyBookingsUpdatesCount(response.data.unreadCount || 0);
@@ -131,7 +132,7 @@ export const AuthProvider = ({ children }) => {
     if (!currentTokenParam || user?.role !== 'admin') return;
     try {
       // Assuming an endpoint like /api/admin/tasks-count that returns { pendingListingsCount: X }
-      const response = await axios.get(`${API_URL}/admin/tasks-count`, { // You'd need to create this endpoint
+      const response = await api.get(`${API_URL}/admin/tasks-count`, { // You'd need to create this endpoint
         headers: { Authorization: `Bearer ${currentTokenParam}` },
       });
       setUnreadAdminTasksCount(response.data.pendingListingsCount || 0);
@@ -145,7 +146,7 @@ export const AuthProvider = ({ children }) => {
     if (!currentTokenParam || user?.role !== 'owner') return;
     try {
       // Example: Endpoint to get count of 'pending' bookings for owner's listings
-      const response = await axios.get(`${API_URL}/bookings/owner/pending-count`, { // You'd need to create this endpoint
+      const response = await api.get(`${API_URL}/bookings/owner/pending-count`, { // You'd need to create this endpoint
         headers: { Authorization: `Bearer ${currentTokenParam}` },
       });
       setUnreadBookingRequestsCount(response.data.pendingCount || 0);
@@ -161,7 +162,7 @@ export const AuthProvider = ({ children }) => {
       return false;
     }
     try {
-      const response = await axios.get(`${API_URL}/auth/socket-eligibility`, {
+      const response = await api.get(`${API_URL}/auth/socket-eligibility`, {
         headers: { Authorization: `Bearer ${currentTokenParam}` },
       });
       setIsSocketEligible(response.data.eligible);
@@ -181,7 +182,7 @@ export const AuthProvider = ({ children }) => {
       if (storedToken) {
         setToken(storedToken); // Set token state for other hooks/logic
         try {
-          const res = await axios.get(`${API_URL}/auth/user`, {
+          const res = await api.get(`${API_URL}/auth/user`, {
             headers: { 'Authorization': `Bearer ${storedToken}` }
           });
           const userData = res.data;
@@ -327,7 +328,7 @@ export const AuthProvider = ({ children }) => {
 
     try {
       // Fetch user data using the new token
-      const res = await axios.get(`${API_URL}/auth/user`, {
+      const res = await api.get(`${API_URL}/auth/user`, {
         headers: { 'Authorization': `Bearer ${newToken}` }
       });
       const userData = res.data;
@@ -364,7 +365,7 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       try {
         const config = { headers: { 'Authorization': `Bearer ${token}` } };
-        const res = await axios.get(`${API_URL}/auth/user`, config);
+        const res = await api.get(`${API_URL}/auth/user`, config);
         setUser(res.data);
         localStorage.setItem('user', JSON.stringify(res.data));
       } catch (err) {
@@ -380,11 +381,11 @@ export const AuthProvider = ({ children }) => {
     const isCurrentlyFavorited = favorites.includes(stringListingId);
     try {
       if (isCurrentlyFavorited) {
-        await axios.delete(`${API_URL}/users/me/favorites/${stringListingId}`, { headers: { Authorization: `Bearer ${token}` } });
+        await api.delete(`${API_URL}/users/me/favorites/${stringListingId}`, { headers: { Authorization: `Bearer ${token}` } });
         setFavorites(prev => prev.filter(id => id !== stringListingId));
         return false;
       } else {
-        await axios.post(`${API_URL}/users/me/favorites/${stringListingId}`, {}, { headers: { Authorization: `Bearer ${token}` } });
+        await api.post(`${API_URL}/users/me/favorites/${stringListingId}`, {}, { headers: { Authorization: `Bearer ${token}` } });
         setFavorites(prev => [...prev, stringListingId]);
         return true;
       }
@@ -398,7 +399,7 @@ export const AuthProvider = ({ children }) => {
   const markChatAsRead = useCallback(async (listingId, chatPartnerId) => {
     if (!token || !listingId || !chatPartnerId) return 0;
     try {
-      const response = await axios.put(`${API_URL}/chats/mark-as-read`,
+      const response = await api.put(`${API_URL}/chats/mark-as-read`,
         { listingId: String(listingId), chatPartnerId: String(chatPartnerId) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -415,7 +416,7 @@ export const AuthProvider = ({ children }) => {
   const acknowledgeBookingUpdates = useCallback(async () => {
     if (!token || user?.role !== 'tenant') return;
     try {
-      await axios.put(`${API_URL}/users/me/acknowledge-booking-updates`, {}, { // You'd need to create this endpoint
+      await api.put(`${API_URL}/users/me/acknowledge-booking-updates`, {}, { // You'd need to create this endpoint
         headers: { Authorization: `Bearer ${token}` }
       });
       // After acknowledging, refresh the count (should be 0 or less)

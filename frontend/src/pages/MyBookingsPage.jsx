@@ -1,6 +1,7 @@
 // frontend/src/pages/MyBookingsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import Calendar from 'react-calendar';
@@ -8,14 +9,13 @@ import 'react-calendar/dist/Calendar.css'; // Base calendar styles
 import Slider from 'react-slick'; // For card image slider
 // import "slick-carousel/slick/slick.css"; // Ensure these are imported globally or here
 // import "slick-carousel/slick/slick-theme.css";
-
 import {
     ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight,
     CalendarDaysIcon, MapPinIcon,
     UserCircleIcon, ChatBubbleLeftEllipsisIcon, ClockIcon, CheckCircleIcon, ArchiveBoxIcon,
     TrashIcon
 } from '@heroicons/react/24/outline';
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick in cards
 function SlickCardArrowLeft({ currentSlide, slideCount, ...props }) {
     return (
@@ -45,7 +45,7 @@ function SlickCardArrowRight({ currentSlide, slideCount, ...props }) {
 
 const getListingImageUrl = (photoFilename) => {
     if (photoFilename) {
-        return `http://localhost:5000/uploads/${photoFilename}`;
+        return `${SERVER_URL}/uploads/${photoFilename}`;
     }
     return 'https://via.placeholder.com/400x300.png?text=Зображення+відсутнє';
 };
@@ -87,7 +87,7 @@ function MyBookingsPage() {
         setError(null);
         setActionError(null);
         try {
-            const response = await axios.get('http://localhost:5000/api/bookings/my-bookings', {
+            const response = await api.get('/bookings/my-bookings', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const sortedBookings = response.data.sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
@@ -140,7 +140,7 @@ function MyBookingsPage() {
             if (doubleConfirmCancel) {
                 try {
                     setLoading(true);
-                    await axios.post(`http://localhost:5000/api/bookings/${bookingId}/cancel`, {}, {
+                    await api.post(`/bookings/${bookingId}/cancel`, {}, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     await fetchMyBookings();

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -218,7 +219,7 @@ function CreateListingPage() {
     photos.forEach(photoObject => { formDataToSend.append('photos', photoObject.file); });
 
     try {
-      const response = await axios.post('http://localhost:5000/api/listings', formDataToSend, {
+      const response = await api.post('/listings', formDataToSend, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setSuccess("Оголошення успішно створено! Вас буде перенаправлено за кілька секунд."); // Translated

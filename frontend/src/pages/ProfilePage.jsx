@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
-
+import api from '../api/api.js';
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 function ProfilePage() {
   const { user, loading: authLoading, token, login } = useAuth();
 
@@ -41,7 +42,7 @@ function ProfilePage() {
       if (user.profile_photo_url) {
         // Ensure the URL is constructed correctly if profile_photo_url is just a filename
         const filename = user.profile_photo_url.split('/').pop();
-        setPreviewPhoto(`http://localhost:5000/uploads/profiles/${filename}`);
+        setPreviewPhoto(`${SERVER_URL}/uploads/profiles/${filename}`);
       } else {
         setPreviewPhoto(null);
       }
@@ -75,7 +76,7 @@ function ProfilePage() {
     }
 
     try {
-      const response = await axios.put('http://localhost:5000/api/users/profile', data, {
+      const response = await api.put('/users/profile', data, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
@@ -110,7 +111,7 @@ function ProfilePage() {
     }
 
     try {
-        const response = await axios.post('http://localhost:5000/api/users/change-password', 
+        const response = await api.post('/users/change-password', 
             { oldPassword, newPassword, confirmNewPassword }, 
             { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -256,7 +257,7 @@ function ProfilePage() {
                       setIsEditing(false);
                       if (user) {
                           setFormData({ name: user.name || '', last_name: user.last_name || '', bio: user.bio || '', phone_number: user.phone_number || '' });
-                          setPreviewPhoto(user.profile_photo_url ? `http://localhost:5000/uploads/profiles/${user.profile_photo_url.split('/').pop()}` : null);
+                          setPreviewPhoto(user.profile_photo_url ? `${SERVER_URL}/uploads/profiles/${user.profile_photo_url.split('/').pop()}` : null);
                           setProfilePhotoFile(null);
                       }
                       setError(''); setSuccess('');

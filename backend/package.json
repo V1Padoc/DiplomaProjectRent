@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "jest --detectOpenHandles" 
+    "test": "jest --detectOpenHandles"
   },
   "keywords": [],
   "author": "",
@@ -26,12 +26,15 @@
     "winston": "^3.17.0"
   },
   "devDependencies": {
+    "dotenv-cli": "^8.0.0",
     "jest": "^30.0.0",
     "supertest": "^7.1.1"
   },
-  "jest": {                 
+  "jest": {
     "testEnvironment": "node",
-    "testTimeout": 10000
+    "testTimeout": 10000,
+    "setupFiles": [
+      "./tests/setup.js"
+    ]
   }
-  
 }

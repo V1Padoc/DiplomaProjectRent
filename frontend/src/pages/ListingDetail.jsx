@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css'; // Base calendar styles
@@ -19,7 +20,7 @@ import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/20/solid'; // For review stars
 import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline'; // For review stars
 import { PhotoIcon } from '@heroicons/react/24/solid'; // For "Show all photos" button
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Leaflet icon fix
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -80,7 +81,7 @@ function ListingDetail() {
                 if (token) {
                     config.headers = { Authorization: `Bearer ${token}` };
                 }
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}`, config);
+                const response = await api.get(`/listings/${listingId}`, config);
                 setListing(response.data);
             } catch (err) {
                 console.error('Error fetching listing details:', err);
@@ -104,7 +105,7 @@ function ListingDetail() {
             try {
                 setReviewLoading(true);
                 setReviewError(null);
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/reviews`);
+                const response = await api.get(`/listings/${listingId}/reviews`);
                 setReviews(response.data);
             } catch (err) {
                 console.error('Error fetching reviews:', err);
@@ -121,7 +122,7 @@ function ListingDetail() {
             if (!listingId) return;
             setLoadingBookedDates(true);
             try {
-                const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
+                const response = await api.get(`/listings/${listingId}/booked-dates`);
                 setBookedRanges(response.data.map(range => ({
                     start: new Date(range.start),
                     end: new Date(range.end)
@@ -156,7 +157,7 @@ function ListingDetail() {
         }
         setReviewSubmitting(true); setReviewError(null); setReviewSubmitSuccess(null);
         try {
-            const response = await axios.post(`http://localhost:5000/api/listings/${listingId}/reviews`,
+            const response = await api.post(`/listings/${listingId}/reviews`,
                 { rating: newReviewRating, comment: newReviewComment },
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
@@ -164,7 +165,7 @@ function ListingDetail() {
             setReviews([response.data.review, ...reviews]);
             setNewReviewRating(0); setNewReviewComment('');
             // Fetch updated listing to get new average_rating
-            const listingResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}`);
+            const listingResponse = await api.get(`/listings/${listingId}`);
             setListing(listingResponse.data);
             setTimeout(() => setReviewSubmitSuccess(null), 3000);
         } catch (err) {
@@ -185,7 +186,7 @@ function ListingDetail() {
         }
         setBookingSubmitting(true); setBookingError(null); setBookingSuccess(null);
         try {
-            const response = await axios.post('http://localhost:5000/api/bookings', {
+            const response = await api.post('/bookings', {
                 listing_id: listingId,
                 start_date: bookingDates[0].toISOString().split('T')[0],
                 end_date: bookingDates[1].toISOString().split('T')[0],
@@ -193,7 +194,7 @@ function ListingDetail() {
             setBookingSuccess(response.data.message || "Запит на бронювання надіслано!");
             setBookingDates([null, null]);
             // Re-fetch booked dates
-            const bookedResponse = await axios.get(`http://localhost:5000/api/listings/${listingId}/booked-dates`);
+            const bookedResponse = await api.get(`/listings/${listingId}/booked-dates`);
             setBookedRanges(bookedResponse.data.map(range => ({ start: new Date(range.start), end: new Date(range.end) })));
             if (token && isAuthenticated && !isSocketEligible) fetchSocketEligibility(token);
             setTimeout(() => setBookingSuccess(null), 3000);
@@ -225,7 +226,7 @@ function ListingDetail() {
     if (!listing) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Оголошення не знайдено.</div>;
 
     const slides = listing.photos?.map((photoFilename, index) => ({
-        src: `http://localhost:5000/uploads/${photoFilename}`,
+        src: `${SERVER_URL}/uploads/${photoFilename}`,
         title: `${listing.title} - Фото ${index + 1}`
     })) || [];
 
@@ -243,7 +244,7 @@ function ListingDetail() {
             // Assuming profile_image_url contains a path like /uploads/profiles/filename.ext
             // We need to ensure it's pointing to the correct uploads directory for profiles
             const filename = profileImageUrl.split('/').pop();
-            return `http://localhost:5000/uploads/profiles/${filename}`;
+            return `${SERVER_URL}/uploads/profiles/${filename}`;
         }
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(nameOrEmail || 'U')}&background=random&size=56&color=fff&font-size=0.5`;
     };

@@ -52,10 +52,23 @@ User.hasMany(Listing, { foreignKey: 'owner_id', as: 'Listings' });
 Listing.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
 // ... etc.
 */
-
+const allowedOrigins = [
+  'http://localhost:3000', // Для локальної розробки
+  process.env.CLIENT_URL   // Для продакшену на Render
+];
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: function (origin, callback) {
+    // Дозволити запити без origin (наприклад, Postman) або якщо origin є у списку
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // --- Serve static files from the 'uploads' directory ---
@@ -200,4 +213,6 @@ async function startServer() {
 if (require.main === module) {
   startServer();
 }
+
+// Експортуємо `server` та `sequelize` для використання в тестах
 module.exports = { server, sequelize };

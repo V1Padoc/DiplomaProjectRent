@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useNavigate, Link } from 'react-router-dom'; // Added Link
 
 function RegisterPage() {
@@ -22,7 +23,7 @@ function RegisterPage() {
     setSuccess('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', {
+      const response = await api.post('/auth/register', {
         email,
         password,
         name,

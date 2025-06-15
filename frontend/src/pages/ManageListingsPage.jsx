@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Slider from 'react-slick';
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid';
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick
 function SlickArrowLeft({ currentSlide, slideCount, ...props }) {
     return (
@@ -52,7 +53,7 @@ function ManageListingsPage() {
       setError(null);
       setActionError(null);
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
-      const response = await axios.get('http://localhost:5000/api/listings/owner', config);
+      const response = await api.get('/listings/owner', config);
       setOwnerListings(response.data);
     } catch (err) {
       console.error('Error fetching owner listings:', err);
@@ -79,7 +80,7 @@ function ManageListingsPage() {
     setActionError(null);
     try {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
-      await axios.delete(`http://localhost:5000/api/listings/${listingId}`, config);
+      await api.delete(`/listings/${listingId}`, config);
       setOwnerListings(prev => prev.filter(listing => listing.id !== listingId));
     } catch (err) {
       console.error('Error deleting listing:', err);
@@ -99,7 +100,7 @@ function ManageListingsPage() {
     setActionError(null);
     try {
       const config = { headers: { 'Authorization': `Bearer ${token}` } };
-      await axios.put(`http://localhost:5000/api/listings/${listingId}/archive`, { status: newStatus }, config);
+      await api.put(`/listings/${listingId}/archive`, { status: newStatus }, config);
       // Optimistic update, then refetch for consistency
       setOwnerListings(prev => prev.map(l => l.id === listingId ? { ...l, status: newStatus } : l));
       // fetchOwnerListings(); // Or just update locally if backend is reliable
@@ -151,7 +152,10 @@ function ManageListingsPage() {
                             <div className="w-full h-60 sm:h-64 slick-listing-card">
                               <Slider {...cardSliderSettings}>
                                 {listing.photos.map((photo, index) => (
-                                  <div key={index}> <img src={`http://localhost:5000/uploads/${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover"/> </div>
+                                  <div key={index}> <img src={`${SERVER_URL}/uploads/thumb-${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover" loading="lazy" decoding="async"
+                                  
+                                  
+                                  /> </div>
                                 ))}
                               </Slider>
                             </div>

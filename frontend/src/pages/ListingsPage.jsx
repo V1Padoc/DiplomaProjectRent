@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import Slider from 'react-slick';
 import "slick-carousel/slick/slick.css";
@@ -10,7 +11,7 @@ import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { useAuth } from '../context/AuthContext';
 import { ChevronLeftIcon, ChevronRightIcon, ArrowUpIcon, ArrowDownIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/20/solid'; // Added ArrowUpIcon
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick
 function SlickArrowLeft({ currentSlide, slideCount, ...props }) {
     return (
@@ -135,7 +136,7 @@ function ListingsPage() {
     setSearchParams(params, { replace: true });
 
     try {
-      const response = await axios.get(`http://localhost:5000/api/listings?${params.toString()}`);
+      const response = await api.get(`/listings?${params.toString()}`);
       setListings(response.data.listings);
       setPagination(prev => ({
         ...prev,
@@ -479,7 +480,7 @@ function ListingsPage() {
                                   <div key={index}>
                                     {/* --- THE CORE FRONTEND CHANGE --- */}
                                     <img 
-                                      src={`http://localhost:5000/uploads/thumb-${photo}`} // <--- Use the thumbnail
+                                      src={`${SERVER_URL}/uploads/thumb-${photo}`} // <--- Use the thumbnail
                                       alt={`${listing.title} ${index + 1}`} 
                                       className="w-full h-60 sm:h-64 object-cover"
                                       loading="lazy" // <--- Native browser lazy loading
@@ -536,7 +537,7 @@ function ListingsPage() {
           </main>
         </div>
       </div>
-      <style jsx global>{`
+      <style jsx="true" global="true">{`
         .form-input, .form-textarea, .form-select, .form-radio { @apply shadow-sm; }
         .tracking-tight { letter-spacing: -0.025em; }
         .slick-listing-card .slick-arrow {

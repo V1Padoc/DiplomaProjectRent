@@ -1,6 +1,7 @@
 // frontend/src/pages/MapListingsPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -14,7 +15,7 @@ import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { useAuth } from '../context/AuthContext';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'; // For slider arrows
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Leaflet icon fix & custom icons
 delete L.Icon.Default.prototype._getIconUrl;
 const defaultIcon = L.icon({
@@ -171,7 +172,7 @@ function MapListingsPage() {
         }
 
         try {
-            const response = await axios.get(`http://localhost:5000/api/listings?${commonParams.toString()}`);
+            const response = await api.get(`/listings?${commonParams.toString()}`);
             setListData(response.data.listings);
             setPagination({
                 totalPages: response.data.totalPages,
@@ -191,7 +192,7 @@ function MapListingsPage() {
         setLoadingMap(true);
         const commonParams = buildCommonParams();
         try {
-            const response = await axios.get(`http://localhost:5000/api/listings/map-data?${commonParams.toString()}`);
+            const response = await api.get(`/listings/map-data?${commonParams.toString()}`);
             setMapData(response.data);
             
             if (response.data.length > 0) {
@@ -366,7 +367,7 @@ function MapListingsPage() {
                                 <Popup>
                                     <div className="w-48">
                                         {listing.photos && listing.photos.length > 0 && (
-                                            <img src={`http://localhost:5000/uploads/${listing.photos[0]}`} alt={listing.title} className="w-full h-24 object-cover rounded-md mb-2"/>
+                                            <img src={`${SERVER_URL}/uploads/${listing.photos[0]}`} alt={listing.title} className="w-full h-24 object-cover rounded-md mb-2"/>
                                         )}
                                         <h3 className="font-semibold text-base mb-1 text-[#0c151d] truncate">{listing.title}</h3>
                                         <p className="text-xs text-[#4574a1] mb-1 truncate">{listing.location}</p>
@@ -439,7 +440,7 @@ function MapListingsPage() {
                                                     <div className="w-full h-48 sm:h-56 slick-listing-card">
                                                     <Slider {...listCardSliderSettings}>
                                                         {listing.photos.map((photo, index) => (
-                                                        <div key={index}> <img src={`http://localhost:5000/uploads/thumb-${photo}`}  alt={`${listing.title} ${index + 1}`} className="w-full h-48 sm:h-56 object-cover" loading="lazy" decoding="async" /> </div>
+                                                        <div key={index}> <img src={`${SERVER_URL}/uploads/thumb-${photo}`}  alt={`${listing.title} ${index + 1}`} className="w-full h-48 sm:h-56 object-cover" loading="lazy" decoding="async" /> </div>
                                                         ))}
                                                     </Slider>
                                                     </div>

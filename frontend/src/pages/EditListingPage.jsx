@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 
 // Leaflet Imports
@@ -33,7 +34,7 @@ import {
 
 // Import the reusable SortablePhotoItem component
 import { SortablePhotoItem } from '../components/SortablePhotoItem'; // Adjust path if needed
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 
 // Leaflet icon fix (important for markers to display correctly)
 // This is a common workaround for issues with Leaflet's default icon paths in Webpack environments.
@@ -150,7 +151,7 @@ function EditListingPage() {
       try {
         setLoading(true); setError(null); setOriginalListing(null);
         const config = { headers: { 'Authorization': `Bearer ${token}` } };
-        const response = await axios.get(`http://localhost:5000/api/listings/${listingId}/edit`, config);
+        const response = await api.get(`/listings/${listingId}/edit`, config);
         const fetchedListing = response.data;
         setOriginalListing(fetchedListing);
         setFormData({
@@ -169,7 +170,7 @@ function EditListingPage() {
         const existingPhotos = Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [];
         setDisplayPhotos(existingPhotos.map((filename, index) => ({
           id: `existing-${Date.now()}-${index}-${filename}`, type: 'existing',
-          originalFilename: filename, previewUrl: `http://localhost:5000/uploads/${filename}`
+          originalFilename: filename, previewUrl: `${SERVER_URL}/uploads/${filename}`
         })));
         if (fetchedListing.latitude && fetchedListing.longitude) {
             const initialPos = { lat: parseFloat(fetchedListing.latitude), lng: parseFloat(fetchedListing.longitude) };
@@ -297,7 +298,7 @@ function EditListingPage() {
     displayPhotos.forEach(p => { if (p.type === 'new' && p.file) updateFormData.append('photos', p.file); });
 
     try {
-      const response = await axios.put(`http://localhost:5000/api/listings/${listingId}`, updateFormData, {
+      const response = await api.put(`/listings/${listingId}`, updateFormData, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setSubmitSuccess(response.data.message || "Оголошення успішно оновлено!");
@@ -308,7 +309,7 @@ function EditListingPage() {
       const serverPhotos = updatedListingFromServer.photos || [];
       setDisplayPhotos(serverPhotos.map((filename, index) => ({
         id: `updated-${Date.now()}-${index}-${filename}`, type: 'existing',
-        originalFilename: filename, previewUrl: `http://localhost:5000/uploads/${filename}`
+        originalFilename: filename, previewUrl: `${SERVER_URL}/uploads/${filename}`
       })));
       setTimeout(() => { navigate('/manage-listings'); }, 2500);
     } catch (err) {

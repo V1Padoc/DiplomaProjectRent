@@ -1,6 +1,7 @@
 // frontend/src/pages/AdminPage.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import {
     createColumnHelper,
@@ -55,7 +56,7 @@ function AdminPage() {
             params.append('page', pagination.pageIndex + 1);
             params.append('limit', pagination.pageSize);
 
-            const response = await axios.get(`http://localhost:5000/api/admin/listings?${params.toString()}`, {
+            const response = await api.get(`/admin/listings?${params.toString()}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setListings(response.data.listings);
@@ -96,8 +97,8 @@ function AdminPage() {
 
         try {
             // Step 1: Update listing status
-            await axios.put(
-                `http://localhost:5000/api/admin/listings/${listingId}/status`,
+            await api.put(
+                `/admin/listings/${listingId}/status`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -105,8 +106,8 @@ function AdminPage() {
             // Step 2: If reason provided, send a message
             if (actionReason.trim() && listingOwner && listingOwner.id) {
                 try {
-                    await axios.post(
-                        `http://localhost:5000/api/chats/send`,
+                    await api.post(
+                        `/chats/send`,
                         {
                             listing_id: listingId,
                             content: actionReason.trim(),
@@ -146,8 +147,8 @@ function AdminPage() {
         const originalListings = [...listings];
         setListings(prev => prev.map(l => l.id === listingId ? {...l, isUpdating: true} : l));
         try {
-            await axios.put(
-                `http://localhost:5000/api/admin/listings/${listingId}/status`,
+            await api.put(
+                `/admin/listings/${listingId}/status`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );

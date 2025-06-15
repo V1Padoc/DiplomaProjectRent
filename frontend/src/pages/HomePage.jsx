@@ -3,14 +3,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../api/api.js';
 import { MagnifyingGlassIcon, HomeModernIcon, KeyIcon, ChatBubbleLeftRightIcon, BuildingStorefrontIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Helper to construct image URLs, similar to other pages
 const getListingImageUrl = (photoFilename) => {
     if (photoFilename) {
         // Assuming photoFilename is just the name like "image.jpg"
-        return `http://localhost:5000/uploads/${photoFilename}`;
+        return `${SERVER_URL}/uploads/${photoFilename}`;
     }
     // Fallback if no photo or filename is undefined
     return 'https://via.placeholder.com/1920x1080.png?text=Rental+Space'; // Generic fallback
@@ -33,7 +34,7 @@ function HomePage() {
       setLoadingHeroImages(true);
       try {
         // Fetch a few recent, active listings with photos
-        const response = await axios.get('http://localhost:5000/api/listings?status=active&limit=5&sortBy=created_at&sortOrder=DESC');
+        const response = await api.get('/listings?status=active&limit=5&sortBy=created_at&sortOrder=DESC');
         const listingsWithPhotos = response.data.listings.filter(l => l.photos && l.photos.length > 0);
         setHeroListings(listingsWithPhotos.length > 0 ? listingsWithPhotos : []);
       } catch (error) {

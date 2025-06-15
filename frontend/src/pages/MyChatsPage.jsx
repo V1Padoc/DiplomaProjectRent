@@ -1,9 +1,10 @@
 // frontend/src/pages/MyChatsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import api from '../api/api.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 const formatLastMessageTimestamp = (timestampStr) => {
     if (!timestampStr) return '23:04'; // Translated
     const date = new Date(timestampStr);
@@ -28,7 +29,7 @@ const formatLastMessageTimestamp = (timestampStr) => {
 const getAvatarUrl = (profileImageUrl, nameOrEmail) => {
     if (profileImageUrl) {
         const filename = profileImageUrl.split('/').pop();
-        return `http://localhost:5000/uploads/profiles/${filename}`; // Adjust path if your backend serves from a subfolder
+        return `${SERVER_URL}/uploads/profiles/${filename}`; // Adjust path if your backend serves from a subfolder
     }
     // Fallback to ui-avatars if no profile image
     const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2) : 'U';
@@ -50,7 +51,7 @@ function MyChatsPage() {
         }
         setLoading(true); setError(null);
         try {
-            const response = await axios.get('http://localhost:5000/api/chats/my-chats', {
+            const response = await api.get('/chats/my-chats', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setConversations(response.data);
