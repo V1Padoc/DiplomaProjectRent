@@ -2,21 +2,28 @@
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+
+// --- ВИПРАВЛЕНО: Імпортуємо тільки потрібне сховище з конфігурації ---
+const { listingsStorage } = require('../config/cloudinaryConfig');
+
+// --- ВИПРАВЛЕНО: Створюємо екземпляр multer з правильним сховищем ---
+const upload = multer({ storage: listingsStorage });
+
+// Імпортуємо контролери та middleware
 const listingController = require('../controllers/listingController');
 const optionalAuthMiddleware = require('../middleware/optionalAuthMiddleware');
-const authMiddleware = require('../middleware/authMiddleware'); // Import the auth middleware
-const upload = require('../config/cloudinaryConfig');
-const multer = require('multer'); // Import the configured multer instance
+const authMiddleware = require('../middleware/authMiddleware');
 const messageController = require('../controllers/messageController');
 const favoriteController = require('../controllers/favoriteController');
-const upload = multer({ storage: upload.listingsStorage });
-// --- IMPORT VALIDATORS ---
+
+// Імпортуємо валідатори
 const {
   createListingValidationRules,
   updateListingValidationRules,
-  validateListingId, // For routes with :id or :listingId param
+  validateListingId,
   validate
-} = require('../validators/listingValidators'); // <--- ADDED: Import validators
+} = require('../validators/listingValidators');
 
 // --- General GET routes ---
 // Most specific paths first, then paths with parameters.
@@ -39,17 +46,17 @@ router.get(
 router.get(
   '/:id/edit',
   authMiddleware,
-  validateListingId(), // <--- ADDED: Validate the :id param
-  validate,            // <--- ADDED: Apply validation
+  validateListingId(),
+  validate,
   listingController.getListingForEdit
 );
 
 // GET a specific listing by ID (public) - Generic route for a single listing
 router.get(
   '/:id',
-  optionalAuthMiddleware, // <-- USE THE MIDDLEWARE HERE
-  validateListingId(), // <--- ADDED: Validate the :id param
-  validate,            // <--- ADDED: Apply validation
+  optionalAuthMiddleware,
+  validateListingId(),
+  validate,
   listingController.getListingById
 );
 
@@ -58,8 +65,8 @@ router.get(
 // GET reviews for a specific listing (public)
 router.get(
   '/:listingId/reviews',
-  validateListingId(), // <--- ADDED: Validate :listingId param
-  validate,            // <--- ADDED: Apply validation
+  validateListingId(),
+  validate,
   listingController.getReviewsByListingId
 );
 
@@ -67,8 +74,8 @@ router.get(
 router.post(
   '/:listingId/reviews',
   authMiddleware,
-  validateListingId(), // <--- ADDED: Validate :listingId param
-  validate,            // <--- ADDED: Apply validation (add specific review validation if needed)
+  validateListingId(),
+  validate,
   listingController.createReview
 );
 
@@ -79,8 +86,8 @@ router.post(
 router.get(
   '/:listingId/messages',
   authMiddleware,
-  validateListingId(), // <--- ADDED: Validate :listingId param
-  validate,            // <--- ADDED: Apply validation
+  validateListingId(),
+  validate,
   messageController.getMessagesByListingId
 );
 
@@ -88,16 +95,16 @@ router.get(
 router.post(
   '/:listingId/messages',
   authMiddleware,
-  validateListingId(), // <--- ADDED: Validate :listingId param
-  validate,            // <--- ADDED: Apply validation (add message content validation if needed)
+  validateListingId(),
+  validate,
   messageController.createMessage
 );
 
 // --- Route to get booked dates for a listing ---
 router.get(
     '/:listingId/booked-dates',
-    validateListingId(), // <--- ADDED: Validate :listingId param
-    validate,            // <--- ADDED: Apply validation
+    validateListingId(),
+    validate,
     listingController.getListingBookedDates
 );
 
@@ -108,9 +115,9 @@ router.get(
 router.post(
   '/',
   authMiddleware,
-  upload.array('photos', 10), // Expecting multiple files named 'photos'
-  createListingValidationRules(), // <--- ADDED: Apply validation rules for creation
-  validate,                       // <--- ADDED: Apply validation
+  upload.array('photos', 10), // Тепер `upload` - це наш правильно налаштований multer
+  createListingValidationRules(),
+  validate,
   listingController.createListing
 );
 
@@ -118,9 +125,9 @@ router.post(
 router.put(
   '/:id',
   authMiddleware,
-  upload.array('photos', 10), // Expecting *new* files named 'photos' for update
-  updateListingValidationRules(), // <--- ADDED: Apply validation rules for update
-  validate,                       // <--- ADDED: Apply validation
+  upload.array('photos', 10), // І тут також
+  updateListingValidationRules(),
+  validate,
   listingController.updateListing
 );
 
@@ -131,30 +138,31 @@ router.put(
   validate,
   listingController.toggleListingArchiveStatus // New controller function
 );
+
 // DELETE a listing (requires auth, owner)
 router.delete(
   '/:id',
   authMiddleware,
-  validateListingId(), // <--- ADDED: Validate the :id param
-  validate,            // <--- ADDED: Apply validation
+  validateListingId(),
+  validate,
   listingController.deleteListing
 );
 
 // Add/Remove favorite for a listing (requires auth)
-// Note: These paths are tied to a specific listing. FavoriteController also has /users/me/favorites routes.
 router.post(
   '/:listingId/favorite',
   authMiddleware,
-  validateListingId(), // <--- ADDED: Validate :listingId param
-  validate,            // <--- ADDED: Apply validation
+  validateListingId(),
+  validate,
   favoriteController.addFavorite
 );
+
 // Remove a listing from favorites
 router.delete(
   '/:listingId/favorite',
   authMiddleware,
-  validateListingId(), // <--- ADDED: Validate :listingId param
-  validate,            // <--- ADDED: Apply validation
+  validateListingId(),
+  validate,
   favoriteController.removeFavorite
 );
 

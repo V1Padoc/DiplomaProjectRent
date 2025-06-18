@@ -217,7 +217,7 @@ function EditListingPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleNewPhotosChange = (e) => { // For click-to-upload
+  const handleNewPhotosChange = (e) => { 
     const files = Array.from(e.target.files);
     const newPhotoItems = files.map((file, index) => ({
       id: `new-${Date.now()}-${index}-${file.name}`, type: 'new',
