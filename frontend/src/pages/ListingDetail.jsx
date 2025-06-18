@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import Calendar from 'react-calendar';
@@ -20,7 +20,6 @@ import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/20/solid'; // For review stars
 import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline'; // For review stars
 import { PhotoIcon } from '@heroicons/react/24/solid'; // For "Show all photos" button
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Leaflet icon fix
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({

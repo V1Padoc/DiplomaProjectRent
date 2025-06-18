@@ -1,7 +1,7 @@
 // frontend/src/pages/CreateListingPage.jsx
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

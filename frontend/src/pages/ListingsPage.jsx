@@ -1,7 +1,7 @@
 // frontend/src/pages/ListingsPage.jsx
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import Slider from 'react-slick';
@@ -11,7 +11,6 @@ import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { useAuth } from '../context/AuthContext';
 import { ChevronLeftIcon, ChevronRightIcon, ArrowUpIcon, ArrowDownIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/20/solid'; // Added ArrowUpIcon
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick
 function SlickArrowLeft({ currentSlide, slideCount, ...props }) {
     return (

@@ -1,7 +1,7 @@
 // frontend/src/pages/RegisterPage.jsx
 
 import React, { useState } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useNavigate, Link } from 'react-router-dom'; // Added Link
 

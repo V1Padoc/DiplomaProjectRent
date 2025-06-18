@@ -1,6 +1,6 @@
 // frontend/src/pages/BookingRequestsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -109,7 +109,7 @@ function BookingRequestsPage() {
         if (!confirmAction) return;
 
         setActionError(null);
-        const originalBookings = bookings.map(b => ({ ...b }));
+        const originalBookings = bookings.map(b => ({ ...b })); // Deep copy for rollback
         setBookings(prevBookings =>
             prevBookings.map(b =>
                 b.id === bookingId ? { ...b, status: newStatus, processing: true } : b
@@ -122,21 +122,22 @@ function BookingRequestsPage() {
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            await fetchBookingRequests();
-            fetchUnreadBookingRequestsCountForOwner(token);
+            await fetchBookingRequests(); // Re-fetch to get accurate, sorted data
+            fetchUnreadBookingRequestsCountForOwner(token); // Refresh unread count
         } catch (err) {
             console.error(`Error updating booking ${bookingId} to ${newStatus}:`, err);
             setActionError(err.response?.data?.message || `Не вдалося оновити статус. ${err.message || ''}`);
-            setBookings(originalBookings); 
+            setBookings(originalBookings); // Rollback on error
         }
     };
 
     const handleCalendarDateChange = (newDate) => {
         setCalendarDate(newDate);
-        setSelectedBookingId(null);
+        setSelectedBookingId(null); // Clear selection when month/year changes
     };
 
     const handleDateClick = (date) => {
+         // Normalize dates to start of day for comparison
          const clickedDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const bookingsOnDate = bookings.filter(b => {
             const startDate = new Date(new Date(b.start_date).getFullYear(), new Date(b.start_date).getMonth(), new Date(b.start_date).getDate());
@@ -145,35 +146,47 @@ function BookingRequestsPage() {
         });
 
         if (bookingsOnDate.length > 0) {
+            // Select the first booking found for that date and scroll to it
             setSelectedBookingId(bookingsOnDate[0].id);
             const element = document.getElementById(`booking-request-card-${bookingsOnDate[0].id}`);
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         } else {
-            setSelectedBookingId(null);
+            setSelectedBookingId(null); // No bookings on this date
         }
     };
 
+    /**
+     * Determines the conceptual status type of a booking for calendar filtering/coloring.
+     * Takes into account if a pending/confirmed booking is in the past.
+     * @param {object} booking The booking object.
+     * @param {Date} todayCal A Date object representing the start of the current day.
+     * @returns {string} One of STATUS_TYPES values (PENDING, CONFIRMED, REJECTED, CANCELLED, PAST).
+     */
     const getBookingStatusType = (booking, todayCal) => {
+        // Normalize end date to start of day for accurate comparison
         const endDate = new Date(new Date(booking.end_date).getFullYear(), new Date(booking.end_date).getMonth(), new Date(booking.end_date).getDate());
+        
         if (booking.status === STATUS_TYPES.PENDING) {
             return endDate < todayCal ? STATUS_TYPES.PAST : STATUS_TYPES.PENDING;
         }
         if (booking.status === STATUS_TYPES.CONFIRMED) {
             return endDate < todayCal ? STATUS_TYPES.PAST : STATUS_TYPES.CONFIRMED;
         }
-        return booking.status; // rejected, cancelled
+        return booking.status; // rejected, cancelled remain as they are
     };
 
-    const tileContent = ({ date, view }) => {
+    // Callback for `react-calendar`'s `tileContent` prop to add custom content to date tiles
+    const tileContent = useCallback(({ date, view }) => {
         if (view === 'month') {
             const currentDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
             const todayCal = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
             const bookingsOnThisDay = bookings.filter(booking => {
                 const statusType = getBookingStatusType(booking, todayCal);
-                if (!calendarFilters[statusType] && !(statusType === STATUS_TYPES.PAST && !calendarFilters[STATUS_TYPES.PAST])) return false; // Check filter
+                // Only include bookings if their status type filter is active
+                if (!calendarFilters[statusType]) return false;
 
                 const startDate = new Date(new Date(booking.start_date).getFullYear(), new Date(booking.start_date).getMonth(), new Date(booking.start_date).getDate());
                 const endDate = new Date(new Date(booking.end_date).getFullYear(), new Date(booking.end_date).getMonth(), new Date(booking.end_date).getDate());
@@ -181,6 +194,7 @@ function BookingRequestsPage() {
             });
 
             if (bookingsOnThisDay.length > 1) {
+                // Display count for days with multiple filtered bookings
                 return (
                     <span className="absolute top-0 right-0 text-[0.6rem] bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
                         {bookingsOnThisDay.length}
@@ -189,9 +203,10 @@ function BookingRequestsPage() {
             }
         }
         return null;
-    };
+    }, [bookings, calendarFilters]); // Re-run if bookings or filters change
 
-    const tileClassName = ({ date, view }) => {
+    // Callback for `react-calendar`'s `tileClassName` prop to add custom CSS classes
+    const tileClassName = useCallback(({ date, view }) => {
         if (view === 'month') {
             const classes = [];
             const currentDateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -201,7 +216,7 @@ function BookingRequestsPage() {
                 const statusType = getBookingStatusType(booking, todayCal);
 
                 // Apply class only if the filter for this status type is active
-                if (!calendarFilters[statusType] && !(statusType === STATUS_TYPES.PAST && !calendarFilters[STATUS_TYPES.PAST])) {
+                if (!calendarFilters[statusType]) {
                     return; // Skip this booking if its status type is filtered out
                 }
 
@@ -220,30 +235,32 @@ function BookingRequestsPage() {
                         classes.push('cancelled-booking-day');
                     } else if (booking.status === STATUS_TYPES.REJECTED) {
                         classes.push('rejected-booking-day');
-                    } else {
-                        classes.push('other-booking-day');
                     }
-
+                    // Add date range specific classes
                     if (currentDateOnly.getTime() === startDate.getTime()) classes.push('booking-start-date');
                     if (currentDateOnly.getTime() === endDate.getTime()) classes.push('booking-end-date');
                     if (startDate.getTime() !== endDate.getTime() && currentDateOnly > startDate && currentDateOnly < endDate) classes.push('booking-mid-range');
                 }
             });
             
+            // Prioritize status classes to ensure only one color is applied per day,
+            // with pending/confirmed taking precedence over past if both are filtered ON.
+            // Simplified logic: just join unique classes. CSS rules will handle priority.
+            // However, to ensure *only* visible statuses contribute to the class:
             let finalClasses = '';
-            // Prioritize visible statuses for the owner
+            // Order of precedence for calendar highlighting: Pending > Confirmed > Rejected > Cancelled > Past (Confirmed/Pending)
             if (classes.includes('pending-booking-day') && calendarFilters[STATUS_TYPES.PENDING]) finalClasses = 'booked-day pending-booking-day';
             else if (classes.includes('confirmed-booking-day') && calendarFilters[STATUS_TYPES.CONFIRMED]) finalClasses = 'booked-day confirmed-booking-day';
-            else if (classes.includes('cancelled-booking-day') && calendarFilters[STATUS_TYPES.CANCELLED]) finalClasses = 'booked-day cancelled-booking-day';
             else if (classes.includes('rejected-booking-day') && calendarFilters[STATUS_TYPES.REJECTED]) finalClasses = 'booked-day rejected-booking-day';
+            else if (classes.includes('cancelled-booking-day') && calendarFilters[STATUS_TYPES.CANCELLED]) finalClasses = 'booked-day cancelled-booking-day';
             else if ((classes.includes('past-confirmed-booking-day') || classes.includes('past-pending-booking-day')) && calendarFilters[STATUS_TYPES.PAST]) {
+                 // If both past-confirmed and past-pending are present, prefer past-confirmed or handle as needed
                  if(classes.includes('past-confirmed-booking-day')) finalClasses = 'booked-day past-confirmed-booking-day';
                  else finalClasses = 'booked-day past-pending-booking-day';
             }
-            else if (classes.includes('other-booking-day')) finalClasses = 'booked-day other-booking-day'; // Fallback
-
 
             if (finalClasses) {
+                // Append range classes if applicable
                 if (classes.includes('booking-start-date')) finalClasses += ' booking-start-date';
                 if (classes.includes('booking-end-date')) finalClasses += ' booking-end-date';
                 if (classes.includes('booking-mid-range')) finalClasses += ' booking-mid-range';
@@ -252,7 +269,7 @@ function BookingRequestsPage() {
             return finalClasses || null;
         }
         return null;
-    };
+    }, [bookings, calendarFilters]); // Re-run if bookings or filters change
 
 
     if (loading && bookings.length === 0) {
@@ -398,10 +415,7 @@ function BookingRequestsPage() {
                                             onClick={() => toggleCalendarFilter(item.status)}
                                             className={`w-full text-left text-xs px-2 py-1.5 rounded-md flex items-center transition-colors duration-150 ${calendarFilters[item.status] ? 'bg-slate-100 hover:bg-slate-200' : 'text-slate-500 hover:bg-slate-100'}`}
                                         >
-                                            <span className={`w-3 h-3 rounded-full 
-                                                
-                                                
-                                                {item.colorClass} mr-2 shrink-0`}></span>
+                                            <span className={`w-3 h-3 rounded-full ${item.colorClass} mr-2 shrink-0`}></span>
                                             {item.label}
                                             {calendarFilters[item.status] ? <EyeIcon className="w-3.5 h-3.5 ml-auto text-slate-500" /> : <EyeSlashIcon className="w-3.5 h-3.5 ml-auto text-slate-400" />}
                                         </button>

@@ -4,12 +4,13 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 
-// --- ВИПРАВЛЕНО: Імпортуємо тільки потрібне сховище з конфігурації ---
 const { listingsStorage } = require('../config/cloudinaryConfig');
 
 // --- ВИПРАВЛЕНО: Створюємо екземпляр multer з правильним сховищем ---
-const upload = multer({ storage: listingsStorage });
-
+const upload = multer({ 
+    storage: listingsStorage,
+    limits: { fileSize: 1024 * 1024 * 10 }, // 10MB limit per photo
+});
 // Імпортуємо контролери та middleware
 const listingController = require('../controllers/listingController');
 const optionalAuthMiddleware = require('../middleware/optionalAuthMiddleware');

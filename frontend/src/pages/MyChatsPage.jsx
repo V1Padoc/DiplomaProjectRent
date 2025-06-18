@@ -1,10 +1,9 @@
 // frontend/src/pages/MyChatsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 const formatLastMessageTimestamp = (timestampStr) => {
     if (!timestampStr) return '23:04'; // Translated
     const date = new Date(timestampStr);
@@ -76,11 +75,11 @@ function MyChatsPage() {
     }, [fetchMyChats, fetchUnreadMessagesCount]);
 
     if (loading) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження ваших чатів...</div>; {/* Translated */}
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження ваших чатів...</div>; 
     }
 
     if (error) {
-        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>; {/* Translated */}
+        return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>; 
     }
 
     return (

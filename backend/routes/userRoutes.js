@@ -1,13 +1,15 @@
 // backend/routes/userRoutes.js
 const express = require('express');
 const router = express.Router();
-const userController = require('../controllers/userController');
-const authMiddleware = require('../middleware/authMiddleware');
-const profileUpload = require('../config/multerProfileConfig'); // We'll create this
-const favoriteController = require('../controllers/favoriteController');
 const multer = require('multer');
 const { profilesStorage } = require('../config/cloudinaryConfig'); // Імпортуємо сховище для профілів
-const profileUpload = multer({ storage: profilesStorage });
+const userController = require('../controllers/userController');
+const authMiddleware = require('../middleware/authMiddleware');
+const favoriteController = require('../controllers/favoriteController');// Імпортуємо сховище для профілів
+const profileUpload = multer({ 
+    storage: profilesStorage,
+    limits: { fileSize: 1024 * 1024 * 5 }, // 5MB limit for profile photo
+});
 // PUT /api/users/profile - Update current user's profile information
 router.put(
     '/profile',

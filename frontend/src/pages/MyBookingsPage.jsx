@@ -1,6 +1,6 @@
 // frontend/src/pages/MyBookingsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -15,7 +15,6 @@ import {
     UserCircleIcon, ChatBubbleLeftEllipsisIcon, ClockIcon, CheckCircleIcon, ArchiveBoxIcon,
     TrashIcon
 } from '@heroicons/react/24/outline';
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick in cards
 function SlickCardArrowLeft({ currentSlide, slideCount, ...props }) {
     return (

@@ -30,8 +30,8 @@ const NotificationBadge = ({ count }) => {
 // Helper to get avatar URL, similar to ProfilePage
 const getAvatarUrl = (profileImageUrl, nameOrEmail, size = 36) => {
     if (profileImageUrl) {
-        const filename = profileImageUrl.split('/').pop();
-        return `http://localhost:5000/uploads/profiles/${filename}`;
+        const filename = profileImageUrl;
+        return `${filename}`;
     }
     const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'U';
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=${size}&font-size=0.45&bold=true`;

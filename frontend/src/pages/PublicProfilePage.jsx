@@ -1,7 +1,7 @@
 // frontend/src/pages/PublicProfilePage.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import Slider from 'react-slick'; // For listing photos
@@ -9,7 +9,6 @@ import Slider from 'react-slick'; // For listing photos
 // import "slick-carousel/slick/slick-theme.css";
 import { ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight, UserCircleIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { MapPinIcon, CurrencyDollarIcon, TagIcon, ChatBubbleLeftEllipsisIcon } from '@heroicons/react/20/solid'; // For listing details
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick in listing cards (similar to MyBookingsPage)
 function SlickListingCardArrowLeft({ currentSlide, slideCount, ...props }) {
     return (

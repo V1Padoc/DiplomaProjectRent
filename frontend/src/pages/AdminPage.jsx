@@ -1,6 +1,6 @@
 // frontend/src/pages/AdminPage.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -16,7 +16,7 @@ import { ChevronLeftIcon, ChevronRightIcon, XMarkIcon } from '@heroicons/react/2
 
 // Helper function to format date
 const formatDate = (dateString) => {
-    if (!dateString) return 'N/A'; // Keep 'N/A' as it's a common abbreviation, or translate to 'Н/Д' if desired.
+    if (!dateString) return 'Н/Д'; // Keep 'Н/Д' as it's a common abbreviation.
     return new Date(dateString).toLocaleDateString('uk-UA', { year: 'numeric', month: 'short', day: 'numeric' }); // Changed to Ukrainian locale
 };
 
@@ -78,13 +78,13 @@ function AdminPage() {
         fetchData();
     }, [fetchData]);
 
-    const openActionModal = (listing, actionType) => {
+    const openActionModal = useCallback((listing, actionType) => {
         setModalTargetListing(listing);
         setModalAction(actionType);
         setActionReason('');
         setModalError('');
         setIsModalOpen(true);
-    };
+    }, []); // No dependencies for this simple state setter and data reset
 
     const handleConfirmAction = async () => {
         if (!modalTargetListing || !modalAction) return;
@@ -143,22 +143,22 @@ function AdminPage() {
     };
     
     // This function is for direct status updates without a modal (e.g., Approve)
-    const handleDirectUpdateStatus = async (listingId, newStatus) => {
-        const originalListings = [...listings];
-        setListings(prev => prev.map(l => l.id === listingId ? {...l, isUpdating: true} : l));
+    const handleDirectUpdateStatus = useCallback(async (listingId, newStatus) => {
+        const originalListings = [...listings]; // Save original state for rollback
+        setListings(prev => prev.map(l => l.id === listingId ? {...l, isUpdating: true} : l)); // Optimistic update for UI feedback
         try {
             await api.put(
                 `/admin/listings/${listingId}/status`,
                 { status: newStatus },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
-            fetchData(); 
+            fetchData(); // Refresh all data from server
         } catch (err) {
             console.error(`Error updating listing ${listingId} to ${newStatus}:`, err);
             alert(err.response?.data?.message || `Не вдалося оновити статус. ${err.message}`);
-            setListings(originalListings.map(l => l.id === listingId ? {...l, isUpdating: false} : l)); 
+            setListings(originalListings); // Rollback on error
         }
-    };
+    }, [listings, token, fetchData]);
 
 
     const columns = useMemo(() => [
@@ -197,7 +197,8 @@ function AdminPage() {
             cell: info => {
                 const price = parseFloat(info.getValue());
                 const type = info.row.original.type;
-                let priceDisplay = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                // Changed currency symbol to Ukrainian Hryvnia (₴) and locale to 'uk-UA'
+                let priceDisplay = `₴${price.toLocaleString('uk-UA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
                 if (type === 'monthly-rental') priceDisplay += '/міс';
                 else if (type === 'daily-rental') priceDisplay += '/день';
                 return <span className="font-medium text-slate-800">{priceDisplay}</span>;
@@ -299,7 +300,7 @@ function AdminPage() {
                 );
             },
         }),
-    ], [token, fetchData]); // Removed handleDirectUpdateStatus and openActionModal from deps, they use useCallback or are stable
+    ], [handleDirectUpdateStatus, openActionModal]); // `handleDirectUpdateStatus` and `openActionModal` are wrapped in `useCallback` so they are stable dependencies
 
     const table = useReactTable({
         data: listings,
@@ -309,8 +310,8 @@ function AdminPage() {
         onPaginationChange: setPagination,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
-        manualPagination: true,
-        debugTable: false,
+        manualPagination: true, // Tell the table we'll handle pagination manually
+        debugTable: false, // Set to true to debug table state
     });
 
     if (authLoading || (loading && listings.length === 0 && !error)) {
@@ -338,7 +339,7 @@ function AdminPage() {
                             value={filterStatus}
                             onChange={(e) => {
                                 setFilterStatus(e.target.value);
-                                setPagination(prev => ({ ...prev, pageIndex: 0 })); 
+                                setPagination(prev => ({ ...prev, pageIndex: 0 })); // Reset to first page on filter change
                             }}
                             className="form-select rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-11 py-2 px-3 text-sm text-[#0c151d]"
                         >
@@ -363,7 +364,8 @@ function AdminPage() {
                                                 key={header.id}
                                                 scope="col" 
                                                 className="px-4 sm:px-6 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider"
-                                                style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                                                // Adjust column width if necessary (based on defined `size` in column helper)
+                                                style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }} 
                                             >
                                                 {header.isPlaceholder
                                                     ? null
@@ -397,13 +399,16 @@ function AdminPage() {
                                 <ChevronLeftIcon className="w-5 h-5" />
                             </button>
                             
+                            {/* Render pagination buttons dynamically */}
                             {Array.from({ length: table.getPageCount() }).map((_, i) => {
                                 const pageNum = i + 1;
                                 const currentPageIndex = table.getState().pagination.pageIndex;
                                 const totalPages = table.getPageCount();
+                                // Logic to show current, adjacent, first, and last pages, with ellipsis
                                 const showPage = Math.abs(i - currentPageIndex) < 2 || i === 0 || i === totalPages -1 || (Math.abs(i - currentPageIndex) < 3 && (currentPageIndex < 2 || currentPageIndex > totalPages - 3));
                                 
                                 if (!showPage) {
+                                     // Render ellipsis for skipped pages
                                      if (i === 1 && currentPageIndex > 2) return <span key="dots-start" className="px-1 sm:px-2 text-sm text-slate-600">...</span>;
                                      if (i === totalPages - 2 && currentPageIndex < totalPages - 3) return <span key="dots-end" className="px-1 sm:px-2 text-sm text-slate-600">...</span>;
                                      return null;
@@ -412,7 +417,7 @@ function AdminPage() {
                                     <button
                                         key={pageNum}
                                         onClick={() => table.setPageIndex(i)}
-                                        disabled={loading}
+                                        disabled={loading} // Disable buttons during loading
                                         className={`text-sm font-medium leading-normal tracking-[0.015em] flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors
                                                    ${currentPageIndex === i ? 'bg-[#e6edf4] text-[#0c151d] font-bold' : 'text-[#0c151d] hover:bg-slate-200'}
                                                    ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -501,6 +506,7 @@ function AdminPage() {
                 </div>
             )}
 
+            {/* Global Tailwind CSS styles (if not using PostCSS/Tailwind JIT in development) */}
             <style jsx global>{`
                 .form-select, .form-textarea { @apply shadow-sm appearance-none; }
                 .tracking-tight { letter-spacing: -0.025em; }

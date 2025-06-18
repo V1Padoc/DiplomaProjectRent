@@ -1,6 +1,6 @@
 // frontend/src/pages/MapListingsPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
@@ -15,7 +15,7 @@ import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { useAuth } from '../context/AuthContext';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'; // For slider arrows
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
+
 // Leaflet icon fix & custom icons
 delete L.Icon.Default.prototype._getIconUrl;
 const defaultIcon = L.icon({
@@ -87,9 +87,9 @@ function MapBoundsAdjuster({ mapListings }) {
             if (map) {
                 try {
                     map.stop(); // Stops any ongoing pan/zoom animations
-                     console.log('MapBoundsAdjuster: map.stop() called on cleanup.');
+                     // console.log('MapBoundsAdjuster: map.stop() called on cleanup.'); // Removed for production
                 } catch (e) {
-                     console.warn('MapBoundsAdjuster: Error calling map.stop() during cleanup:', e);
+                     // console.warn('MapBoundsAdjuster: Error calling map.stop() during cleanup:', e); // Removed for production
                     // Map might already be in a removed state, especially if page is rapidly navigating away.
                 }
             }
@@ -101,9 +101,9 @@ function MapBoundsAdjuster({ mapListings }) {
 
 // Function to determine plural form for "rooms" (consistent with ListingsPage)
 const formatRooms = (count) => {
-    if (count === 1) return '1 ліжко';
-    if (count >= 2 && count <= 4) return `${count} ліжка`;
-    return `${count} ліжок`;
+    if (count === 1) return '1 кімната';
+    if (count >= 2 && count <= 4) return `${count} кімнати`;
+    return `${count} кімнат`;
 };
 
 
@@ -157,7 +157,7 @@ function MapListingsPage() {
     }, [filters]);
     
 
-    const fetchListData = useCallback(async (pageToFetch = pagination.currentPage) => {
+    const fetchListData = useCallback(async (pageToFetch) => {
         setLoadingList(true);
         const commonParams = buildCommonParams();
         commonParams.append('page', String(pageToFetch));
@@ -185,8 +185,7 @@ function MapListingsPage() {
         } finally {
             setLoadingList(false);
         }
-    }, [sort, itemsPerPage, buildCommonParams, setSearchParams, searchParams, pagination.currentPage]);
-
+    }, [sort, itemsPerPage, buildCommonParams, setSearchParams, searchParams]); // Removed pagination.currentPage from deps as pageToFetch handles it
 
     const fetchMapData = useCallback(async () => {
         setLoadingMap(true);
@@ -195,10 +194,13 @@ function MapListingsPage() {
             const response = await api.get(`/listings/map-data?${commonParams.toString()}`);
             setMapData(response.data);
             
-            if (response.data.length > 0) {
-                if (filters.location && response.data[0]?.latitude && response.data[0]?.longitude) {
-                    setMapCenter([parseFloat(response.data[0].latitude), parseFloat(response.data[0].longitude)]);
-                    setMapZoom(12); 
+            // Only adjust map center/zoom if location filter is applied and results exist
+            if (response.data.length > 0 && filters.location) {
+                // Find first valid coordinate from search results to center the map
+                const firstValidListing = response.data.find(l => l.latitude != null && l.longitude != null);
+                if (firstValidListing) {
+                    setMapCenter([parseFloat(firstValidListing.latitude), parseFloat(firstValidListing.longitude)]);
+                    setMapZoom(12); // Zoom in closer when a specific location is searched
                 }
             }
         } catch (err) {
@@ -207,24 +209,20 @@ function MapListingsPage() {
         } finally {
             setLoadingMap(false);
         }
-    }, [filters.location, buildCommonParams]);
-    
-    // Effect for filter/sort changes
-    useEffect(() => {
-        setError(null); 
-        fetchListData(1); 
-        fetchMapData();
-    }, [filters, sort.sortBy, sort.sortOrder, fetchMapData]); // Removed fetchListData from here as it's complex with page
+    }, [filters.location, buildCommonParams]); // Only filters affect map data, not pagination or sort of list
 
-    // Effect for page changes from URL (e.g., back/forward button or direct URL manipulation)
+
+    // Effect for filter/sort changes and initial page load
     useEffect(() => {
+        setError(null); // Clear previous errors
         const pageFromUrl = parseInt(searchParams.get('page') || '1', 10);
-        if (pageFromUrl !== pagination.currentPage || listData.length === 0 && !loadingList && pagination.totalItems > 0) {
-             fetchListData(pageFromUrl);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]); // Only depends on searchParams to react to URL changes for page
+        fetchListData(pageFromUrl); // Always fetch list data based on current URL params
+    }, [searchParams, fetchListData]); // Depend on searchParams to react to URL changes, fetchListData is stable
 
+    // Effect for map data fetching (only when filters change)
+    useEffect(() => {
+        fetchMapData();
+    }, [filters, fetchMapData]); // Depend on filters to trigger map data fetch, fetchMapData is stable
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -232,12 +230,13 @@ function MapListingsPage() {
     };
 
     const handleApplyFilters = () => {
+        // When filters are applied, always reset to page 1
         const currentParams = buildCommonParams();
         currentParams.set('page', '1'); 
         currentParams.set('sortBy', sort.sortBy);
         currentParams.set('sortOrder', sort.sortOrder);
         setSearchParams(currentParams, { replace: true });
-        // The main useEffect for filters/sort will handle fetching
+        // The useEffects will now re-trigger fetching
     };
     
     const handleResetFilters = () => {
@@ -246,18 +245,24 @@ function MapListingsPage() {
         setFilters(defaultFilters);
         setSort(defaultSort);
         
+        // Reset URL parameters to default values
         const params = new URLSearchParams(); 
         params.set('page', '1');
         params.set('sortBy', defaultSort.sortBy);
         params.set('sortOrder', defaultSort.sortOrder);
         setSearchParams(params, { replace: true });
-        // The main useEffect for filters/sort will handle fetching
+        // The useEffects will now re-trigger fetching
     };
 
     const handleSortChange = (e) => {
         const { name, value } = e.target;
         setSort(prev => ({ ...prev, [name]: value }));
-        // The main useEffect for filters/sort will handle fetching and page reset
+        // Sorting also implies re-fetching list data, so it will be handled by the useEffect watching `searchParams`
+        // We'll also reset to page 1 for consistent behavior
+        const currentParams = new URLSearchParams(searchParams);
+        currentParams.set('page', '1');
+        currentParams.set(name, value);
+        setSearchParams(currentParams, { replace: true });
     };
 
     const handlePageChange = (newPage) => {
@@ -383,7 +388,7 @@ function MapListingsPage() {
                             </Marker>
                         ))}
                     </MapContainer>
-                    {(loadingMap || (loadingList && !mapData.length)) && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 p-6 rounded-lg shadow-xl z-[1000] text-[#0c151d] font-medium">Завантаження карти та оголошень...</div>}
+                    {(loadingMap || (loadingList && mapData.length === 0)) && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 p-6 rounded-lg shadow-xl z-[1000] text-[#0c151d] font-medium">Завантаження карти та оголошень...</div>}
                 </div>
 
                 {/* Listings List Area - Adjusted width and grid */}
@@ -441,8 +446,7 @@ function MapListingsPage() {
                                                     <Slider {...listCardSliderSettings}>
                                                       {listing.photos.map((photoUrl, index) => (
                                                          <div key={index}> 
-    
-                                                          <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="..." loading="lazy" decoding="async" /> 
+                                                            <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="w-full h-48 sm:h-56 object-cover" loading="lazy" decoding="async" /> 
                                                          </div>
                                                           ))}
                                                     </Slider>
@@ -460,10 +464,10 @@ function MapListingsPage() {
                                                     (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
                                                     </span>
                                                     {(listing.rooms !== null || listing.area !== null) && (
-                                                        <div className="text-sm text-[#4574a1] flex items-center space-x-1.5"> {/* Changed space-x-2 to space-x-1.5 */}
+                                                        <div className="text-sm text-[#4574a1] flex items-center space-x-1.5">
                                                             {listing.rooms !== null && ( <span>{formatRooms(listing.rooms)}</span> )}
                                                             {listing.rooms !== null && listing.area !== null && <span>·</span>}
-                                                            {listing.area !== null && ( <span>{listing.area} м²</span> )}
+                                                            {listing.area !== null && ( <span>{parseFloat(listing.area).toFixed(0)} м²</span> )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -477,23 +481,33 @@ function MapListingsPage() {
                                 <div className="mt-8 flex items-center justify-center p-4 space-x-1.5 sm:space-x-2">
                                     <button onClick={() => handlePageChange(pagination.currentPage - 1)} disabled={pagination.currentPage === 1 || loadingList}
                                     className="flex size-9 sm:size-10 items-center justify-center rounded-full text-[#0c151d] hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"> <ChevronLeftIcon className="w-5 h-5" /> </button>
-                                    {Array.from({ length: Math.min(3, pagination.totalPages) }, (_, i) => {
-                                        let pageNum;
-                                        const maxPagesToShow = 3;
-                                        let startPage = Math.max(1, pagination.currentPage - Math.floor(maxPagesToShow / 2));
-                                        let endPage = Math.min(pagination.totalPages, startPage + maxPagesToShow - 1);
-                                        if (endPage - startPage + 1 < maxPagesToShow) {
-                                            startPage = Math.max(1, endPage - maxPagesToShow + 1);
+                                    {Array.from({ length: pagination.totalPages }, (_, i) => { // Iterate through all pages
+                                        const pageNum = i + 1;
+                                        const currentPageIndex = pagination.currentPage;
+                                        const totalPages = pagination.totalPages;
+
+                                        // Logic to show current, adjacent, first, and last pages, with ellipsis
+                                        // Shows 1, 2, ..., current-1, current, current+1, ..., total-1, total
+                                        const showPage = Math.abs(i - (currentPageIndex - 1)) < 2 || // Current page and its immediate neighbors
+                                                         i === 0 || // First page
+                                                         i === totalPages - 1 || // Last page
+                                                         (Math.abs(i - (currentPageIndex - 1)) < 3 && (currentPageIndex - 1 < 2 || currentPageIndex - 1 > totalPages - 3)); // For edges: if near start or end, show a few more
+
+                                        if (!showPage) {
+                                            // Show ellipsis for skipped pages, but only once
+                                            if (i === 1 && (currentPageIndex - 1) > 2) return <span key="dots-start" className="px-1 sm:px-2 text-sm text-slate-600">...</span>;
+                                            if (i === totalPages - 2 && (currentPageIndex - 1) < totalPages - 3) return <span key="dots-end" className="px-1 sm:px-2 text-sm text-slate-600">...</span>;
+                                            return null;
                                         }
-                                        pageNum = startPage + i;
-                                        if (pageNum > endPage) return null;
 
                                         return (
                                         <button key={pageNum} onClick={() => handlePageChange(pageNum)} disabled={loadingList} 
                                                 className={`text-sm font-medium leading-normal tracking-[0.015em] flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors
-                                                        ${pagination.currentPage === pageNum ? 'bg-[#e6edf4] text-[#0c151d] font-bold' : 'text-[#0c151d] hover:bg-slate-200'}`}> {pageNum} </button>
+                                                        ${pagination.currentPage === pageNum ? 'bg-[#e6edf4] text-[#0c151d] font-bold' : 'text-[#0c151d] hover:bg-slate-200'}
+                                                        ${loadingList ? 'opacity-50 cursor-not-allowed' : ''}` // Disable if loading
+                                                }> {pageNum} </button>
                                         );
-                                    }).filter(Boolean)}
+                                    }).filter(Boolean)} {/* Filter out nulls from ellipsis logic */}
                                     <button onClick={() => handlePageChange(pagination.currentPage + 1)} disabled={pagination.currentPage === pagination.totalPages || loadingList}
                                     className="flex size-9 sm:size-10 items-center justify-center rounded-full text-[#0c151d] hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"> <ChevronRightIcon className="w-5 h-5" /> </button>
                                 </div>
@@ -508,6 +522,7 @@ function MapListingsPage() {
                 }
                 .tracking-tight { letter-spacing: -0.025em; }
 
+                /* Slick Carousel Customizations for listing cards */
                 .slick-listing-card .slick-arrow {
                   z-index: 10; width: 32px; height: 32px; background-color: rgba(0,0,0,0.3);
                   border-radius: 50%; transition: background-color 0.2s ease; position: absolute;

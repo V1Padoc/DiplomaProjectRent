@@ -1,7 +1,7 @@
 // frontend/src/context/AuthContext.js
 
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { io } from 'socket.io-client'; // Import socket.io-client
 

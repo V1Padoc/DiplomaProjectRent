@@ -1,7 +1,7 @@
 // frontend/src/pages/ManageListingsPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,6 @@ import Slider from 'react-slick';
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid';
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Custom arrow components for react-slick
 function SlickArrowLeft({ currentSlide, slideCount, ...props }) {
     return (

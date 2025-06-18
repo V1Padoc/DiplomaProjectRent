@@ -1,12 +1,11 @@
 // frontend/src/pages/HomePage.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { MagnifyingGlassIcon, HomeModernIcon, KeyIcon, ChatBubbleLeftRightIcon, BuildingStorefrontIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Helper to construct image URLs, similar to other pages
 const getListingImageUrl = (photoUrl) => {
     if (photoUrl) {

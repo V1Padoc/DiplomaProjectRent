@@ -1,14 +1,15 @@
 // backend/config/database.js
+// backend/config/database.js
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 let sequelize;
 
-// Перевіряємо, чи ми в середовищі Render/Heroku (де є DATABASE_URL)
+// Перевіряємо, чи ми в середовищі Render (де є DATABASE_URL)
 if (process.env.DATABASE_URL) {
   // Використовуємо DATABASE_URL для продакшену
   sequelize = new Sequelize(process.env.DATABASE_URL, {
-    dialect: 'postgres', // На Render за замовчуванням PostgreSQL
+    dialect: 'postgres',
     protocol: 'postgres',
     dialectOptions: {
       ssl: {
@@ -26,7 +27,7 @@ if (process.env.DATABASE_URL) {
     process.env.DB_PASSWORD,
     {
       host: process.env.DB_HOST,
-      dialect: process.env.DB_DIALECT || 'mysql', // Ваш локальний діалект (ймовірно, mysql)
+      dialect: process.env.DB_DIALECT || 'mysql',
       port: process.env.DB_PORT,
       logging: console.log // Включаємо логування для розробки
     }

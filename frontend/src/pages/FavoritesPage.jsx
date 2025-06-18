@@ -1,6 +1,6 @@
 // frontend/src/pages/FavoritesPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -9,8 +9,8 @@ import Slider from 'react-slick'; // Added for photo slider
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'; // For slider arrows
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
-// Custom arrow components for react-slick (copied from ListingsPage)
+
+// Custom arrow components for react-slick
 function SlickArrowLeft({ currentSlide, slideCount, ...props }) {
     return (
       <button
@@ -41,7 +41,7 @@ function FavoritesPage() {
     const [favoriteListings, setFavoriteListings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const { token, toggleFavorite } = useAuth();
+    const { token, toggleFavorite } = useAuth(); // Assuming toggleFavorite handles API call and local state update
 
     const fetchFavorites = useCallback(async () => {
         if (!token) {
@@ -62,15 +62,23 @@ function FavoritesPage() {
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, [token]); // Re-fetch when token changes
 
     useEffect(() => {
         fetchFavorites();
-    }, [fetchFavorites]);
+    }, [fetchFavorites]); // Run on mount and when fetchFavorites callback changes
 
     const handleRemoveFavorite = async (listingId) => {
-        await toggleFavorite(listingId); 
+        // Optimistically remove from UI
         setFavoriteListings(prev => prev.filter(l => l.id !== listingId));
+        try {
+            await toggleFavorite(listingId); // Call the context function to perform API request
+        } catch (err) {
+            console.error("Error removing favorite:", err);
+            // Optionally, re-fetch or re-add the listing if the API call fails
+            alert("Не вдалося видалити з обраних. Спробуйте ще раз.");
+            fetchFavorites(); // Re-fetch to ensure UI consistency
+        }
     };
 
     // Slider settings for the listing cards
@@ -87,8 +95,8 @@ function FavoritesPage() {
         lazyLoad: 'ondemand', 
     };
 
-    if (loading) return <div className="text-center text-slate-700 py-10">Завантаження ваших обраних...</div>;
-    if (error) return <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6 mx-auto max-w-lg">Помилка: {error}</div>;
+    if (loading) return <div className="text-center text-slate-700 py-10" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Завантаження ваших обраних...</div>;
+    if (error) return <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6 mx-auto max-w-lg" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>;
 
     return (
         <div className="relative flex size-full min-h-screen flex-col bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
@@ -116,14 +124,24 @@ function FavoritesPage() {
                                           {listing.photos && listing.photos.length > 0 ? (
                                             <div className="w-full h-60 sm:h-64 slick-listing-card">
                                               <Slider {...cardSliderSettings}>
-                                               {listing.photos.map((photoUrl, index) => (
-                              <div key={index}> 
-                                <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="..." loading="lazy" decoding="async"/> 
-                                 </div>
-                              ))}
+                                                {listing.photos.map((photoUrl, index) => (
+                                                    <div key={index}> {/* key prop on direct child of Slider */}
+                                                        {/* Use Cloudinary's dynamic image transformation for optimization if needed */}
+                                                        <img 
+                                                          src={photoUrl} // Cloudinary URL
+                                                          alt={`${listing.title} ${index + 1}`} 
+                                                          className="w-full h-60 sm:h-64 object-cover" // Ensure image covers the container
+                                                          loading="lazy" 
+                                                          decoding="async"
+                                                        /> 
+                                                    </div>
+                                                ))}
                                               </Slider>
                                             </div>
-                                          ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> )}
+                                          ) : ( 
+                                            // Placeholder if no images
+                                            <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> 
+                                          )}
                                         </Link>
                                     </div>
                                     <Link to={`/listings/${listing.id}`} className="block p-4 sm:p-5 flex flex-col flex-grow">
@@ -132,14 +150,25 @@ function FavoritesPage() {
                                         <div className="mt-auto pt-2">
                                           <div className="flex items-baseline justify-between text-[#0c151d]">
                                             <span className="text-base sm:text-lg font-bold">
-                                              {listing.type === 'monthly-rental' ? `$${parseFloat(listing.price).toFixed(0)}/міс` :
-                                               (listing.type === 'daily-rental' ? `$${parseFloat(listing.price).toFixed(0)}/день` : `$${parseFloat(listing.price).toFixed(0)}`)}
+                                              {/* Price display with Ukrainian Hryvnia symbol and locale */}
+                                              {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` :
+                                               (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
                                             </span>
                                             {(listing.rooms !== null || listing.area !== null) && (
                                                 <div className="text-sm text-[#4574a1] flex items-center space-x-2">
-                                                    {listing.rooms !== null && ( <span>{listing.rooms} {listing.rooms === 1 ? 'ліжко' : 'ліжка'}</span> )}
+                                                    {listing.rooms !== null && ( 
+                                                        <span>
+                                                            {listing.rooms} {
+                                                            // Correct pluralization for 'кімнати' (rooms) in Ukrainian
+                                                            listing.rooms === 1 ? 'кімната' : 
+                                                            (listing.rooms >= 2 && listing.rooms <= 4 ? 'кімнати' : 'кімнат')
+                                                            }
+                                                        </span> 
+                                                    )}
                                                     {listing.rooms !== null && listing.area !== null && <span>·</span>}
-                                                    {listing.area !== null && ( <span>{listing.area} м²</span> )} {/* Keeping sqft, but translated the word */}
+                                                    {listing.area !== null && ( 
+                                                        <span>{parseFloat(listing.area).toFixed(0)} м²</span> 
+                                                    )}
                                                 </div>
                                             )}
                                           </div>
@@ -151,6 +180,7 @@ function FavoritesPage() {
                     )}
                 </div>
             </div>
+            {/* Global styles for form elements and Slick Carousel */}
             <style jsx global>{`
                 .form-input, .form-textarea, .form-select { @apply shadow-sm; }
                 .tracking-tight { letter-spacing: -0.025em; }
@@ -180,14 +210,14 @@ function FavoritesPage() {
                   right: 10px;
                 }
                 .slick-listing-card .slick-prev:before, .slick-listing-card .slick-next:before {
-                  content: ''; 
+                  content: ''; /* Hide default slick arrow content */
                 }
                 .slick-listing-card .slick-disabled {
                     opacity: 0.3;
                     cursor: default;
                 }
                 .slick-listing-card .slick-dots {
-                    display: none !important;
+                    display: none !important; /* Hide dots for cleaner look */
                 }
             `}</style>
         </div>

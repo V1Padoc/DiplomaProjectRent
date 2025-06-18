@@ -1,7 +1,7 @@
 // frontend/src/pages/LoginPage.jsx
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

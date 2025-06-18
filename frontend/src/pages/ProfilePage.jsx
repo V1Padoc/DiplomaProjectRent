@@ -1,12 +1,10 @@
 // frontend/src/pages/ProfilePage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios'; // Although api.js is used, axios might be needed if api.js is just a wrapper. Let's keep it for now or verify if api.js is sufficient. Assuming api.js wraps axios.
 import api from '../api/api.js';
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000'; // This variable is defined but not used in the provided code block. It might be used elsewhere or intended for profile_photo_url construction if user.profile_photo_url is just a path.
 
 function ProfilePage() {
-  const { user, loading: authLoading, token, login } = useAuth();
+  const { user, loading: authLoading, token, login } = useAuth(); // `login` function is used to update user context
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -15,8 +13,8 @@ function ProfilePage() {
     bio: '',
     phone_number: '',
   });
-  const [profilePhotoFile, setProfilePhotoFile] = useState(null);
-  const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState(null); // Stores the actual File object
+  const [previewPhoto, setPreviewPhoto] = useState(null); // Stores URL for displaying preview (could be blob: or Cloudinary URL)
   
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -30,8 +28,9 @@ function ProfilePage() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
 
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef(null); // Ref for the hidden file input element
 
+  // Effect to initialize form data and photo preview when user data changes
   useEffect(() => {
     if (user) {
       setFormData({
@@ -40,41 +39,45 @@ function ProfilePage() {
         bio: user.bio || '',
         phone_number: user.phone_number || '',
       });
-      if (user.profile_photo_url) {
-        // Use the profile_photo_url directly from the user object
-        setPreviewPhoto(user.profile_photo_url);
-      } else {
-        setPreviewPhoto(null);
-      }
+      // Set previewPhoto to the user's current profile photo URL from the backend
+      setPreviewPhoto(user.profile_photo_url || null);
     }
-    // Clean up object URL when component unmounts or previewPhoto changes (e.g., new file selected)
-    return () => {
-      if (previewPhoto && previewPhoto.startsWith('blob:')) {
-        URL.revokeObjectURL(previewPhoto);
-      }
-    };
-  }, [user, previewPhoto]); // Added previewPhoto to dependency array for cleanup
+    // This effect does not need a cleanup function here, as individual Blob URLs
+    // are managed where they are created/replaced/no longer needed.
+  }, [user]); // Dependency on `user` ensures this runs when user data loads or changes
 
-
+  // Handler for text input changes
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Handler for file input change (profile photo selection)
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Revoke previous object URL before creating a new one
+      // IMPORTANT: Revoke the previous Blob URL before creating a new one to prevent memory leaks
       if (previewPhoto && previewPhoto.startsWith('blob:')) {
         URL.revokeObjectURL(previewPhoto);
       }
-      setProfilePhotoFile(file);
-      setPreviewPhoto(URL.createObjectURL(file));
+      setProfilePhotoFile(file); // Store the actual file to be uploaded
+      setPreviewPhoto(URL.createObjectURL(file)); // Create a Blob URL for instant preview
+    } else {
+        // If user cancels file selection, revert to previous photo or null
+        if (profilePhotoFile) { // If a file was previously selected
+            if (previewPhoto && previewPhoto.startsWith('blob:')) {
+                URL.revokeObjectURL(previewPhoto);
+            }
+            setProfilePhotoFile(null);
+            setPreviewPhoto(user?.profile_photo_url || null); // Revert to stored user photo or null
+        }
     }
   };
 
+  // Handler for submitting profile updates
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    // Clear all previous messages
     setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess('');
 
     const data = new FormData();
@@ -83,66 +86,57 @@ function ProfilePage() {
     data.append('bio', formData.bio);
     data.append('phone_number', formData.phone_number);
     if (profilePhotoFile) {
-      data.append('profilePhoto', profilePhotoFile);
+      data.append('profilePhoto', profilePhotoFile); // Append the actual File object
     }
 
     try {
       const response = await api.put('/users/profile', data, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          // 'Content-Type': 'multipart/form-data' is often set automatically by the browser for FormData
+          // 'Content-Type': 'multipart/form-data' is typically set automatically by the browser for FormData
         },
       });
       setSuccess(response.data.message || "Профіль успішно оновлено!");
-      // Assuming the backend returns the updated user object, ideally with the new profile photo URL
-      // The login function in AuthContext should ideally fetch the latest user data or update the user state with the response data
-      if (token) {
-          // A better approach is to use the user data from the response if available
-          if(response.data.user) {
-              login(token, response.data.user); // Assuming login can take user data as second arg
-          } else {
-             login(token); // Fallback to re-fetching user if login(token, userData) is not supported
-          }
+      
+      // Update the user data in AuthContext. This will trigger the `useEffect` above,
+      // which will then update `previewPhoto` with the new URL from `response.data.user`.
+      if (token && response.data.user) {
+          login(token, response.data.user); 
       }
-      setIsEditing(false);
-      setProfilePhotoFile(null);
-      // Clean up the preview URL after successful upload if it's a blob URL
-      if (previewPhoto && previewPhoto.startsWith('blob:')) {
-         URL.revokeObjectURL(previewPhoto);
-      }
-      // Ensure previewPhoto is set to the new URL from the server response
-      if (response.data.user?.profile_photo_url) {
-        setPreviewPhoto(response.data.user.profile_photo_url);
-      } else {
-        // If no new photo URL is returned, revert to original or default
-        setPreviewPhoto(user?.profile_photo_url || null);
-      }
+      
+      setIsEditing(false); // Exit editing mode
+      setProfilePhotoFile(null); // Clear the file state after successful upload
 
+      // The Blob URL (if any) is now stale and its cleanup will be handled by the `handleFileChange` on subsequent selections,
+      // or implicitly by garbage collection if no longer referenced, or if the component unmounts.
+      // Since `previewPhoto` is updated via `user` context, explicit `URL.revokeObjectURL` for the *previous* blob here is unnecessary.
 
-      setTimeout(() => setSuccess(''), 3000);
+      setTimeout(() => setSuccess(''), 3000); // Clear success message after 3 seconds
     } catch (err) {
-      // Clean up the preview URL if upload failed
+      // If upload failed, explicitly revoke the Blob URL if it exists
       if (previewPhoto && previewPhoto.startsWith('blob:')) {
          URL.revokeObjectURL(previewPhoto);
       }
-      // Revert preview photo to user's current photo on error
+      // Revert preview photo to the user's current photo stored in context
       setPreviewPhoto(user?.profile_photo_url || null);
-      setProfilePhotoFile(null);
-
+      setProfilePhotoFile(null); // Clear the file state as upload failed
 
       setError(err.response?.data?.message || 'Не вдалося оновити профіль.');
       console.error("Profile update error:", err);
-      setTimeout(() => setError(''), 3000);
+      setTimeout(() => setError(''), 3000); // Clear error message after 3 seconds
     } finally {
-      setSubmitting(false);
+      setSubmitting(false); // End submission process
     }
   };
 
+  // Handler for changing password submission
   const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
     setPasswordSubmitting(true);
+    // Clear all previous messages
     setPasswordError(''); setPasswordSuccess(''); setError(''); setSuccess('');
 
+    // Client-side validation for new passwords
     if (newPassword !== confirmNewPassword) {
         setPasswordError('Новий пароль та підтвердження не збігаються.');
         setPasswordSubmitting(false); return;
@@ -158,22 +152,23 @@ function ProfilePage() {
             { headers: { Authorization: `Bearer ${token}` } }
         );
         setPasswordSuccess(response.data.message || "Пароль успішно змінено!");
+        // Clear password fields on success
         setOldPassword(''); setNewPassword(''); setConfirmNewPassword('');
         setTimeout(() => {
             setPasswordSuccess('');
-            // setShowPasswordForm(false); // Optionally hide after success
+            // setShowPasswordForm(false); // Optionally hide password form after success
         }, 3000);
     } catch (err) {
         console.error("Password change error:", err);
         setPasswordError(err.response?.data?.message || 'Не вдалося змінити пароль.');
-        setTimeout(() => setPasswordError(''), 3000);
+        setTimeout(() => setPasswordError(''), 3000); // Clear error after 3 seconds
     } finally {
         setPasswordSubmitting(false);
     }
   };
 
+  // Helper function to generate UI Avatars URL if no profile photo is available
   const getUiAvatarUrl = (name, lastName) => {
-    // Fallback to 'U' for 'User' if no name/last name and email's first char
     const initials = `${name ? name.charAt(0) : ''}${lastName ? lastName.charAt(0) : ''}`.trim() || (user?.email ? user.email.charAt(0) : 'U');
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=128&font-size=0.5&bold=true`;
   };
@@ -206,7 +201,7 @@ function ProfilePage() {
               {isEditing && (
                  <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => fileInputRef.current?.click()} // Trigger hidden file input click
                     className="absolute -bottom-2 -right-2 bg-slate-600 hover:bg-slate-700 text-white p-2 rounded-full shadow-md transition-colors"
                     aria-label="Змінити фото профілю"
                   >
@@ -222,9 +217,14 @@ function ProfilePage() {
               <p className="text-[#49749c] text-base font-normal leading-normal capitalize">{user.role === 'owner' ? 'Власник' : 'Користувач'}</p>
               <p className="text-[#49749c] text-sm font-normal leading-normal">Приєднався {joinedDate}</p>
             </div>
+            {/* Conditional button for editing profile */}
             {!isEditing && !showPasswordForm && (
               <button
-                onClick={() => { setIsEditing(true); setShowPasswordForm(false); setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess('');}}
+                onClick={() => { 
+                    setIsEditing(true); 
+                    setShowPasswordForm(false); // Ensure password form is hidden
+                    setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess(''); // Clear all messages
+                }}
                 className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-[#e7edf4] text-[#0d151c] text-sm font-bold leading-normal tracking-[0.015em] w-full max-w-xs sm:w-auto hover:bg-slate-200 transition-colors"
               >
                 <span className="truncate">Редагувати профіль</span>
@@ -232,14 +232,14 @@ function ProfilePage() {
             )}
           </div>
 
-          {/* Messages Area */}
+          {/* Messages Area (errors/success from profile update or password change) */}
           {error && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Помилка</p><p>{error}</p></div>}
           {success && <div className="mb-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Успіх</p><p>{success}</p></div>}
           {passwordError && <div className="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Помилка пароля</p><p>{passwordError}</p></div>}
           {passwordSuccess && <div className="mb-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Успіх</p><p>{passwordSuccess}</p></div>}
 
 
-          {/* View Profile Information or Edit Form */}
+          {/* Conditional rendering: View Profile Info / Edit Form / Change Password Form */}
           {!isEditing && !showPasswordForm ? (
             <>
               <h2 className="text-[#0d151c] text-xl font-bold leading-tight tracking-tight mb-4">Інформація про профіль</h2>
@@ -259,14 +259,18 @@ function ProfilePage() {
               </div>
               <div className="mt-8">
                 <button
-                  onClick={() => { setShowPasswordForm(true); setIsEditing(false); setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess('');}}
+                  onClick={() => { 
+                      setShowPasswordForm(true); 
+                      setIsEditing(false); // Ensure editing mode is off
+                      setError(''); setSuccess(''); setPasswordError(''); setPasswordSuccess(''); // Clear all messages
+                  }}
                   className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-[#e7edf4] text-[#0d151c] text-sm font-bold leading-normal tracking-[0.015em] w-full max-w-xs sm:w-auto hover:bg-slate-200 transition-colors"
                 >
                   <span className="truncate">Змінити пароль</span>
                 </button>
               </div>
             </>
-          ) : isEditing ? (
+          ) : isEditing ? ( // Show edit profile form
             <form onSubmit={handleSubmit}>
               <h2 className="text-[#0d151c] text-xl font-bold leading-tight tracking-tight mb-6">Редагувати інформацію профілю</h2>
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
@@ -296,18 +300,23 @@ function ProfilePage() {
               <div className="mt-8 flex flex-col sm:flex-row sm:justify-end gap-3">
                 <button type="button"
                   onClick={() => {
-                      setIsEditing(false);
-                      // Revert form data and preview photo to current user data
+                      setIsEditing(false); // Exit editing mode
+                      // Revert form data to current user data from context
                       if (user) {
-                          setFormData({ name: user.name || '', last_name: user.last_name || '', bio: user.bio || '', phone_number: user.phone_number || '' });
-                          // Clean up the blob URL if user clicked cancel after selecting a file
-                           if (previewPhoto && previewPhoto.startsWith('blob:')) {
+                          setFormData({ 
+                              name: user.name || '', 
+                              last_name: user.last_name || '', 
+                              bio: user.bio || '', 
+                              phone_number: user.phone_number || '' 
+                          });
+                          // Clean up the Blob URL if user selected a new file and then clicked cancel
+                          if (previewPhoto && previewPhoto.startsWith('blob:')) {
                              URL.revokeObjectURL(previewPhoto);
                            }
-                          setPreviewPhoto(user.profile_photo_url || null);
-                          setProfilePhotoFile(null);
+                          setPreviewPhoto(user.profile_photo_url || null); // Revert preview to original
+                          setProfilePhotoFile(null); // Clear the selected file
                       }
-                      setError(''); setSuccess('');
+                      setError(''); setSuccess(''); // Clear messages
                   }}
                   className="order-2 sm:order-1 flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-slate-200 hover:bg-slate-300 text-[#0d151c] text-sm font-bold transition-colors"
                 > Скасувати </button>
@@ -316,7 +325,7 @@ function ProfilePage() {
                 > {submitting ? 'Збереження...' : 'Зберегти зміни'} </button>
               </div>
             </form>
-          ) : ( // showPasswordForm is true
+          ) : ( // showPasswordForm is true, show change password form
             <form onSubmit={handleChangePasswordSubmit}>
                 <h2 className="text-[#0d151c] text-xl font-bold leading-tight tracking-tight mb-6">Змінити пароль</h2>
                 <div className="space-y-5">
@@ -341,7 +350,12 @@ function ProfilePage() {
                 </div>
                 <div className="mt-8 flex flex-col sm:flex-row sm:justify-end gap-3">
                     <button type="button"
-                        onClick={() => { setShowPasswordForm(false); setOldPassword(''); setNewPassword(''); setConfirmNewPassword(''); setPasswordError(''); setPasswordSuccess('');}}
+                        onClick={() => { 
+                            setShowPasswordForm(false); // Hide password form
+                            // Clear password fields and messages
+                            setOldPassword(''); setNewPassword(''); setConfirmNewPassword(''); 
+                            setPasswordError(''); setPasswordSuccess('');
+                        }}
                         className="order-2 sm:order-1 flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-slate-200 hover:bg-slate-300 text-[#0d151c] text-sm font-bold transition-colors"
                     > Скасувати </button>
                     <button type="submit" disabled={passwordSubmitting}
@@ -352,6 +366,7 @@ function ProfilePage() {
         )}
         </div>
       </div>
+      {/* Global CSS for forms */}
       <style jsx global>{`
         /* Ensure Tailwind forms plugin is active for form-input, form-textarea */
         .form-input, .form-textarea {

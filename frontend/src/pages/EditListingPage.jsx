@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+
 import api from '../api/api.js';
 import { useAuth } from '../context/AuthContext';
 
@@ -34,7 +34,6 @@ import {
 
 // Import the reusable SortablePhotoItem component
 import { SortablePhotoItem } from '../components/SortablePhotoItem'; // Adjust path if needed
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 
 // Leaflet icon fix (important for markers to display correctly)
 // This is a common workaround for issues with Leaflet's default icon paths in Webpack environments.
@@ -125,27 +124,29 @@ function EditListingPage() {
     location: '', latitude: '', longitude: '', amenities: '',
     type: 'monthly-rental', status: '',
   });
-  const [displayPhotos, setDisplayPhotos] = useState([]);
-  const [activePhotoId, setActivePhotoId] = useState(null);
+  const [displayPhotos, setDisplayPhotos] = useState([]); // Stores {id, type, file?, originalUrl?, previewUrl}
+  const [activePhotoId, setActivePhotoId] = useState(null); // For DndContext DragOverlay
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitSuccess, setSubmitSuccess] = useState(null);
-  const [markerPosition, setMarkerPosition] = useState(null);
-  const [mapCenter, setMapCenter] = useState([51.505, -0.09]);
-  const mapRef = useRef(null);
-  const newPhotoInputRef = useRef(null);
+  const [markerPosition, setMarkerPosition] = useState(null); // LatLng object for Leaflet marker
+  const [mapCenter, setMapCenter] = useState([51.505, -0.09]); // Default map center (e.g., London)
+  const mapRef = useRef(null); // Ref to access the Leaflet map instance
+  const newPhotoInputRef = useRef(null); // Ref for hidden file input
   const photoDropZoneRef = useRef(null); // Ref for the styled drop zone
 
   const navigate = useNavigate();
   const { token, user } = useAuth();
 
+  // Dnd-kit sensors configuration
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Drag starts after 5px movement
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  // Effect to fetch listing data when component mounts or listingId/token changes
   useEffect(() => {
     const fetchListingForEdit = async () => {
       try {
@@ -153,7 +154,9 @@ function EditListingPage() {
         const config = { headers: { 'Authorization': `Bearer ${token}` } };
         const response = await api.get(`/listings/${listingId}/edit`, config);
         const fetchedListing = response.data;
-        setOriginalListing(fetchedListing);
+        setOriginalListing(fetchedListing); // Store original listing data
+        
+        // Populate form data
         setFormData({
           title: fetchedListing.title || '',
           description: fetchedListing.description || '',
@@ -167,82 +170,107 @@ function EditListingPage() {
           type: fetchedListing.type || 'monthly-rental',
           status: fetchedListing.status || '',
         });
+
+        // Initialize displayPhotos with existing photos from the fetched listing
         const existingPhotos = Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [];
-       setDisplayPhotos(existingPhotos.map((photoUrl, index) => ({
-  id: `existing-${Date.now()}-${index}`, // ID можна спростити
-  type: 'existing',
-  // Тепер `originalUrl` зберігає повну адресу
-  originalUrl: photoUrl, 
-  // І `previewUrl` є тією ж самою адресою
-  previewUrl: photoUrl 
-})));
+        setDisplayPhotos(existingPhotos.map((photoUrl, index) => ({
+            id: `existing-${listingId}-${index}`, // More stable ID for existing photos
+            type: 'existing', // Mark as existing
+            originalUrl: photoUrl, // Store the full Cloudinary URL
+            previewUrl: photoUrl // Use the same URL for display
+        })));
+
+        // Set initial map marker position and center
         if (fetchedListing.latitude && fetchedListing.longitude) {
             const initialPos = { lat: parseFloat(fetchedListing.latitude), lng: parseFloat(fetchedListing.longitude) };
-            setMarkerPosition(initialPos); setMapCenter([initialPos.lat, initialPos.lng]);
-        } else { setMarkerPosition(null); }
+            setMarkerPosition(initialPos);
+            setMapCenter([initialPos.lat, initialPos.lng]); // Center map on listing location
+        } else {
+            setMarkerPosition(null); // No initial marker if no coordinates
+        }
       } catch (err) {
         console.error('Помилка при отриманні оголошення для редагування:', err);
         setError(err.response?.data?.message || 'Не вдалося завантажити дані оголошення.');
       } finally { setLoading(false); }
     };
+    
+    // Fetch data only if listingId and token are available
     if (listingId && token) { fetchListingForEdit(); }
     else if (!token) { setLoading(false); setError('Відсутній токен автентифікації.'); }
-  }, [listingId, token]);
+  }, [listingId, token]); // Dependencies for this effect
 
+  // Cleanup effect for new photo preview URLs (revokeObjectURL)
   useEffect(() => {
     return () => {
       displayPhotos.forEach(photo => {
         if (photo.type === 'new' && photo.previewUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(photo.previewUrl);
+          URL.revokeObjectURL(photo.previewUrl); // Clean up Blob URLs to prevent memory leaks
         }
       });
     };
+  // The dependency array is intentionally empty, or careful about `displayPhotos` changes.
+  // If `displayPhotos` is a dependency, this cleanup will run *every* time displayPhotos changes,
+  // potentially revoking URLs that are still in use by the UI. This is a common React pitfall.
+  // A better approach often involves tracking 'old' photos to revoke their URLs or
+  // only revoking when component unmounts. For this case, running only on unmount is safer.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Callback to update marker position and form data for latitude/longitude
   const handleMapPositionChange = useCallback((latlng) => {
     setMarkerPosition(latlng);
     setFormData(prev => ({ ...prev, latitude: latlng.lat.toFixed(7), longitude: latlng.lng.toFixed(7) }));
-  }, []);
+  }, []); // No dependencies, as it only uses latlng directly
 
+  // Callback to handle geocoding results from the search field
   const handleGeocodeResult = useCallback((latlng, addressLabel) => {
-    handleMapPositionChange(latlng);
-    setFormData(prev => ({ ...prev, location: addressLabel }));
-    if (mapRef.current) { mapRef.current.flyTo(latlng, 15); }
-    else { setMapCenter([latlng.lat, latlng.lng]); }
-  }, [handleMapPositionChange]);
+    handleMapPositionChange(latlng); // Update marker and lat/lng
+    setFormData(prev => ({ ...prev, location: addressLabel })); // Update location text field
+    if (mapRef.current) { 
+        mapRef.current.flyTo(latlng, 15); // Fly map to result with a higher zoom level
+    } else { 
+        setMapCenter([latlng.lat, latlng.lng]); // If map ref not ready, just update center state
+    }
+  }, [handleMapPositionChange]); // Depends on handleMapPositionChange
 
+  // Generic handler for form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Handler for adding new photos from file input
   const handleNewPhotosChange = (e) => { 
     const files = Array.from(e.target.files);
     const newPhotoItems = files.map((file, index) => ({
-      id: `new-${Date.now()}-${index}-${file.name}`, type: 'new',
-      file: file, previewUrl: URL.createObjectURL(file)
+      id: `new-${Date.now()}-${index}-${file.name.replace(/\s+/g, '-')}`, // Create unique ID for new photos
+      type: 'new', // Mark as new
+      file: file, // Store the actual file object
+      previewUrl: URL.createObjectURL(file) // Create a temporary URL for preview
     }));
     setDisplayPhotos(prevPhotos => [...prevPhotos, ...newPhotoItems]);
-    if (newPhotoInputRef.current) newPhotoInputRef.current.value = "";
+    if (newPhotoInputRef.current) {
+        newPhotoInputRef.current.value = ""; // Clear file input to allow re-selection of same file
+    }
   };
 
+  // Drag-and-drop handlers for the photo drop zone
   const handleDrop = useCallback((event) => {
     event.preventDefault();
     event.stopPropagation();
     if (photoDropZoneRef.current) {
-      photoDropZoneRef.current.classList.remove('border-blue-500', 'bg-blue-50');
+      photoDropZoneRef.current.classList.remove('border-blue-500', 'bg-blue-50'); // Remove drag-over styles
     }
     if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
       const files = Array.from(event.dataTransfer.files);
       const newPhotoItems = files.map((file, index) => ({
-        id: `new-drop-${Date.now()}-${index}-${file.name}`, // Ensure unique ID
+        id: `new-drop-${Date.now()}-${index}-${file.name.replace(/\s+/g, '-')}`, 
         type: 'new',
         file: file,
         previewUrl: URL.createObjectURL(file)
       }));
       setDisplayPhotos(prevPhotos => [...prevPhotos, ...newPhotoItems]);
-      event.dataTransfer.clearData();
+      event.dataTransfer.clearData(); // Clear dataTransfer to prevent default browser behavior
     }
   }, []); 
 
@@ -250,7 +278,7 @@ function EditListingPage() {
     event.preventDefault();
     event.stopPropagation();
     if (photoDropZoneRef.current) {
-      photoDropZoneRef.current.classList.add('border-blue-500', 'bg-blue-50');
+      photoDropZoneRef.current.classList.add('border-blue-500', 'bg-blue-50'); // Add drag-over styles
     }
   }, []);
 
@@ -258,13 +286,15 @@ function EditListingPage() {
     event.preventDefault();
     event.stopPropagation();
     if (photoDropZoneRef.current) {
-      photoDropZoneRef.current.classList.remove('border-blue-500', 'bg-blue-50');
+      photoDropZoneRef.current.classList.remove('border-blue-500', 'bg-blue-50'); // Remove drag-over styles
     }
   }, []);
 
+  // Handler for removing a photo from the display list
   const handleRemovePhoto = (idToRemove) => {
     setDisplayPhotos(prevPhotos => {
       const photoToRemove = prevPhotos.find(p => p.id === idToRemove);
+      // Revoke Blob URL if it was a new photo to prevent memory leaks
       if (photoToRemove?.type === 'new' && photoToRemove.previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(photoToRemove.previewUrl);
       }
@@ -272,34 +302,49 @@ function EditListingPage() {
     });
   };
 
+  // Dnd-kit handlers for drag and drop reordering
   function handleDragStart(event) { setActivePhotoId(event.active.id); }
   function handleDragEnd(event) {
     const { active, over } = event;
-    setActivePhotoId(null);
+    setActivePhotoId(null); // Clear active photo ID for overlay
     if (over && active.id !== over.id) {
       setDisplayPhotos(items => {
         const oldIndex = items.findIndex(item => item.id === active.id);
         const newIndex = items.findIndex(item => item.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
+        return arrayMove(items, oldIndex, newIndex); // Reorder photos in the array
       });
     }
   }
-  function handleDragCancel() { setActivePhotoId(null); }
+  function handleDragCancel() { setActivePhotoId(null); } // Clear active photo ID if drag is cancelled
 
+  // Handler for form submission (updating listing)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError(null); setSubmitSuccess(null); setSubmitting(true);
+    
     const updateFormData = new FormData();
+    // Append form fields to FormData
     Object.keys(formData).forEach(key => {
+        // Only allow admin to change status, otherwise it's handled by backend (set to pending)
         if (key === 'status' && user?.role === 'admin' && formData.status !== originalListing?.status) {
              updateFormData.append(key, formData[key]);
-        } else if (key !== 'status') {
+        } else if (key !== 'status') { // Always append other fields
             updateFormData.append(key, formData[key]);
         }
     });
-    const photoManifest = displayPhotos.map(p => p.type === 'existing' ? p.originalFilename : '__NEW_PHOTO__');
+
+    // Create photo manifest:
+    // For existing photos, send their original Cloudinary URL.
+    // For new photos, send a special marker `__NEW_PHOTO__`.
+    const photoManifest = displayPhotos.map(p => p.type === 'existing' ? p.originalUrl : '__NEW_PHOTO__');
     updateFormData.append('photoManifest', JSON.stringify(photoManifest));
-    displayPhotos.forEach(p => { if (p.type === 'new' && p.file) updateFormData.append('photos', p.file); });
+
+    // Append new files to FormData
+    displayPhotos.forEach(p => { 
+        if (p.type === 'new' && p.file) {
+            updateFormData.append('photos', p.file); // 'photos' is the field name for multer
+        }
+    });
 
     try {
       const response = await api.put(`/listings/${listingId}`, updateFormData, {
@@ -307,24 +352,30 @@ function EditListingPage() {
       });
       setSubmitSuccess(response.data.message || "Оголошення успішно оновлено!");
       console.log('Оголошення оновлено:', response.data.listing);
+      
+      // Cleanup Blob URLs for new photos after successful upload
       displayPhotos.forEach(p => { if (p.type === 'new' && p.previewUrl.startsWith('blob:')) URL.revokeObjectURL(p.previewUrl); });
+      
+      // Update displayPhotos with the new list of photo URLs received from the server
       const updatedListingFromServer = response.data.listing;
-      setOriginalListing(prev => ({...prev, ...updatedListingFromServer }));
-      const serverPhotos = updatedListingFromServer.photos || [];
-     setDisplayPhotos(serverPhotos.map((photoUrl, index) => ({
-  id: `updated-${Date.now()}-${index}`,
-  type: 'existing',
-  originalUrl: photoUrl,
-  previewUrl: photoUrl
-})));
-      setTimeout(() => { navigate('/manage-listings'); }, 2500);
+      setOriginalListing(prev => ({...prev, ...updatedListingFromServer })); // Update original listing with new server data
+      const serverPhotos = Array.isArray(updatedListingFromServer.photos) ? updatedListingFromServer.photos : [];
+      setDisplayPhotos(serverPhotos.map((photoUrl, index) => ({
+          id: `updated-${listingId}-${index}`, // Generate new stable IDs
+          type: 'existing', // All photos are now existing
+          originalUrl: photoUrl,
+          previewUrl: photoUrl
+      })));
+      
+      setTimeout(() => { navigate('/manage-listings'); }, 2500); // Redirect after a short delay
     } catch (err) {
       console.error('Помилка при оновленні оголошення:', err);
       setSubmitError(err.response?.data?.message || 'Не вдалося оновити оголошення. Будь ласка, спробуйте ще раз.');
-      setTimeout(() => setSubmitError(null), 3000);
+      setTimeout(() => setSubmitError(null), 3000); // Clear error after 3 seconds
     } finally { setSubmitting(false); }
   };
 
+  // Loading and Error states for the page
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-gray-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
@@ -342,6 +393,7 @@ function EditListingPage() {
   }
 
   if (!originalListing) {
+      // This state implies loading is done, but originalListing is still null (e.g., fetch failed without explicit error).
       return (
           <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-gray-700 p-10 text-center" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
               Дані оголошення недоступні.
@@ -349,6 +401,7 @@ function EditListingPage() {
       );
   }
 
+  // Find the active photo for DragOverlay based on its ID
   const activePhotoForOverlay = activePhotoId ? displayPhotos.find(p => p.id === activePhotoId) : null;
 
   return (
@@ -453,7 +506,7 @@ function EditListingPage() {
                 <label className="block text-[#49749c] text-sm font-medium mb-2">Фотографії (Перетягніть для зміни порядку)</label>
                 <div
                     ref={photoDropZoneRef}
-                    onClick={() => newPhotoInputRef.current?.click()} 
+                    onClick={() => newPhotoInputRef.current?.click()} // Click hidden input on drop zone click
                     onDrop={handleDrop}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
@@ -469,20 +522,22 @@ function EditListingPage() {
                     ref={newPhotoInputRef}
                     id="new-photos-input-hidden" 
                     type="file" multiple accept="image/*" onChange={handleNewPhotosChange}
-                    className="hidden"
+                    className="hidden" // Hidden input for file selection
                 />
             
+                {/* DndContext for drag-and-drop reordering of photos */}
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
                     <SortableContext items={displayPhotos.map(p => p.id)} strategy={rectSortingStrategy}>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-2 border border-slate-200 rounded-lg min-h-[100px] bg-slate-50">
                         {displayPhotos.map((photo) => (
                             <SortablePhotoItem
                                 key={photo.id} id={photo.id} photo={photo} onRemove={handleRemovePhoto}
-                                isExisting={photo.type === 'existing'}
+                                isExisting={photo.type === 'existing'} // Pass prop to differentiate new/existing for styling
                             />
                         ))}
                         </div>
                     </SortableContext>
+                    {/* DragOverlay for smooth dragging visual */}
                     <DragOverlay dropAnimation={null}>
                         {activePhotoForOverlay ? (
                         <div className="relative w-28 h-28 sm:w-32 sm:h-32 border rounded-md overflow-hidden shadow-2xl bg-white z-50">
@@ -504,13 +559,14 @@ function EditListingPage() {
             </div>
           </form>
 
-          {/* Moved Messages to the bottom of the form area */}
+          {/* Messages for submission status */}
           {submitting && !submitSuccess && !submitError && <div className="mt-6 text-center text-blue-600 p-3 bg-blue-50 rounded-md">Збереження змін, будь ласка, зачекайте...</div>}
           {submitSuccess && <div className="mt-6 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md" role="alert"><p className="font-bold">Успіх!</p><p>{submitSuccess}</p></div>}
           {submitError && <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert"><p className="font-bold">Помилка</p><p>{submitError}</p></div>}
           
         </div>
       </div>
+      {/* Global CSS for form elements and Leaflet-Geosearch styling */}
       <style jsx global>{`
         .form-input, .form-textarea, .form-select { @apply shadow-sm; }
         .tracking-tight { letter-spacing: -0.025em; }
