@@ -28,14 +28,12 @@ const formatLastMessageTimestamp = (timestampStr) => {
 // Helper to get avatar URL, similar to ProfilePage
 const getAvatarUrl = (profileImageUrl, nameOrEmail) => {
     if (profileImageUrl) {
-        const filename = profileImageUrl.split('/').pop();
-        return `${SERVER_URL}/uploads/profiles/${filename}`; // Adjust path if your backend serves from a subfolder
+        return profileImageUrl; // <-- Повертаємо URL без змін
     }
-    // Fallback to ui-avatars if no profile image
+    // Fallback-логіка залишається такою ж
     const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2) : 'U';
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=96&font-size=0.4&bold=true`;
 };
-
 
 function MyChatsPage() {
     const [conversations, setConversations] = useState([]);

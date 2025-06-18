@@ -225,8 +225,8 @@ function ListingDetail() {
     if (error) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-red-600" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Помилка: {error}</div>;
     if (!listing) return <div className="flex justify-center items-center min-h-screen bg-slate-50 text-xl text-slate-700" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>Оголошення не знайдено.</div>;
 
-    const slides = listing.photos?.map((photoFilename, index) => ({
-        src: `${SERVER_URL}/uploads/${photoFilename}`,
+    const slides = listing.photos?.map((photoUrl, index) => ({
+       src: photoUrl,
         title: `${listing.title} - Фото ${index + 1}`
     })) || [];
 
@@ -241,10 +241,7 @@ function ListingDetail() {
 
     const getAvatarUrl = (profileImageUrl, nameOrEmail) => {
         if (profileImageUrl) {
-            // Assuming profile_image_url contains a path like /uploads/profiles/filename.ext
-            // We need to ensure it's pointing to the correct uploads directory for profiles
-            const filename = profileImageUrl.split('/').pop();
-            return `${SERVER_URL}/uploads/profiles/${filename}`;
+                  return profileImageUrl; 
         }
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(nameOrEmail || 'U')}&background=random&size=56&color=fff&font-size=0.5`;
     };

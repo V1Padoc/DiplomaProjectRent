@@ -5,10 +5,11 @@ const router = express.Router();
 const listingController = require('../controllers/listingController');
 const optionalAuthMiddleware = require('../middleware/optionalAuthMiddleware');
 const authMiddleware = require('../middleware/authMiddleware'); // Import the auth middleware
-const upload = require('../config/multerConfig'); // Import the configured multer instance
+const upload = require('../config/cloudinaryConfig');
+const multer = require('multer'); // Import the configured multer instance
 const messageController = require('../controllers/messageController');
 const favoriteController = require('../controllers/favoriteController');
-
+const upload = multer({ storage: upload.listingsStorage });
 // --- IMPORT VALIDATORS ---
 const {
   createListingValidationRules,

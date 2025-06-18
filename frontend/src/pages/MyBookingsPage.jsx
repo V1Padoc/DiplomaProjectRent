@@ -43,10 +43,10 @@ function SlickCardArrowRight({ currentSlide, slideCount, ...props }) {
     );
 }
 
-const getListingImageUrl = (photoFilename) => {
-    if (photoFilename) {
-        return `${SERVER_URL}/uploads/${photoFilename}`;
-    }
+const getListingImageUrl = (photoUrl) => {
+    if (photoUrl) {
+    return photoUrl;
+}
     return 'https://via.placeholder.com/400x300.png?text=Зображення+відсутнє';
 };
 const fallbackImage = 'https://via.placeholder.com/400x300.png?text=Немає+зображень+для+оголошення';

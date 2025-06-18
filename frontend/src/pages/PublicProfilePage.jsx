@@ -37,10 +37,10 @@ function SlickListingCardArrowRight({ currentSlide, slideCount, ...props }) {
     );
 }
 
-const getListingImageUrl = (photoFilename) => {
-    if (photoFilename) {
-        return `${SERVER_URL}/uploads/${photoFilename}`;
-    }
+const getListingImageUrl = (photoUrl) => {
+   if (photoUrl) {
+    return photoUrl;
+}
     return 'https://via.placeholder.com/400x300.png?text=Зображення+відсутнє'; // Translated
 };
 const fallbackImage = 'https://via.placeholder.com/400x300.png?text=Немає+зображень+для+оголошення'; // Translated
@@ -89,10 +89,9 @@ function PublicProfilePage() {
 
     const { user: profileUser, listings: userListings } = profileData;
 
-    const profileAvatar = profileUser.profile_photo_url
-        ? `${SERVER_URL}/uploads/profiles/${profileUser.profile_photo_url.split('/').pop()}` // Ensure correct path for profiles
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(profileUser.name || profileUser.email || 'U')}&background=random&color=fff&size=160&font-size=0.4&bold=true`;
-
+   const profileAvatar = profileUser.profile_photo_url
+  ? profileUser.profile_photo_url // <-- Просто беремо готовий URL
+  : `https://ui-avatars.com/api/?name=${encodeURIComponent(profileUser.name || profileUser.email || 'U')}&background=random&color=fff&size=160&font-size=0.4&bold=true`;
     const listingSliderSettings = {
         dots: true,
         infinite: true,

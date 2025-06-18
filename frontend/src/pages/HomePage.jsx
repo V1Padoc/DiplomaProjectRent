@@ -8,10 +8,10 @@ import { MagnifyingGlassIcon, HomeModernIcon, KeyIcon, ChatBubbleLeftRightIcon, 
 import { useAuth } from '../context/AuthContext';
 const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
 // Helper to construct image URLs, similar to other pages
-const getListingImageUrl = (photoFilename) => {
-    if (photoFilename) {
-        // Assuming photoFilename is just the name like "image.jpg"
-        return `${SERVER_URL}/uploads/${photoFilename}`;
+const getListingImageUrl = (photoUrl) => {
+    if (photoUrl) {
+       
+        return photoUrl;
     }
     // Fallback if no photo or filename is undefined
     return 'https://via.placeholder.com/1920x1080.png?text=Rental+Space'; // Generic fallback

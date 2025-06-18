@@ -151,12 +151,12 @@ function ManageListingsPage() {
                           {listing.photos && listing.photos.length > 0 ? (
                             <div className="w-full h-60 sm:h-64 slick-listing-card">
                               <Slider {...cardSliderSettings}>
-                                {listing.photos.map((photo, index) => (
-                                  <div key={index}> <img src={`${SERVER_URL}/uploads/thumb-${photo}`} alt={`${listing.title} ${index + 1}`} className="w-full h-60 sm:h-64 object-cover" loading="lazy" decoding="async"
-                                  
-                                  
-                                  /> </div>
-                                ))}
+                               {listing.photos.map((photoUrl, index) => (
+                                                         <div key={index}> 
+    
+                                                          <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="..." loading="lazy" decoding="async" /> 
+                                                         </div>
+                                                          ))}
                               </Slider>
                             </div>
                           ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Немає зображення</div> )}

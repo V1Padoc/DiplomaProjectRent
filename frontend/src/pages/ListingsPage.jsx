@@ -480,7 +480,7 @@ function ListingsPage() {
                                   <div key={index}>
                                     {/* --- THE CORE FRONTEND CHANGE --- */}
                                     <img 
-                                      src={`${SERVER_URL}/uploads/thumb-${photo}`} // <--- Use the thumbnail
+                                      src={photo}// <--- Use the thumbnail
                                       alt={`${listing.title} ${index + 1}`} 
                                       className="w-full h-60 sm:h-64 object-cover"
                                       loading="lazy" // <--- Native browser lazy loading

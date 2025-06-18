@@ -41,8 +41,8 @@ function ProfilePage() {
       });
       if (user.profile_photo_url) {
         // Ensure the URL is constructed correctly if profile_photo_url is just a filename
-        const filename = user.profile_photo_url.split('/').pop();
-        setPreviewPhoto(`${SERVER_URL}/uploads/profiles/${filename}`);
+       // const filename = user.profile_photo_url.split('/').pop();
+        setPreviewPhoto(response.data.user.profile_photo_url);
       } else {
         setPreviewPhoto(null);
       }
@@ -257,7 +257,7 @@ function ProfilePage() {
                       setIsEditing(false);
                       if (user) {
                           setFormData({ name: user.name || '', last_name: user.last_name || '', bio: user.bio || '', phone_number: user.phone_number || '' });
-                          setPreviewPhoto(user.profile_photo_url ? `${SERVER_URL}/uploads/profiles/${user.profile_photo_url.split('/').pop()}` : null);
+                          setPreviewPhoto(user.profile_photo_url || null);
                           setProfilePhotoFile(null);
                       }
                       setError(''); setSuccess('');

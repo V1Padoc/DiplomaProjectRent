@@ -367,7 +367,7 @@ function MapListingsPage() {
                                 <Popup>
                                     <div className="w-48">
                                         {listing.photos && listing.photos.length > 0 && (
-                                            <img src={`${SERVER_URL}/uploads/${listing.photos[0]}`} alt={listing.title} className="w-full h-24 object-cover rounded-md mb-2"/>
+                                            <img src={listing.photos[0]} alt={listing.title} className="w-full h-24 object-cover rounded-md mb-2"/>
                                         )}
                                         <h3 className="font-semibold text-base mb-1 text-[#0c151d] truncate">{listing.title}</h3>
                                         <p className="text-xs text-[#4574a1] mb-1 truncate">{listing.location}</p>
@@ -439,9 +439,12 @@ function MapListingsPage() {
                                                 {listing.photos && listing.photos.length > 0 ? (
                                                     <div className="w-full h-48 sm:h-56 slick-listing-card">
                                                     <Slider {...listCardSliderSettings}>
-                                                        {listing.photos.map((photo, index) => (
-                                                        <div key={index}> <img src={`${SERVER_URL}/uploads/thumb-${photo}`}  alt={`${listing.title} ${index + 1}`} className="w-full h-48 sm:h-56 object-cover" loading="lazy" decoding="async" /> </div>
-                                                        ))}
+                                                      {listing.photos.map((photoUrl, index) => (
+                                                         <div key={index}> 
+    
+                                                          <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="..." loading="lazy" decoding="async" /> 
+                                                         </div>
+                                                          ))}
                                                     </Slider>
                                                     </div>
                                                 ) : ( <div className="w-full h-48 sm:h-56 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> )}

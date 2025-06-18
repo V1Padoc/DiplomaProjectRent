@@ -25,8 +25,7 @@ const formatDateHeader = (dateString) => {
 
 const getAvatarUrl = (profileImageUrl, nameOrEmail, size = 96) => {
     if (profileImageUrl) {
-        const filename = profileImageUrl.split('/').pop();
-        return `${SERVER_URL}/uploads/profiles/${filename}`;
+       return profileImageUrl; 
     }
     // 'U' for 'User' in English, 'К' for 'Користувач' in Ukrainian. Could be 'К' but 'U' is widely understood.
     const initials = nameOrEmail ? nameOrEmail.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'U'; 

@@ -168,10 +168,14 @@ function EditListingPage() {
           status: fetchedListing.status || '',
         });
         const existingPhotos = Array.isArray(fetchedListing.photos) ? fetchedListing.photos : [];
-        setDisplayPhotos(existingPhotos.map((filename, index) => ({
-          id: `existing-${Date.now()}-${index}-${filename}`, type: 'existing',
-          originalFilename: filename, previewUrl: `${SERVER_URL}/uploads/${filename}`
-        })));
+       setDisplayPhotos(existingPhotos.map((photoUrl, index) => ({
+  id: `existing-${Date.now()}-${index}`, // ID можна спростити
+  type: 'existing',
+  // Тепер `originalUrl` зберігає повну адресу
+  originalUrl: photoUrl, 
+  // І `previewUrl` є тією ж самою адресою
+  previewUrl: photoUrl 
+})));
         if (fetchedListing.latitude && fetchedListing.longitude) {
             const initialPos = { lat: parseFloat(fetchedListing.latitude), lng: parseFloat(fetchedListing.longitude) };
             setMarkerPosition(initialPos); setMapCenter([initialPos.lat, initialPos.lng]);
@@ -307,10 +311,12 @@ function EditListingPage() {
       const updatedListingFromServer = response.data.listing;
       setOriginalListing(prev => ({...prev, ...updatedListingFromServer }));
       const serverPhotos = updatedListingFromServer.photos || [];
-      setDisplayPhotos(serverPhotos.map((filename, index) => ({
-        id: `updated-${Date.now()}-${index}-${filename}`, type: 'existing',
-        originalFilename: filename, previewUrl: `${SERVER_URL}/uploads/${filename}`
-      })));
+     setDisplayPhotos(serverPhotos.map((photoUrl, index) => ({
+  id: `updated-${Date.now()}-${index}`,
+  type: 'existing',
+  originalUrl: photoUrl,
+  previewUrl: photoUrl
+})));
       setTimeout(() => { navigate('/manage-listings'); }, 2500);
     } catch (err) {
       console.error('Помилка при оновленні оголошення:', err);
