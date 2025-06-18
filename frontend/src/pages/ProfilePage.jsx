@@ -1,9 +1,10 @@
 // frontend/src/pages/ProfilePage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
+import axios from 'axios'; // Although api.js is used, axios might be needed if api.js is just a wrapper. Let's keep it for now or verify if api.js is sufficient. Assuming api.js wraps axios.
 import api from '../api/api.js';
-const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000';
+const SERVER_URL = process.env.REACT_APP_SERVER_BASE_URL || 'http://localhost:5000'; // This variable is defined but not used in the provided code block. It might be used elsewhere or intended for profile_photo_url construction if user.profile_photo_url is just a path.
+
 function ProfilePage() {
   const { user, loading: authLoading, token, login } = useAuth();
 
@@ -40,14 +41,20 @@ function ProfilePage() {
         phone_number: user.phone_number || '',
       });
       if (user.profile_photo_url) {
-        // Ensure the URL is constructed correctly if profile_photo_url is just a filename
-       // const filename = user.profile_photo_url.split('/').pop();
-        setPreviewPhoto(response.data.user.profile_photo_url);
+        // Use the profile_photo_url directly from the user object
+        setPreviewPhoto(user.profile_photo_url);
       } else {
         setPreviewPhoto(null);
       }
     }
-  }, [user]);
+    // Clean up object URL when component unmounts or previewPhoto changes (e.g., new file selected)
+    return () => {
+      if (previewPhoto && previewPhoto.startsWith('blob:')) {
+        URL.revokeObjectURL(previewPhoto);
+      }
+    };
+  }, [user, previewPhoto]); // Added previewPhoto to dependency array for cleanup
+
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -56,6 +63,10 @@ function ProfilePage() {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Revoke previous object URL before creating a new one
+      if (previewPhoto && previewPhoto.startsWith('blob:')) {
+        URL.revokeObjectURL(previewPhoto);
+      }
       setProfilePhotoFile(file);
       setPreviewPhoto(URL.createObjectURL(file));
     }
@@ -79,15 +90,46 @@ function ProfilePage() {
       const response = await api.put('/users/profile', data, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
+          // 'Content-Type': 'multipart/form-data' is often set automatically by the browser for FormData
         },
       });
       setSuccess(response.data.message || "Профіль успішно оновлено!");
-      if (token) { login(token); }
+      // Assuming the backend returns the updated user object, ideally with the new profile photo URL
+      // The login function in AuthContext should ideally fetch the latest user data or update the user state with the response data
+      if (token) {
+          // A better approach is to use the user data from the response if available
+          if(response.data.user) {
+              login(token, response.data.user); // Assuming login can take user data as second arg
+          } else {
+             login(token); // Fallback to re-fetching user if login(token, userData) is not supported
+          }
+      }
       setIsEditing(false);
       setProfilePhotoFile(null);
+      // Clean up the preview URL after successful upload if it's a blob URL
+      if (previewPhoto && previewPhoto.startsWith('blob:')) {
+         URL.revokeObjectURL(previewPhoto);
+      }
+      // Ensure previewPhoto is set to the new URL from the server response
+      if (response.data.user?.profile_photo_url) {
+        setPreviewPhoto(response.data.user.profile_photo_url);
+      } else {
+        // If no new photo URL is returned, revert to original or default
+        setPreviewPhoto(user?.profile_photo_url || null);
+      }
+
+
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
+      // Clean up the preview URL if upload failed
+      if (previewPhoto && previewPhoto.startsWith('blob:')) {
+         URL.revokeObjectURL(previewPhoto);
+      }
+      // Revert preview photo to user's current photo on error
+      setPreviewPhoto(user?.profile_photo_url || null);
+      setProfilePhotoFile(null);
+
+
       setError(err.response?.data?.message || 'Не вдалося оновити профіль.');
       console.error("Profile update error:", err);
       setTimeout(() => setError(''), 3000);
@@ -169,7 +211,7 @@ function ProfilePage() {
                     aria-label="Змінити фото профілю"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 20 000-2.828z" />
                       <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
                     </svg>
                   </button>
@@ -255,8 +297,13 @@ function ProfilePage() {
                 <button type="button"
                   onClick={() => {
                       setIsEditing(false);
+                      // Revert form data and preview photo to current user data
                       if (user) {
                           setFormData({ name: user.name || '', last_name: user.last_name || '', bio: user.bio || '', phone_number: user.phone_number || '' });
+                          // Clean up the blob URL if user clicked cancel after selecting a file
+                           if (previewPhoto && previewPhoto.startsWith('blob:')) {
+                             URL.revokeObjectURL(previewPhoto);
+                           }
                           setPreviewPhoto(user.profile_photo_url || null);
                           setProfilePhotoFile(null);
                       }
