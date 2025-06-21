@@ -9,6 +9,7 @@ import Slider from 'react-slick';
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid';
+
 // Custom arrow components for react-slick
 function SlickArrowLeft({ currentSlide, slideCount, ...props }) {
     return (
@@ -141,26 +142,36 @@ function ManageListingsPage() {
             <p className="text-center text-slate-600 py-10">Ви ще не створили жодного оголошення. Натисніть "+ Створити нове оголошення", щоб розпочати!</p>
           )}
 
-          {!loading && !error && ownerListings.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-8">
+           {!loading && !error && ownerListings.length > 0 && (
+           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-8">
               {ownerListings.map((listing) => (
+                // Головний контейнер картки з `flex flex-col`
                 <div key={listing.id} className="flex flex-col bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-shadow duration-300 group">
+                    
+                    {/* --- БЛОК 1: Зображення. Він самодостатній. --- */}
                     <div className="relative">
                         <Link to={`/listings/${listing.id}`} className="block">
                           {listing.photos && listing.photos.length > 0 ? (
                             <div className="w-full h-60 sm:h-64 slick-listing-card">
                               <Slider {...cardSliderSettings}>
                                {listing.photos.map((photoUrl, index) => (
-                                                         <div key={index}> 
-    
-                                                          <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="..." loading="lazy" decoding="async" /> 
-                                                         </div>
-                                                          ))}
+                                    <div key={index} className="h-60 sm:h-64">
+                                        <img 
+                                            src={photoUrl} 
+                                            alt={`${listing.title} ${index + 1}`} 
+                                            className="w-full h-full object-cover" 
+                                            loading="lazy" 
+                                            decoding="async" 
+                                        />
+                                    </div>
+                                ))}
                               </Slider>
                             </div>
                           ) : ( <div className="w-full h-60 sm:h-64 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Немає зображення</div> )}
                         </Link>
-                    </div>
+                    </div> {/* <-- ✅ ОСЬ ТУТ ПРАВИЛЬНЕ МІСЦЕ ДЛЯ ЗАКРИВАЮЧОГО ТЕГУ */}
+
+                    {/* --- БЛОК 2: Текст. Тепер це сусід, а не нащадок блоку зображення. --- */}
                     <div className="p-4 sm:p-5 flex flex-col flex-grow">
                         <h3 className="text-lg sm:text-xl font-semibold mb-1 text-[#0c151d] group-hover:text-blue-600 transition-colors truncate" title={listing.title}>{listing.title}</h3>
                         <p className="text-sm text-[#4574a1] mb-1 truncate" title={listing.location}>{listing.location}</p>
@@ -197,7 +208,7 @@ function ManageListingsPage() {
                                >
                                    Редагувати
                                </Link>
-                                {/* Archive/Unarchive Button */}
+                                {/* ... решта кнопок ... */}
                                 {(listing.status === 'active' || listing.status === 'pending') && (
                                     <button
                                         onClick={() => handleArchiveToggle(listing.id, listing.status)}

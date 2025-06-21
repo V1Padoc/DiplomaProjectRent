@@ -7,7 +7,7 @@ import { io } from 'socket.io-client'; // Import socket.io-client
 
 // API URL base
 const API_URL = '';
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL;
 
 // Create the Auth Context
 const AuthContext = createContext();
