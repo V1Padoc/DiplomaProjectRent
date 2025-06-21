@@ -80,6 +80,15 @@ const getPublicIdFromUrl = (url) => {
 
 // PUT /api/users/profile - Update user profile
 exports.updateUserProfile = async (req, res) => {
+    logger.info('[updateUserProfile] Handler started. Checking for file...'); // <-- ДОДАЙТЕ ЦЕЙ ЛОГ
+
+    // Перевіряємо, чи multer взагалі спрацював
+    if (req.file) {
+        logger.info('[updateUserProfile] req.file IS PRESENT:', req.file); // <-- ДОДАЙТЕ ЦЕЙ ЛОГ
+    } else {
+        logger.info('[updateUserProfile] req.file IS MISSING.'); // <-- ДОДАЙТЕ ЦЕЙ ЛОГ
+    }
+
     const userId = req.user.id; // Get ID from authentication middleware
     const { name, last_name, bio, phone_number } = req.body;
 
@@ -127,6 +136,8 @@ exports.updateUserProfile = async (req, res) => {
                 }
             }
             // Save the new photo URL from Cloudinary (provided by multer-storage-cloudinary)
+            // ВАЖЛИВО: перевіримо, чи є тут req.file.path
+            logger.info(`[updateUserProfile] Attempting to save path to DB: ${req.file.path}`);
             fieldsToUpdate.profile_photo_url = req.file.path;
             logger.info(`[updateUserProfile] New profile photo uploaded: ${req.file.path} for user ${userId}`);
         }
@@ -150,7 +161,8 @@ exports.updateUserProfile = async (req, res) => {
         });
 
     } catch (error) {
-        logger.error("Error updating user profile:", { userId, body: req.body, file: req.file, error: error.message, stack: error.stack });
+        // Цей лог вже є, і він дуже важливий
+        logger.error("Error updating user profile:", { userId: req.user.id, body: req.body, file: req.file, error: error.message, stack: error.stack });
         // Handle Multer errors if any
         if (error.code && error.code.startsWith('LIMIT_')) {
             // E.g., 'LIMIT_FILE_SIZE' or 'LIMIT_UNEXPECTED_FILE'

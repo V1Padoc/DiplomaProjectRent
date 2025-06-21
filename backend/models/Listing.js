@@ -1,10 +1,8 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database'); // Import the configured sequelize instance
-const User = require('./User'); // Import the User model to define the relationship
+const sequelize = require('../config/database');
+const User = require('./User');
 
-// Define the Listing model
 const Listing = sequelize.define('Listing', {
-  // Model attributes are defined here
   id: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
@@ -14,9 +12,9 @@ const Listing = sequelize.define('Listing', {
   owner_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: { // Define the foreign key relationship
-      model: User, // Reference the User model
-      key: 'id'    // Use the 'id' column of the User model
+    references: {
+      model: User,
+      key: 'id'
     }
   },
   title: {
@@ -24,27 +22,27 @@ const Listing = sequelize.define('Listing', {
     allowNull: false
   },
   description: {
-    type: DataTypes.TEXT, // Use TEXT for potentially longer descriptions
-    allowNull: true      // Description can be optional
+    type: DataTypes.TEXT,
+    allowNull: true
   },
   price: {
-    type: DataTypes.DECIMAL(10, 2), // Use DECIMAL for monetary values (total 10 digits, 2 after decimal)
+    type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
     validate: {
       isDecimal: true,
-      min: 0 // Price should be non-negative
+      min: 0
     }
   },
   rooms: {
     type: DataTypes.INTEGER,
-    allowNull: true, // Number of rooms can be optional
+    allowNull: true,
     validate: {
       isInt: true,
       min: 0
     }
   },
   area: {
-    type: DataTypes.DECIMAL(10, 2), // Area (e.g., in sq ft or sq meters)
+    type: DataTypes.DECIMAL(10, 2),
     allowNull: true,
     validate: {
       isDecimal: true,
@@ -52,57 +50,43 @@ const Listing = sequelize.define('Listing', {
     }
   },
   location: {
-    // This could be a simple string address, or more complex geo data
     type: DataTypes.STRING,
-    allowNull: false // Location is essential
-    // You might want to split this into city, address, zip, lat, lon later
-    // For now, let's keep it simple as a string
+    allowNull: false
   },
   amenities: {
-    // Store amenities as a JSON string or text, or link to a separate Amenities table later
-    type: DataTypes.TEXT, // Store as text, perhaps a comma-separated list or JSON string
+    type: DataTypes.TEXT,
     allowNull: true
   },
   type: {
-    type: DataTypes.ENUM('monthly-rental', 'daily-rental'), // Updated types
+    type: DataTypes.ENUM('monthly-rental', 'daily-rental'),
     allowNull: false
   },
   status: {
-    type: DataTypes.ENUM('pending', 'active', 'rejected', 'archived'), // Listing status
+    type: DataTypes.ENUM('pending', 'active', 'rejected', 'archived'),
     allowNull: false,
-    defaultValue: 'pending' // Listings start as pending until admin approves
+    defaultValue: 'pending'
   },
   photos: {
-    type: DataTypes.JSON, // Use JSON type for an array of photo paths/filenames
-    allowNull: true       // Matches the database column allowing NULL
+    type: DataTypes.JSONB, // <-- ЗМІНЕНО з DataTypes.JSON на DataTypes.JSONB для кращої продуктивності в Postgres
+    allowNull: true
   },
    latitude: {
     type: DataTypes.DECIMAL(10, 8),
-    allowNull: true // Matches the database column
+    allowNull: true
   },
   longitude: {
     type: DataTypes.DECIMAL(11, 8),
-    allowNull: true // Matches the database column
+    allowNull: true
   },
-  // Sequelize will add createdAt and updatedAt automatically because timestamps: true
-  // If you want to store photo file paths, you might add:
-  // photos: {
-  //   type: DataTypes.JSON, // Store an array of photo paths as JSON
-  //   allowNull: true
-  // }
-  // We'll handle photo paths when we implement the listing creation API.
 }, {
-  // Model options go here
-  sequelize, // Pass the connection instance
-  modelName: 'Listing', // The model name
-  tableName: 'listings', // Explicitly set the table name
-  timestamps: true,      // Use default timestamps (createdAt and updatedAt)
-  underscored: true      // Use snake_case for column names
+  sequelize,
+  modelName: 'Listing',
+  tableName: 'listings',
+  timestamps: true,
+  underscored: true
 });
 
-// Define the association: A Listing belongs to a User (the owner)
 Listing.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
-// Conversely, a User can have many Listings
 User.hasMany(Listing, { foreignKey: 'owner_id', as: 'Listings' });
 
 module.exports = Listing;

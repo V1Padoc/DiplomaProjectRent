@@ -10,7 +10,7 @@ const User = require('./models/User');
 
 const sequelize = require('./config/database');
 
-// --- Routes ---
+
 const generalRoutes = require('./routes/generalRoutes');
 const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
@@ -59,7 +59,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false, 
 });
 
-// --- API Routes ---
+
 app.use('/api/auth', authLimiter);
 app.use('/api', generalRoutes);
 app.use('/api/auth', authRoutes); 
@@ -69,7 +69,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
 
-// --- WebSocket Authentication and Logic ---
+
 io.use(async (socket, next) => {
   const token = socket.handshake.auth.token;
   if (!token) return next(new Error('Authentication error: No token provided.'));
@@ -102,19 +102,15 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- Server Start Logic ---
+
 const PORT = process.env.PORT || 5000;
 
-// Використовуємо self-invoking async function для старту
+
 (async () => {
     try {
         await sequelize.authenticate();
         console.log('Database connection has been established successfully.');
-        
-        // Синхронізація моделей (опціонально, краще робити через міграції)
-        // await sequelize.sync({ force: false }); // false - не видаляти таблиці. alter: true - змінювати існуючі.
-        // console.log("All models were synchronized successfully.");
-        
+       // await sequelize.sync({ force: true });
         server.listen(PORT, () => {
             console.log(`✅ Server with Socket.IO is live and running on port ${PORT}`);
         });
@@ -124,4 +120,4 @@ const PORT = process.env.PORT || 5000;
     }
 })();
 
-module.exports = { server, sequelize }; // Експорт для тестів
+module.exports = { server, sequelize }; 

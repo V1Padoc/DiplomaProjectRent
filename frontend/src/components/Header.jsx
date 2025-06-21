@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import logo from '../assets/logo.svg'; // Переконайтесь, що шлях правильний
 import {
   BellIcon,
   ChatBubbleLeftEllipsisIcon,
@@ -61,9 +62,11 @@ function Header() {
   }, [profileDropdownRef]);
 
   const handleLogout = () => {
-    logout();
-    setIsProfileDropdownOpen(false); // Close dropdown on logout
-    navigate('/'); // Navigate to home on logout
+    if (window.confirm('Ви впевнені, що хочете вийти з акаунту?')) {
+      logout();
+      setIsProfileDropdownOpen(false); // Close dropdown on logout
+      navigate('/'); // Navigate to home on logout
+    }
   };
   
   const UserAvatar = () => (
@@ -78,34 +81,42 @@ function Header() {
   return (
     <header className="bg-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16"> {/* Fixed height header */}
+        <div className="flex justify-between items-center h-16">
 
           {/* Left Side: Logo and Primary Nav */}
-          <div className="flex items-center space-x-8">
-            <Link to="/" className="text-2xl font-bold text-slate-800 hover:text-blue-600 transition-colors">
-              Твоя Квартира Тут
+          <div className="flex flex-1 items-center space-x-5 md:space-x-8 min-w-0">
+            <Link to="/" className="flex items-center flex-shrink-0">
+              <img 
+                src={logo} 
+                alt="Логотип" 
+                className="h-9 md:h-10 w-auto"
+              />
+              <span className="hidden md:inline-block ml-3 text-xl font-bold text-slate-800 hover:text-blue-600 transition-colors truncate">
+                Твоя Квартира Тут
+              </span>
             </Link>
-            <nav className="hidden md:flex space-x-5 items-center">
-              <Link to="/listings" className="text-slate-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center">
-                <MagnifyingGlassIcon className="w-5 h-5 mr-1.5 text-slate-400 group-hover:text-blue-500"/> Оголошення
+            <nav className="flex space-x-3 md:space-x-5 items-center">
+              <Link to="/listings" title="Оголошення" className="text-slate-600 hover:text-blue-600 p-2 md:px-3 rounded-full md:rounded-md hover:bg-slate-100 text-sm font-medium transition-colors flex items-center">
+                <MagnifyingGlassIcon className="w-6 h-6 md:w-5 md:h-5 text-slate-500 group-hover:text-blue-500"/>
+                <span className="hidden md:inline ml-1.5">Оголошення</span>
               </Link>
-              <Link to="/map-listings" className="text-slate-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center">
-                <MapIcon className="w-5 h-5 mr-1.5 text-slate-400 group-hover:text-blue-500"/> Перегляд на карті
+              <Link to="/map-listings" title="Перегляд на карті" className="text-slate-600 hover:text-blue-600 p-2 md:px-3 rounded-full md:rounded-md hover:bg-slate-100 text-sm font-medium transition-colors flex items-center">
+                <MapIcon className="w-6 h-6 md:w-5 md:h-5 text-slate-500 group-hover:text-blue-500"/>
+                <span className="hidden md:inline ml-1.5">Перегляд на карті</span>
               </Link>
             </nav>
           </div>
 
           {/* Right Side: Actions & Profile */}
-          <div className="flex items-center space-x-3 sm:space-x-4">
+          <div className="flex-shrink-0 flex items-center space-x-2 sm:space-x-4">
             {isAuthenticated && user ? (
               <>
                 {/* Notification Icons Area */}
-                <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="flex items-center space-x-1 sm:space-x-3">
                   <Link to="/my-chats" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Мої чати">
                     <ChatBubbleLeftEllipsisIcon className="w-6 h-6" />
                     <NotificationBadge count={unreadMessagesCount} />
                   </Link>
-
                   {user.role === 'owner' && (
                     <Link to="/booking-requests" className="relative text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-slate-100 transition-colors" title="Запити на бронювання">
                       <BellIcon className="w-6 h-6" />
@@ -178,35 +189,40 @@ function Header() {
                 </div>
               </>
             ) : (
-              // Logged out state
-              <div className="hidden md:flex items-center space-x-2">
-                 <Link
-                  to="/login"
-                  className="text-slate-600 hover:text-blue-600 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Увійти
-                </Link>
-                <Link
-                  to="/register"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm"
-                >
-                  Зареєструватися
-                </Link>
-              </div>
+              // ЗМІНА: Об'єднана логіка для стану "Logged out"
+              <>
+                {/* Desktop Buttons */}
+                <div className="hidden md:flex items-center space-x-2">
+                  <Link
+                    to="/login"
+                    className="text-slate-600 hover:text-blue-600 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Увійти
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm"
+                  >
+                    Реєстрація
+                  </Link>
+                </div>
+                {/* Mobile Buttons */}
+                <div className="md:hidden flex items-center space-x-2">
+                  <Link
+                    to="/login"
+                    className="text-slate-600 hover:bg-slate-100 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Увійти
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm font-semibold transition-colors shadow-sm"
+                  >
+                    Реєстрація
+                  </Link>
+                </div>
+              </>
             )}
-
-            {/* Mobile Menu Button (Placeholder for future) */}
-            <div className="md:hidden flex items-center">
-              {/* Hamburger icon can go here if you implement full mobile nav */}
-              {!isAuthenticated && (
-                 <Link
-                  to="/login"
-                  className="text-slate-600 hover:text-blue-600 p-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Увійти
-                </Link>
-              )}
-            </div>
           </div>
         </div>
       </div>
@@ -214,4 +230,4 @@ function Header() {
   );
 }
 
-export default Header;
+export default Header; 

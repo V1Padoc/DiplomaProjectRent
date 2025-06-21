@@ -5,7 +5,7 @@ import api from '../api/api.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 const formatLastMessageTimestamp = (timestampStr) => {
-    if (!timestampStr) return '23:04'; // Translated
+    if (!timestampStr) return 'Немає часу'; // Translated
     const date = new Date(timestampStr);
     if (isNaN(date.getTime())) return 'Недійсна дата'; // Translated
 

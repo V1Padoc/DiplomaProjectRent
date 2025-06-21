@@ -14,7 +14,7 @@ import "slick-carousel/slick/slick-theme.css";
 import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { useAuth } from '../context/AuthContext';
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'; // For slider arrows
+import { ChevronLeftIcon, ChevronRightIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/20/solid'; // For slider arrows & mobile filters
 
 // Leaflet icon fix & custom icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -86,15 +86,13 @@ function MapBoundsAdjuster({ mapListings }) {
         return () => {
             if (map) {
                 try {
-                    map.stop(); // Stops any ongoing pan/zoom animations
-                     // console.log('MapBoundsAdjuster: map.stop() called on cleanup.'); // Removed for production
+                    map.stop();
                 } catch (e) {
-                     // console.warn('MapBoundsAdjuster: Error calling map.stop() during cleanup:', e); // Removed for production
-                    // Map might already be in a removed state, especially if page is rapidly navigating away.
+                    // Map might already be in a removed state
                 }
             }
         };
-    }, [mapListings, map]); // 'map' from useMap() is stable, 'mapListings' triggers effect
+    }, [mapListings, map]);
 
     return null;
 }
@@ -114,6 +112,7 @@ function MapListingsPage() {
     const [loadingList, setLoadingList] = useState(true);
     const [loadingMap, setLoadingMap] = useState(true);
     const [error, setError] = useState(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const [searchParams, setSearchParams] = useSearchParams();
     const { isAuthenticated, favorites, toggleFavorite } = useAuth();
@@ -137,13 +136,25 @@ function MapListingsPage() {
         totalPages: 1,
         totalItems: 0,
     });
-    const itemsPerPage = 6; // Adjusted for 1 or 2 items per "row" in list panel
+    const itemsPerPage = 6;
 
-    const [mapCenter, setMapCenter] = useState([40.7128, -74.0060]); // Default: NYC
-    const [mapZoom, setMapZoom] = useState(5); // Default zoom
+    const [mapCenter, setMapCenter] = useState([40.7128, -74.0060]);
+    const [mapZoom, setMapZoom] = useState(5);
     const mapRef = useRef(null);
 
     const [hoveredListingId, setHoveredListingId] = useState(null);
+    
+    // Effect to manage body scroll when mobile sidebar is open
+    useEffect(() => {
+        if (isSidebarOpen && window.innerWidth < 1024) { // lg breakpoint
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, [isSidebarOpen]);
 
     const buildCommonParams = useCallback(() => {
         const params = new URLSearchParams();
@@ -166,7 +177,6 @@ function MapListingsPage() {
         commonParams.append('sortOrder', sort.sortOrder);
         
         const newSearchParams = new URLSearchParams(commonParams);
-        // Only update URL if it's different to avoid re-triggering effects unnecessarily
         if (searchParams.toString() !== newSearchParams.toString()) {
             setSearchParams(newSearchParams, { replace: true });
         }
@@ -185,7 +195,7 @@ function MapListingsPage() {
         } finally {
             setLoadingList(false);
         }
-    }, [sort, itemsPerPage, buildCommonParams, setSearchParams, searchParams]); // Removed pagination.currentPage from deps as pageToFetch handles it
+    }, [sort, itemsPerPage, buildCommonParams, setSearchParams, searchParams]);
 
     const fetchMapData = useCallback(async () => {
         setLoadingMap(true);
@@ -194,13 +204,11 @@ function MapListingsPage() {
             const response = await api.get(`/listings/map-data?${commonParams.toString()}`);
             setMapData(response.data);
             
-            // Only adjust map center/zoom if location filter is applied and results exist
             if (response.data.length > 0 && filters.location) {
-                // Find first valid coordinate from search results to center the map
                 const firstValidListing = response.data.find(l => l.latitude != null && l.longitude != null);
                 if (firstValidListing) {
                     setMapCenter([parseFloat(firstValidListing.latitude), parseFloat(firstValidListing.longitude)]);
-                    setMapZoom(12); // Zoom in closer when a specific location is searched
+                    setMapZoom(12);
                 }
             }
         } catch (err) {
@@ -209,20 +217,18 @@ function MapListingsPage() {
         } finally {
             setLoadingMap(false);
         }
-    }, [filters.location, buildCommonParams]); // Only filters affect map data, not pagination or sort of list
+    }, [filters.location, buildCommonParams]);
 
 
-    // Effect for filter/sort changes and initial page load
     useEffect(() => {
-        setError(null); // Clear previous errors
+        setError(null);
         const pageFromUrl = parseInt(searchParams.get('page') || '1', 10);
-        fetchListData(pageFromUrl); // Always fetch list data based on current URL params
-    }, [searchParams, fetchListData]); // Depend on searchParams to react to URL changes, fetchListData is stable
+        fetchListData(pageFromUrl);
+    }, [searchParams, fetchListData]);
 
-    // Effect for map data fetching (only when filters change)
     useEffect(() => {
         fetchMapData();
-    }, [filters, fetchMapData]); // Depend on filters to trigger map data fetch, fetchMapData is stable
+    }, [filters, fetchMapData]);
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -230,13 +236,12 @@ function MapListingsPage() {
     };
 
     const handleApplyFilters = () => {
-        // When filters are applied, always reset to page 1
         const currentParams = buildCommonParams();
         currentParams.set('page', '1'); 
         currentParams.set('sortBy', sort.sortBy);
         currentParams.set('sortOrder', sort.sortOrder);
         setSearchParams(currentParams, { replace: true });
-        // The useEffects will now re-trigger fetching
+        setIsSidebarOpen(false); // Close mobile sidebar on apply
     };
     
     const handleResetFilters = () => {
@@ -245,20 +250,17 @@ function MapListingsPage() {
         setFilters(defaultFilters);
         setSort(defaultSort);
         
-        // Reset URL parameters to default values
         const params = new URLSearchParams(); 
         params.set('page', '1');
         params.set('sortBy', defaultSort.sortBy);
         params.set('sortOrder', defaultSort.sortOrder);
         setSearchParams(params, { replace: true });
-        // The useEffects will now re-trigger fetching
+        setIsSidebarOpen(false); // Close mobile sidebar on reset
     };
 
     const handleSortChange = (e) => {
         const { name, value } = e.target;
         setSort(prev => ({ ...prev, [name]: value }));
-        // Sorting also implies re-fetching list data, so it will be handled by the useEffect watching `searchParams`
-        // We'll also reset to page 1 for consistent behavior
         const currentParams = new URLSearchParams(searchParams);
         currentParams.set('page', '1');
         currentParams.set(name, value);
@@ -267,7 +269,6 @@ function MapListingsPage() {
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= pagination.totalPages && newPage !== pagination.currentPage) {
-            // Update URL parameter for page, which will trigger the useEffect listening to searchParams
             const currentParams = new URLSearchParams(searchParams);
             currentParams.set('page', String(newPage));
             setSearchParams(currentParams, { replace: true });
@@ -291,46 +292,75 @@ function MapListingsPage() {
         lazyLoad: 'ondemand', 
     };
 
+    const renderFilters = () => (
+        <>
+            <div>
+                <label htmlFor="location" className="block text-xs text-[#4574a1] mb-0.5">Місцезнаходження</label>
+                <input type="text" name="location" id="location" value={filters.location} onChange={handleFilterChange} placeholder="Місто, район..." className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+            </div>
+            <div>
+                <label htmlFor="type" className="block text-xs text-[#4574a1] mb-0.5">Тип</label>
+                <select name="type" id="type" value={filters.type} onChange={handleFilterChange} className="form-select w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-2 pr-8 text-sm text-[#0c151d]">
+                    <option value="">Усі типи</option> <option value="monthly-rental">Щомісячна оренда</option> <option value="daily-rental">Щоденна оренда</option>
+                </select>
+            </div>
+            <div className="flex space-x-2">
+                <div className="flex-1">
+                    <label htmlFor="priceMin" className="block text-xs text-[#4574a1] mb-0.5">Мін. ціна</label>
+                    <input type="number" name="priceMin" id="priceMin" value={filters.priceMin} onChange={handleFilterChange} placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+                </div>
+                <div className="flex-1">
+                    <label htmlFor="priceMax" className="block text-xs text-[#4574a1] mb-0.5">Макс. ціна</label>
+                    <input type="number" name="priceMax" id="priceMax" value={filters.priceMax} onChange={handleFilterChange} placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+                </div>
+            </div>
+            <div>
+                <label htmlFor="roomsMin" className="block text-xs text-[#4574a1] mb-0.5">Мін. кімнат</label>
+                <input type="number" name="roomsMin" id="roomsMin" value={filters.roomsMin} onChange={handleFilterChange} min="0" placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+            </div>
+            <div>
+                <label htmlFor="search" className="block text-xs text-[#4574a1] mb-0.5">Ключове слово</label>
+                <input type="text" name="search" id="search" value={filters.search} onChange={handleFilterChange} placeholder="напр., набережна" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
+            </div>
+        </>
+    );
+
     return (
         <div className="flex flex-col h-screen bg-slate-50" style={{ fontFamily: 'Inter, "Noto Sans", sans-serif' }}>
-            {/* Top Filter Bar */}
-            <div className="bg-white p-3 shadow-sm sticky top-0 z-20">
+            
+            {/* --- MOBILE UI: Floating Button & Sidebar --- */}
+            <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden fixed bottom-6 left-4 z-30 p-3 bg-slate-800 text-white rounded-full shadow-lg hover:bg-slate-700 transition-colors"
+                aria-label="Відкрити фільтри"
+            >
+                <Bars3Icon className="h-6 w-6" />
+            </button>
+            {isSidebarOpen && (
+                <div onClick={() => setIsSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-30" aria-hidden="true"></div>
+            )}
+            <aside className={`lg:hidden fixed top-0 left-0 h-full w-[90vw] max-w-sm bg-white shadow-xl z-40 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="h-full flex flex-col">
+                    <div className="flex justify-between items-center p-4 border-b">
+                        <h2 className="text-xl font-bold text-[#0c151d]">Фільтри</h2>
+                        <button onClick={() => setIsSidebarOpen(false)} aria-label="Закрити фільтри">
+                            <XMarkIcon className="h-6 w-6 text-slate-600" />
+                        </button>
+                    </div>
+                    <div className="flex-grow overflow-y-auto p-4 space-y-4">{renderFilters()}</div>
+                    <div className="p-4 border-t flex space-x-2 bg-slate-50">
+                         <button onClick={handleApplyFilters} className="flex-1 bg-[#359dff] hover:bg-blue-600 text-white text-sm font-bold rounded-lg h-10 transition-colors">Застосувати</button>
+                         <button onClick={handleResetFilters} className="flex-1 bg-[#e6edf4] hover:bg-slate-300 text-[#0c151d] text-sm font-bold rounded-lg h-10 transition-colors">Скинути</button>
+                    </div>
+                </div>
+            </aside>
+
+
+            {/* --- DESKTOP UI: Top Filter Bar --- */}
+            <div className="hidden lg:block bg-white p-3 shadow-sm sticky top-0 z-20">
                 <div className="max-w-none mx-auto px-2 sm:px-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-3 items-end">
-                        <div>
-                            <label htmlFor="location" className="block text-xs text-[#4574a1] mb-0.5">Місцезнаходження</label>
-                            <input
-                                type="text" name="location" id="location" value={filters.location} onChange={handleFilterChange}
-                                placeholder="Місто, район, поштовий індекс"
-                                className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="type" className="block text-xs text-[#4574a1] mb-0.5">Тип</label>
-                            <select name="type" id="type" value={filters.type} onChange={handleFilterChange} className="form-select w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-2 pr-8 text-sm text-[#0c151d]">
-                                <option value="">Усі типи</option>
-                                <option value="monthly-rental">Щомісячна оренда</option>
-                                <option value="daily-rental">Щоденна оренда</option>
-                            </select>
-                        </div>
-                        <div className="flex space-x-2">
-                            <div className="flex-1">
-                                <label htmlFor="priceMin" className="block text-xs text-[#4574a1] mb-0.5">Мін. ціна</label>
-                                <input type="number" name="priceMin" id="priceMin" value={filters.priceMin} onChange={handleFilterChange} placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
-                            </div>
-                            <div className="flex-1">
-                                <label htmlFor="priceMax" className="block text-xs text-[#4574a1] mb-0.5">Макс. ціна</label>
-                                <input type="number" name="priceMax" id="priceMax" value={filters.priceMax} onChange={handleFilterChange} placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
-                            </div>
-                        </div>
-                        <div>
-                            <label htmlFor="roomsMin" className="block text-xs text-[#4574a1] mb-0.5">Мін. кімнат</label>
-                            <input type="number" name="roomsMin" id="roomsMin" value={filters.roomsMin} onChange={handleFilterChange} min="0" placeholder="Будь-яка" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
-                        </div>
-                        <div>
-                            <label htmlFor="search" className="block text-xs text-[#4574a1] mb-0.5">Ключове слово</label>
-                            <input type="text" name="search" id="search" value={filters.search} onChange={handleFilterChange} placeholder="напр., набережна, затишна" className="form-input w-full rounded-lg border border-[#cddcea] bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 h-10 p-3 text-sm placeholder:text-[#7b98b4]"/>
-                        </div>
+                        {renderFilters()}
                         <div className="flex space-x-2 items-end">
                              <button onClick={handleApplyFilters} className="w-full bg-[#359dff] hover:bg-blue-600 text-white text-sm font-bold rounded-lg h-10 transition-colors">Застосувати</button>
                              <button onClick={handleResetFilters} className="w-full bg-[#e6edf4] hover:bg-slate-300 text-[#0c151d] text-sm font-bold rounded-lg h-10 transition-colors">Скинути</button>
@@ -339,16 +369,10 @@ function MapListingsPage() {
                 </div>
             </div>
 
+            {/* --- MAIN CONTENT AREA --- */}
             <div className="flex-grow flex overflow-hidden">
-                <div className="w-3/5 xl:w-2/3 h-full relative">
-                    <MapContainer
-                        center={mapCenter}
-                        zoom={mapZoom}
-                        scrollWheelZoom={true}
-                        style={{ height: '100%', width: '100%' }}
-                        ref={mapRef}
-                        whenCreated={mapInstance => { mapRef.current = mapInstance; }}
-                    >
+              <div className="w-full lg:w-3/5 xl:w-2/3 h-full relative z-10">
+                    <MapContainer center={mapCenter} zoom={mapZoom} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }} ref={mapRef} whenCreated={mapInstance => { mapRef.current = mapInstance; }}>
                         <TileLayer attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                         <MapBoundsAdjuster mapListings={mapData} />
                         {mapData.filter(l => l.latitude != null && l.longitude != null).map(listing => (
@@ -356,53 +380,40 @@ function MapListingsPage() {
                                 key={listing.id}
                                 position={[parseFloat(listing.latitude), parseFloat(listing.longitude)]}
                                 icon={String(listing.id) === String(hoveredListingId) ? highlightedIcon : defaultIcon}
-                                eventHandlers={{
-                                    mouseover: () => handleListItemHover(listing.id),
-                                    mouseout: () => handleListItemHover(null),
-                                }}
+                                eventHandlers={{ mouseover: () => handleListItemHover(listing.id), mouseout: () => handleListItemHover(null) }}
                             >
                                 <Tooltip>
                                     <strong className="text-sm">{listing.title}</strong><br />
                                     <span className="text-xs">
-                                    {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` : 
-                                     (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
+                                    {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` : `₴${parseFloat(listing.price).toFixed(0)}/день`}
                                     {listing.rooms ? ` · ${formatRooms(listing.rooms)}` : ''}
                                     </span>
                                 </Tooltip>
                                 <Popup>
                                     <div className="w-48">
-                                        {listing.photos && listing.photos.length > 0 && (
-                                            <img src={listing.photos[0]} alt={listing.title} className="w-full h-24 object-cover rounded-md mb-2"/>
-                                        )}
+                                        {listing.photos && listing.photos.length > 0 && ( <img src={listing.photos[0]} alt={listing.title} className="w-full h-24 object-cover rounded-md mb-2"/> )}
                                         <h3 className="font-semibold text-base mb-1 text-[#0c151d] truncate">{listing.title}</h3>
                                         <p className="text-xs text-[#4574a1] mb-1 truncate">{listing.location}</p>
-                                        <p className="text-sm font-bold text-[#0c151d] mb-2">
-                                            {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` : 
-                                             (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
-                                        </p>
-                                        <Link to={`/listings/${listing.id}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm bg-[#359dff] hover:bg-blue-600 text-white font-bold py-1.5 px-2 rounded-md transition-colors">
-                                            Переглянути деталі
-                                        </Link>
+                                        <p className="text-sm font-bold text-[#0c151d] mb-2">{listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` : `₴${parseFloat(listing.price).toFixed(0)}/день`}</p>
+                                        <Link to={`/listings/${listing.id}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm bg-[#359dff] hover:bg-blue-600 text-white font-bold py-1.5 px-2 rounded-md transition-colors">Переглянути деталі</Link>
                                     </div>
                                 </Popup>
                             </Marker>
                         ))}
                     </MapContainer>
-                    {(loadingMap || (loadingList && mapData.length === 0)) && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 p-6 rounded-lg shadow-xl z-[1000] text-[#0c151d] font-medium">Завантаження карти та оголошень...</div>}
+                    {(loadingMap || (loadingList && mapData.length === 0)) && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 p-6 rounded-lg shadow-xl z-[1000] text-[#0c151d] font-medium">Завантаження...</div>}
                 </div>
 
-                {/* Listings List Area - Adjusted width and grid */}
-                <div className="w-2/5 lg:w-2/5 xl:w-1/3 h-full overflow-y-auto p-4 bg-slate-50">
+                {/* Listings List Area - Hidden on mobile, visible on desktop */}
+                <div className="hidden lg:block w-full lg:w-2/5 xl:w-1/3 h-full overflow-y-auto p-4 bg-slate-50">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold text-[#0c151d]">
-                            {pagination.totalItems > 0 ? `${pagination.totalItems} Знайдено житла` : "Оголошення"}
-                        </h2>
+                        <h2 className="text-xl font-bold text-[#0c151d]">{pagination.totalItems > 0 ? `${pagination.totalItems} Знайдено` : "Оголошення"}</h2>
                         <div className="flex items-center space-x-2">
-                            <label htmlFor="sortByList" className="text-sm text-[#4574a1]">Сортувати:</label>
-                            <select name="sortBy" id="sortByList" value={sort.sortBy} onChange={handleSortChange} className="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:ring-opacity-50 text-sm h-9 py-1 pl-2 pr-7">
+                            <label htmlFor="sortByList" className="text-sm text-[#4574a1]">Сорт:</label>
+                            <select name="sortBy" id="sortByList" value={sort.sortBy} onChange={handleSortChange} className="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm h-9 py-1 pl-2 pr-7">
                                 <option value="created_at">Дата</option><option value="price">Ціна</option><option value="rooms">Кімнати</option>
                             </select>
-                            <select name="sortOrder" id="sortOrderList" value={sort.sortOrder} onChange={handleSortChange} className="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:ring-opacity-50 text-sm h-9 py-1 pl-2 pr-7">
+                            <select name="sortOrder" id="sortOrderList" value={sort.sortOrder} onChange={handleSortChange} className="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm h-9 py-1 pl-2 pr-7">
                                 <option value="DESC">Спад.</option><option value="ASC">Зрост.</option>
                             </select>
                         </div>
@@ -410,48 +421,31 @@ function MapListingsPage() {
 
                     {loadingList && <div className="text-center py-10 text-slate-700">Завантаження оголошень...</div>}
                     {error && !loadingList && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md text-center my-6">{error}</div>}
-                    
-                    {!loadingList && !error && listData.length === 0 && (
-                        <div className="text-center py-10 text-slate-600">Жодне оголошення не відповідає вашим поточним фільтрам.</div>
-                    )}
+                    {!loadingList && !error && listData.length === 0 && (<div className="text-center py-10 text-slate-600">Нічого не знайдено.</div>)}
 
                     {!loadingList && !error && listData.length > 0 && (
                         <>
-                            {/* Updated grid for 1 or 2 listings per line */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {listData.map((listing) => (
-                                    <div
-                                        key={listing.id}
-                                        className="flex flex-col bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-shadow duration-300 group"
-                                        onMouseEnter={() => handleListItemHover(listing.id)}
-                                        onMouseLeave={() => handleListItemHover(null)}
-                                    >
+                                    <div key={listing.id} className="flex flex-col bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-shadow duration-300 group" onMouseEnter={() => handleListItemHover(listing.id)} onMouseLeave={() => handleListItemHover(null)}>
                                         <div className="relative">
                                             {isAuthenticated && (
-                                                <button 
-                                                    onClick={async (e) => { 
-                                                        e.stopPropagation(); e.preventDefault(); await toggleFavorite(listing.id); 
-                                                    }}
-                                                    className="absolute top-3 right-3 z-10 p-2 bg-black bg-opacity-40 rounded-full text-white hover:bg-opacity-60 focus:outline-none transition-colors"
-                                                    aria-label={favorites.includes(String(listing.id)) ? "Видалити з обраних" : "Додати до обраних"}
-                                                >
-                                                    {favorites.includes(String(listing.id)) ? 
-                                                        <HeartSolid className="w-5 h-5 text-red-400"/> : 
-                                                        <HeartOutline className="w-5 h-5 text-white"/>}
+                                                <button onClick={async (e) => { e.stopPropagation(); e.preventDefault(); await toggleFavorite(listing.id); }} className="absolute top-3 right-3 z-10 p-2 bg-black bg-opacity-40 rounded-full text-white hover:bg-opacity-60 focus:outline-none transition-colors" aria-label={favorites.includes(String(listing.id)) ? "Видалити з обраних" : "Додати до обраних"}>
+                                                    {favorites.includes(String(listing.id)) ? <HeartSolid className="w-5 h-5 text-red-400"/> : <HeartOutline className="w-5 h-5 text-white"/>}
                                                 </button>
                                             )}
                                              <Link to={`/listings/${listing.id}`} className="block">
                                                 {listing.photos && listing.photos.length > 0 ? (
-                                                    <div className="w-full h-48 sm:h-56 slick-listing-card">
-                                                    <Slider {...listCardSliderSettings}>
-                                                      {listing.photos.map((photoUrl, index) => (
-                                                         <div key={index}> 
-                                                            <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="w-full h-48 sm:h-56 object-cover" loading="lazy" decoding="async" /> 
-                                                         </div>
+                                                    <div className="w-full h-48 slick-listing-card">
+                                                        <Slider {...listCardSliderSettings}>
+                                                          {listing.photos.map((photoUrl, index) => (
+                                                             <div key={index}> 
+                                                                <img src={photoUrl} alt={`${listing.title} ${index + 1}`} className="w-full h-48 object-cover" loading="lazy" decoding="async" /> 
+                                                             </div>
                                                           ))}
-                                                    </Slider>
+                                                        </Slider>
                                                     </div>
-                                                ) : ( <div className="w-full h-48 sm:h-56 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> )}
+                                                ) : ( <div className="w-full h-48 bg-slate-200 flex items-center justify-center text-slate-500 text-sm">Без зображення</div> )}
                                             </Link>
                                         </div>
                                         <Link to={`/listings/${listing.id}`} className="block p-4 flex flex-col flex-grow">
@@ -459,10 +453,7 @@ function MapListingsPage() {
                                             <p className="text-sm text-[#4574a1] mb-1.5 truncate" title={listing.location}>{listing.location}</p>
                                             <div className="mt-auto pt-2">
                                                 <div className="flex items-baseline justify-between text-[#0c151d]">
-                                                    <span className="text-base font-bold">
-                                                    {listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` :
-                                                    (listing.type === 'daily-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/день` : `₴${parseFloat(listing.price).toFixed(0)}`)}
-                                                    </span>
+                                                    <span className="text-base font-bold">{listing.type === 'monthly-rental' ? `₴${parseFloat(listing.price).toFixed(0)}/міс` : `₴${parseFloat(listing.price).toFixed(0)}/день`}</span>
                                                     {(listing.rooms !== null || listing.area !== null) && (
                                                         <div className="text-sm text-[#4574a1] flex items-center space-x-1.5">
                                                             {listing.rooms !== null && ( <span>{formatRooms(listing.rooms)}</span> )}
@@ -478,38 +469,19 @@ function MapListingsPage() {
                             </div>
 
                             {pagination.totalPages > 1 && (
-                                <div className="mt-8 flex items-center justify-center p-4 space-x-1.5 sm:space-x-2">
-                                    <button onClick={() => handlePageChange(pagination.currentPage - 1)} disabled={pagination.currentPage === 1 || loadingList}
-                                    className="flex size-9 sm:size-10 items-center justify-center rounded-full text-[#0c151d] hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"> <ChevronLeftIcon className="w-5 h-5" /> </button>
-                                    {Array.from({ length: pagination.totalPages }, (_, i) => { // Iterate through all pages
-                                        const pageNum = i + 1;
-                                        const currentPageIndex = pagination.currentPage;
-                                        const totalPages = pagination.totalPages;
-
-                                        // Logic to show current, adjacent, first, and last pages, with ellipsis
-                                        // Shows 1, 2, ..., current-1, current, current+1, ..., total-1, total
-                                        const showPage = Math.abs(i - (currentPageIndex - 1)) < 2 || // Current page and its immediate neighbors
-                                                         i === 0 || // First page
-                                                         i === totalPages - 1 || // Last page
-                                                         (Math.abs(i - (currentPageIndex - 1)) < 3 && (currentPageIndex - 1 < 2 || currentPageIndex - 1 > totalPages - 3)); // For edges: if near start or end, show a few more
-
+                                <div className="mt-8 flex items-center justify-center p-4 space-x-1 sm:space-x-2">
+                                    <button onClick={() => handlePageChange(pagination.currentPage - 1)} disabled={pagination.currentPage === 1 || loadingList} className="flex size-9 items-center justify-center rounded-full text-[#0c151d] hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"> <ChevronLeftIcon className="w-5 h-5" /> </button>
+                                    {Array.from({ length: pagination.totalPages }, (_, i) => {
+                                        const pageNum = i + 1; const currentPageIndex = pagination.currentPage; const totalPages = pagination.totalPages;
+                                        const showPage = Math.abs(i - (currentPageIndex - 1)) < 2 || i === 0 || i === totalPages - 1 || (Math.abs(i - (currentPageIndex - 1)) < 3 && (currentPageIndex - 1 < 2 || currentPageIndex - 1 > totalPages - 3));
                                         if (!showPage) {
-                                            // Show ellipsis for skipped pages, but only once
-                                            if (i === 1 && (currentPageIndex - 1) > 2) return <span key="dots-start" className="px-1 sm:px-2 text-sm text-slate-600">...</span>;
-                                            if (i === totalPages - 2 && (currentPageIndex - 1) < totalPages - 3) return <span key="dots-end" className="px-1 sm:px-2 text-sm text-slate-600">...</span>;
+                                            if (i === 1 && (currentPageIndex - 1) > 2) return <span key="dots-start" className="px-1 text-sm text-slate-600">...</span>;
+                                            if (i === totalPages - 2 && (currentPageIndex - 1) < totalPages - 3) return <span key="dots-end" className="px-1 text-sm text-slate-600">...</span>;
                                             return null;
                                         }
-
-                                        return (
-                                        <button key={pageNum} onClick={() => handlePageChange(pageNum)} disabled={loadingList} 
-                                                className={`text-sm font-medium leading-normal tracking-[0.015em] flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors
-                                                        ${pagination.currentPage === pageNum ? 'bg-[#e6edf4] text-[#0c151d] font-bold' : 'text-[#0c151d] hover:bg-slate-200'}
-                                                        ${loadingList ? 'opacity-50 cursor-not-allowed' : ''}` // Disable if loading
-                                                }> {pageNum} </button>
-                                        );
-                                    }).filter(Boolean)} {/* Filter out nulls from ellipsis logic */}
-                                    <button onClick={() => handlePageChange(pagination.currentPage + 1)} disabled={pagination.currentPage === pagination.totalPages || loadingList}
-                                    className="flex size-9 sm:size-10 items-center justify-center rounded-full text-[#0c151d] hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"> <ChevronRightIcon className="w-5 h-5" /> </button>
+                                        return (<button key={pageNum} onClick={() => handlePageChange(pageNum)} disabled={loadingList} className={`text-sm font-medium flex size-9 items-center justify-center rounded-full transition-colors ${pagination.currentPage === pageNum ? 'bg-[#e6edf4] text-[#0c151d] font-bold' : 'text-[#0c151d] hover:bg-slate-200'} ${loadingList ? 'opacity-50 cursor-not-allowed' : ''}`}> {pageNum} </button>);
+                                    }).filter(Boolean)}
+                                    <button onClick={() => handlePageChange(pagination.currentPage + 1)} disabled={pagination.currentPage === pagination.totalPages || loadingList} className="flex size-9 items-center justify-center rounded-full text-[#0c151d] hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"> <ChevronRightIcon className="w-5 h-5" /> </button>
                                 </div>
                             )}
                         </>
@@ -517,18 +489,9 @@ function MapListingsPage() {
                 </div>
             </div>
             <style jsx global>{`
-                .form-input, .form-textarea, .form-select {
-                    @apply shadow-sm appearance-none;
-                }
+                .form-input, .form-textarea, .form-select { @apply shadow-sm appearance-none; }
                 .tracking-tight { letter-spacing: -0.025em; }
-
-                /* Slick Carousel Customizations for listing cards */
-                .slick-listing-card .slick-arrow {
-                  z-index: 10; width: 32px; height: 32px; background-color: rgba(0,0,0,0.3);
-                  border-radius: 50%; transition: background-color 0.2s ease; position: absolute;
-                  top: 50%; transform: translateY(-50%); display: flex !important;
-                  align-items: center; justify-content: center;
-                }
+                .slick-listing-card .slick-arrow { z-index: 10; width: 32px; height: 32px; background-color: rgba(0,0,0,0.3); border-radius: 50%; transition: background-color 0.2s ease; position: absolute; top: 50%; transform: translateY(-50%); display: flex !important; align-items: center; justify-content: center; }
                 .slick-listing-card .slick-arrow:hover { background-color: rgba(0,0,0,0.5); }
                 .slick-listing-card .slick-prev { left: 10px; }
                 .slick-listing-card .slick-next { right: 10px; }

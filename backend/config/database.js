@@ -1,5 +1,4 @@
 // backend/config/database.js
-// backend/config/database.js
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
@@ -9,32 +8,32 @@ let sequelize;
 if (process.env.DATABASE_URL) {
   // Використовуємо DATABASE_URL для продакшену
   sequelize = new Sequelize(process.env.DATABASE_URL, {
-    dialect: 'postgres',
+    dialect: 'postgres', // Діалект для продакшену
     protocol: 'postgres',
     dialectOptions: {
       ssl: {
         require: true,
-        rejectUnauthorized: false // Це критично важливо для підключення до баз Render
+        rejectUnauthorized: false
       }
     },
-    logging: false // Відключаємо логування в продакшені
+    logging: false
   });
 } else {
-  // Використовуємо ваші старі налаштування для локальної розробки
+  // Використовуємо налаштування для локальної розробки з .env
   sequelize = new Sequelize(
     process.env.DB_NAME,
     process.env.DB_USER,
     process.env.DB_PASSWORD,
     {
       host: process.env.DB_HOST,
-      dialect: process.env.DB_DIALECT || 'mysql',
+      dialect: 'postgres', // <-- Змінено на 'postgres' для локальної розробки
       port: process.env.DB_PORT,
-      logging: console.log // Включаємо логування для розробки
+      logging: console.log
     }
   );
 }
 
-// Функція для перевірки з'єднання залишається такою ж
+// Функція для перевірки з'єднання
 async function connectDB() {
   try {
     await sequelize.authenticate();
@@ -44,6 +43,6 @@ async function connectDB() {
   }
 }
 
-connectDB(); // Можна викликати для перевірки при запуску
+connectDB();
 
 module.exports = sequelize;
